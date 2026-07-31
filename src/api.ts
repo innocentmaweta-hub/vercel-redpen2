@@ -1,9 +1,9 @@
 /**
  * Centralized API configuration and utilities
- * All endpoints are routed to the WordPress REST API at empire16.com
+ * All endpoints are routed to the WordPress REST API at redpen.empire16.com
  */
 
-const BASE_API = 'https://empire16.com/wp-json/redpen/v1';
+const BASE_API = 'https://redpen.empire16.com/wp-json/redpen/v1';
 export const AUTH_TOKEN_KEY = 'yaza_auth_token';
 
 /**
