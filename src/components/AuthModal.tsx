@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { AuthResponse } from '../types';
 import { GoogleLogin } from "@react-oauth/google";
+import { API_ENDPOINTS, AUTH_TOKEN_KEY } from '../api';
 
 interface AuthModalProps {
   onClose?: () => void;
@@ -25,11 +26,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
     setLoading(true);
 
     try {
-      // Direct absolute WordPress API integration path
-      const baseApi = "https://redpen.empire16.com";
-      
-      // FIXED: Added a trailing slash at the end of the endpoint strings
-      const endpoint = isLogin ? `${baseApi}/auth/login/` : `${baseApi}/auth/register/`;
+      const endpoint = isLogin ? API_ENDPOINTS.auth.login : API_ENDPOINTS.auth.register;
       
       const body = isLogin
         ? { email, password }
@@ -47,7 +44,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
         throw new Error(data.message || `${isLogin ? 'Login' : 'Registration'} failed`);
       }
 
-      localStorage.setItem('yaza_auth_token', data.token);
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
       onAuthSuccess(data);
     } catch (err: any) {
       setError(err.message || `${isLogin ? 'Login' : 'Registration'} failed`);
@@ -95,8 +92,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
                 setError("");
 
                 try {
-                  const baseApi = "https://redpen.empire16.com";
-                  const res = await fetch(`${baseApi}/auth/google`, {
+                  const res = await fetch(API_ENDPOINTS.auth.google, {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -112,7 +108,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
                     throw new Error(data.message || "Google authentication failed");
                   }
 
-                  localStorage.setItem("yaza_auth_token", data.token);
+                  localStorage.setItem(AUTH_TOKEN_KEY, data.token);
                   onAuthSuccess(data);
                 } catch (err: any) {
                   setError(err.message || "Google authentication failed");
@@ -144,7 +140,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">First Name</label>
                     <input
                       type="text"
-                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700"
+                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-600"
                       placeholder="John"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
@@ -155,7 +151,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Last Name</label>
                     <input
                       type="text"
-                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700"
+                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-600"
                       placeholder="Doe"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
@@ -171,7 +167,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
                   <Mail size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
                   <input
                     type="email"
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-600"
                     placeholder="you@university.edu"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -186,7 +182,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
                   <Lock size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-9 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-9 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-600"
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -205,7 +201,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-accent-blue hover:bg-accent-blue/90 disabled:bg-accent-blue/50 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 mt-2"
+                className="w-full bg-accent-blue hover:bg-accent-blue/90 disabled:bg-accent-blue/50 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 size={14} className="animate-spin" /> : isLogin ? 'Sign In' : 'Create Account'}
               </button>
