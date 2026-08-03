@@ -16,16 +16,5 @@
             "source": "/(.*)",
             "destination": "/index.html"
         }
-    ],
-    "env": {
-        "WORDPRESS_SITE_URL": "@wordpress_site_url",
-        "WORDPRESS_API_URL": "@wordpress_api_url",
-        "WORDPRESS_USERNAME": "@wordpress_username",
-        "WORDPRESS_PASSWORD": "@wordpress_password",
-        "JWT_SECRET": "@jwt_secret",
-        "GOOGLE_CLIENT_ID": "@google_client_id",
-        "GOOGLE_CLIENT_SECRET": "@google_client_secret",
-        "GEMINI_API_KEY": "@gemini_api_key",
-        "OPENAI_API_KEY": "@openai_api_key"
-    }
+    ]
 }
