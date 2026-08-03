@@ -17,33 +17,53 @@ const WP_AUTH_ENDPOINTS = {
 };
 
 /**
- * Get WordPress user by email
+ * Build admin Basic Auth header.
+ * Required for /wp/v2/users lookups, since WordPress hides the `email`
+ * field from unauthenticated/non-privileged requests.
+ * WORDPRESS_PASSWORD must be a WordPress Application Password,
+ * not the normal wp-admin login password.
+ */
+function getAdminAuthHeader() {
+  const adminAuth = Buffer.from(
+    `${process.env.WORDPRESS_USERNAME}:${process.env.WORDPRESS_PASSWORD}`
+  ).toString('base64');
+  return { Authorization: `Basic ${adminAuth}` };
+}
+
+/**
+ * Get WordPress user by email (exact match)
  */
 export async function getWordPressUserByEmail(email) {
   try {
-    // WordPress stores users by username, not email directly via REST API
-    // This search is limited - best practice is to use username
     const response = await axios.get(`${WORDPRESS_API}/wp/v2/users`, {
-      params: { search: email },
+      params: { search: email, context: 'edit' },
+      headers: getAdminAuthHeader(),
+      timeout: 5000,
     });
-    return response.data.length > 0 ? response.data[0] : null;
+    return response.data.find((u) => u.email === email) || null;
   } catch (error) {
-    console.error('Error fetching WordPress user:', error.message);
+    console.error('Error fetching WordPress user by email:', error.response?.data || error.message);
     return null;
   }
 }
 
 /**
- * Get WordPress user by username
+ * Get WordPress user by username (exact match)
  */
 export async function getWordPressUserByUsername(username) {
   try {
     const response = await axios.get(`${WORDPRESS_API}/wp/v2/users`, {
       params: { search: username, context: 'edit' },
+      headers: getAdminAuthHeader(),
+      timeout: 5000,
     });
-    return response.data.length > 0 ? response.data[0] : null;
+    return (
+      response.data.find(
+        (u) => u.username === username || u.slug === username
+      ) || response.data[0] || null
+    );
   } catch (error) {
-    console.error('Error fetching WordPress user:', error.message);
+    console.error('Error fetching WordPress user by username:', error.response?.data || error.message);
     return null;
   }
 }
@@ -63,7 +83,7 @@ export async function authenticateWithWordPress(username, password) {
       );
 
       const { token, user_email, user_nicename } = tokenResponse.data;
-      
+
       return {
         success: true,
         wordPressToken: token,
@@ -74,7 +94,7 @@ export async function authenticateWithWordPress(username, password) {
     } catch (jwtError) {
       // Fallback: Validate using Basic Auth with wp/v2/users/me
       console.log('JWT Auth plugin not available, trying Basic Auth fallback');
-      
+
       const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
       const meResponse = await axios.get(`${WORDPRESS_API}/wp/v2/users/me`, {
         headers: { Authorization: `Basic ${basicAuth}` },
@@ -90,7 +110,7 @@ export async function authenticateWithWordPress(username, password) {
       };
     }
   } catch (error) {
-    console.error('WordPress authentication failed:', error.message);
+    console.error('WordPress authentication failed:', error.response?.data || error.message);
     return {
       success: false,
       error: error.response?.data?.message || error.message,
@@ -104,10 +124,6 @@ export async function authenticateWithWordPress(username, password) {
  */
 export async function createWordPressUser(userData) {
   try {
-    const adminAuth = Buffer.from(
-      `${process.env.WORDPRESS_USERNAME}:${process.env.WORDPRESS_PASSWORD}`
-    ).toString('base64');
-
     const response = await axios.post(
       `${WORDPRESS_API}/wp/v2/users`,
       {
@@ -119,7 +135,7 @@ export async function createWordPressUser(userData) {
         name: userData.name || userData.email,
       },
       {
-        headers: { Authorization: `Basic ${adminAuth}` },
+        headers: getAdminAuthHeader(),
         timeout: 5000,
       }
     );
@@ -134,7 +150,7 @@ export async function createWordPressUser(userData) {
       },
     };
   } catch (error) {
-    console.error('WordPress user creation failed:', error.message);
+    console.error('WordPress user creation failed:', error.response?.data || error.message);
     return {
       success: false,
       error: error.response?.data?.message || error.message,
@@ -177,11 +193,8 @@ export function generateAppToken(user) {
 
 /**
  * Sync WordPress user to app database (optional)
- * Creates a lightweight local record for faster queries
  */
 export async function syncWordPressUser(user) {
-  // If you want to keep a local cache of WordPress users
-  // This is optional but improves performance
   return {
     id: user.id || user.userId,
     email: user.email,
