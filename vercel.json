@@ -2,11 +2,6 @@
     "buildCommand": "vite build",
     "outputDirectory": "dist",
     "devCommand": "vite --port=5000 --host=0.0.0.0",
-    "functions": {
-        "api/server-wordpress.js": {
-            "runtime": "nodejs18.x"
-        }
-    },
     "rewrites": [
         {
             "source": "/api/(.*)",
