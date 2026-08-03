@@ -1,6 +1,6 @@
 /**
  * Express Server with WordPress Database Integration
- * Uses WordPress REST API for user authentication and management
+ * Direct backend authentication without CORS proxy
  */
 
 import 'dotenv/config';
@@ -16,12 +16,19 @@ import {
   generateAppToken,
   getWordPressUserByEmail,
   getWordPressUserByUsername,
-  syncWordPressUser,
 } from './wordpress-auth.js';
 
 const app = express();
+
+// Enable CORS for all origins
+app.use(cors({
+  origin: '*',
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json({ limit: '50mb' }));
-app.use(cors());
 
 // JWT_SECRET must be set in production
 if (!process.env.JWT_SECRET) {
@@ -80,10 +87,10 @@ function authMiddleware(req, res, next) {
   try {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // Contains { email, id, username, wordPressId, source }
+    req.user = decoded;
     next();
-  } catch {
-    return res.status(401).json({ code: 'INVALID_TOKEN', message: 'Invalid token' });
+  } catch (error) {
+    return res.status(401).json({ code: 'INVALID_TOKEN', message: 'Invalid or expired token' });
   }
 }
 
@@ -95,38 +102,56 @@ function authMiddleware(req, res, next) {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
     if (!email || !password) {
-      return res.status(400).json({ code: 'MISSING_CREDENTIALS', message: 'Email and password are required' });
+      return res.status(400).json({ 
+        code: 'MISSING_CREDENTIALS', 
+        message: 'Email and password are required' 
+      });
     }
 
-    // Try to authenticate with WordPress
+    // Get WordPress user by email
     const wpUser = await getWordPressUserByEmail(email);
     if (!wpUser) {
-      return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        code: 'INVALID_CREDENTIALS', 
+        message: 'Invalid email or password' 
+      });
     }
 
-    // Authenticate with WordPress using username
+    // Authenticate with WordPress
     const authResult = await authenticateWithWordPress(wpUser.username, password);
     if (!authResult.success) {
-      return res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
+      return res.status(401).json({ 
+        code: 'INVALID_CREDENTIALS', 
+        message: 'Invalid email or password' 
+      });
     }
 
-    // Sync user and generate app token
+    // Create user object
     const user = {
       id: wpUser.id,
       email: wpUser.email,
       username: wpUser.username,
-      name: wpUser.name,
+      name: wpUser.name || wpUser.email.split('@')[0],
       wordPressId: wpUser.id,
     };
 
+    // Generate app token
     const token = generateAppToken(user);
-    const { password: _, ...safeUser } = user;
 
-    res.json({ token, user: safeUser });
+    res.json({ 
+      token, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+      }
+    });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ code: 'LOGIN_FAILED', message: 'Login failed' });
+    console.error('Login error:', error.message);
+    res.status(500).json({ code: 'LOGIN_FAILED', message: 'Login failed: ' + error.message });
   }
 });
 
@@ -136,49 +161,79 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
+    
     if (!name || !email || !password) {
-      return res.status(400).json({ code: 'MISSING_FIELDS', message: 'Name, email, and password are required' });
+      return res.status(400).json({ 
+        code: 'MISSING_FIELDS', 
+        message: 'Name, email, and password are required' 
+      });
     }
+    
     if (password.length < 6) {
-      return res.status(400).json({ code: 'WEAK_PASSWORD', message: 'Password must be at least 6 characters' });
+      return res.status(400).json({ 
+        code: 'WEAK_PASSWORD', 
+        message: 'Password must be at least 6 characters' 
+      });
     }
+    
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ code: 'INVALID_EMAIL', message: 'Please provide a valid email address' });
+      return res.status(400).json({ 
+        code: 'INVALID_EMAIL', 
+        message: 'Please provide a valid email address' 
+      });
     }
 
-    // Check if user already exists in WordPress
+    // Check if user already exists
     const existingUser = await getWordPressUserByEmail(email);
     if (existingUser) {
-      return res.status(409).json({ code: 'EMAIL_EXISTS', message: 'Email already registered' });
+      return res.status(409).json({ 
+        code: 'EMAIL_EXISTS', 
+        message: 'Email already registered' 
+      });
     }
 
     // Create user in WordPress
     const createResult = await createWordPressUser({ name, email, password });
     if (!createResult.success) {
-      return res.status(400).json({ code: 'REGISTRATION_FAILED', message: createResult.error });
+      return res.status(400).json({ 
+        code: 'REGISTRATION_FAILED', 
+        message: createResult.error || 'Failed to create user' 
+      });
     }
 
     const user = createResult.user;
     const token = generateAppToken(user);
-    const { password: _, ...safeUser } = user;
 
-    res.json({ token, user: safeUser });
+    res.status(201).json({ 
+      token, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+      }
+    });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Registration failed' });
+    console.error('Register error:', error.message);
+    res.status(500).json({ 
+      code: 'REGISTRATION_FAILED',
+      message: 'Registration failed: ' + error.message 
+    });
   }
 });
 
 /**
  * Google OAuth Callback Handler
- * Links Google account to WordPress user
  */
 app.post('/api/auth/google', async (req, res) => {
   try {
     const { idToken } = req.body;
 
     if (!idToken) {
-      return res.status(400).json({ code: 'MISSING_TOKEN', message: 'ID token is required' });
+      return res.status(400).json({ 
+        code: 'MISSING_TOKEN', 
+        message: 'ID token is required' 
+      });
     }
 
     // Verify the token with Google
@@ -188,25 +243,31 @@ app.post('/api/auth/google', async (req, res) => {
     });
 
     const payload = ticket.getPayload();
-    const { email, name, picture, sub: googleId } = payload;
+    const { email, name, sub: googleId } = payload;
 
     if (!email) {
-      return res.status(400).json({ code: 'INVALID_EMAIL', message: 'Email not provided by Google' });
+      return res.status(400).json({ 
+        code: 'INVALID_EMAIL', 
+        message: 'Email not provided by Google' 
+      });
     }
 
-    // Check if user exists in WordPress
+    // Check if user exists
     let wpUser = await getWordPressUserByEmail(email);
 
     if (!wpUser) {
-      // Create new WordPress user from Google
+      // Create new user from Google
       const createResult = await createWordPressUser({
         name: name || email.split('@')[0],
         email,
-        password: googleId, // Use Google ID as initial password
+        password: googleId,
       });
 
       if (!createResult.success) {
-        return res.status(400).json({ code: 'REGISTRATION_FAILED', message: createResult.error });
+        return res.status(400).json({ 
+          code: 'REGISTRATION_FAILED', 
+          message: createResult.error 
+        });
       }
 
       wpUser = createResult.user;
@@ -217,17 +278,27 @@ app.post('/api/auth/google', async (req, res) => {
       id: wpUser.id,
       email: wpUser.email,
       username: wpUser.username,
-      name: wpUser.name,
+      name: wpUser.name || name,
       wordPressId: wpUser.id,
     };
 
     const token = generateAppToken(user);
-    const { password: _, ...safeUser } = user;
 
-    res.json({ token, user: safeUser });
+    res.json({ 
+      token, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+      }
+    });
   } catch (error) {
     console.error('Google auth error:', error.message);
-    res.status(401).json({ code: 'GOOGLE_AUTH_FAILED', message: error.message });
+    res.status(401).json({ 
+      code: 'GOOGLE_AUTH_FAILED', 
+      message: error.message 
+    });
   }
 });
 
@@ -238,20 +309,20 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const wpUser = await getWordPressUserByUsername(req.user.username);
     if (!wpUser) {
-      return res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' });
+      return res.status(404).json({ 
+        code: 'USER_NOT_FOUND', 
+        message: 'User not found' 
+      });
     }
 
-    const user = {
-      id: wpUser.id,
-      email: wpUser.email,
-      username: wpUser.username,
-      name: wpUser.name,
-      tier: 'free', // Default tier - could be extended with custom WordPress fields
-      gradingCount: 0, // Could be tracked with WordPress postmeta
-      gradingLimit: 5,
-    };
-
-    res.json({ user });
+    res.json({ 
+      user: {
+        id: wpUser.id,
+        email: wpUser.email,
+        username: wpUser.username,
+        name: wpUser.name,
+      }
+    });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Failed to get user' });
@@ -262,7 +333,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
  * Logout
  */
 app.post('/api/auth/logout', (_req, res) => {
-  res.json({ message: 'Logged out' });
+  res.json({ message: 'Logged out successfully' });
 });
 
 // ========== Grading Endpoint ==========
@@ -275,7 +346,11 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     const { studentInfo, markingScheme, studentPaper } = req.body;
 
     if (!studentPaper || typeof studentPaper !== 'string') {
-      return res.status(400).json({ code: 'MISSING_PAPER', error: true, message: 'Student paper is required.' });
+      return res.status(400).json({ 
+        code: 'MISSING_PAPER', 
+        error: true, 
+        message: 'Student paper is required.' 
+      });
     }
 
     if (!provider) {
@@ -319,7 +394,11 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error(`[${requestId}] Grading error:`, error);
-    res.status(500).json({ code: 'GRADING_FAILED', error: true, message: error.message || 'Failed to complete grading.' });
+    res.status(500).json({ 
+      code: 'GRADING_FAILED', 
+      error: true, 
+      message: error.message || 'Failed to complete grading.' 
+    });
   }
 });
 
@@ -327,7 +406,19 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
  * Status Endpoint
  */
 app.get('/api/status', (_req, res) => {
-  res.json({ provider, model: MODEL, database: 'wordpress' });
+  res.json({ 
+    status: 'ok',
+    provider, 
+    model: MODEL, 
+    database: 'wordpress',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ========== Health Check ==========
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'healthy' });
 });
 
 // ========== Helper Functions ==========
@@ -414,5 +505,4 @@ async function gradeWithGemini(prompt, cleanScheme, schemeMime, cleanPaper, pape
   return JSON.parse(response.text);
 }
 
-// Export the Express app as a serverless function for Vercel
 export default app;
