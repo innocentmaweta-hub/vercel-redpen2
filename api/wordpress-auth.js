@@ -207,6 +207,46 @@ export async function syncWordPressUser(user) {
   };
 }
 
+/**
+ * Get a user meta value (JSON) by key
+ */
+export async function getUserMeta(userId, key) {
+  try {
+    const response = await axios.get(`${WORDPRESS_API}/wp/v2/users/${userId}`, {
+      params: { context: 'edit' },
+      headers: getAdminAuthHeader(),
+      timeout: 5000,
+    });
+    const raw = response.data?.meta?.[key];
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  } catch (error) {
+    console.error(`Error fetching user meta "${key}":`, error.response?.data || error.message);
+    return null;
+  }
+}
+
+/**
+ * Update a user meta value (stored as JSON string)
+ */
+export async function updateUserMeta(userId, key, value) {
+  try {
+    await axios.post(
+      `${WORDPRESS_API}/wp/v2/users/${userId}`,
+      { meta: { [key]: JSON.stringify(value) } },
+      { headers: getAdminAuthHeader(), timeout: 5000 }
+    );
+    return true;
+  } catch (error) {
+    console.error(`Error updating user meta "${key}":`, error.response?.data || error.message);
+    return false;
+  }
+}
+
 export default {
   authenticateWithWordPress,
   createWordPressUser,
@@ -215,4 +255,6 @@ export default {
   getWordPressUserByEmail,
   getWordPressUserByUsername,
   syncWordPressUser,
+  getUserMeta,
+  updateUserMeta,
 };
