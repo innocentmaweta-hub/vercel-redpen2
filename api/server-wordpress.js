@@ -16,6 +16,8 @@ import {
   generateAppToken,
   getWordPressUserByEmail,
   getWordPressUserByUsername,
+  getUserMeta,
+  updateUserMeta,
 } from './wordpress-auth.js';
 
 const app = express();
@@ -102,29 +104,29 @@ function authMiddleware(req, res, next) {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
-      return res.status(400).json({ 
-        code: 'MISSING_CREDENTIALS', 
-        message: 'Email and password are required' 
+      return res.status(400).json({
+        code: 'MISSING_CREDENTIALS',
+        message: 'Email and password are required'
       });
     }
 
     // Get WordPress user by email
     const wpUser = await getWordPressUserByEmail(email);
     if (!wpUser) {
-      return res.status(401).json({ 
-        code: 'INVALID_CREDENTIALS', 
-        message: 'Invalid email or password' 
+      return res.status(401).json({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password'
       });
     }
 
     // Authenticate with WordPress
     const authResult = await authenticateWithWordPress(wpUser.username, password);
     if (!authResult.success) {
-      return res.status(401).json({ 
-        code: 'INVALID_CREDENTIALS', 
-        message: 'Invalid email or password' 
+      return res.status(401).json({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password'
       });
     }
 
@@ -140,8 +142,8 @@ app.post('/api/auth/login', async (req, res) => {
     // Generate app token
     const token = generateAppToken(user);
 
-    res.json({ 
-      token, 
+    res.json({
+      token,
       user: {
         id: user.id,
         email: user.email,
@@ -161,51 +163,51 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    
+
     if (!name || !email || !password) {
-      return res.status(400).json({ 
-        code: 'MISSING_FIELDS', 
-        message: 'Name, email, and password are required' 
+      return res.status(400).json({
+        code: 'MISSING_FIELDS',
+        message: 'Name, email, and password are required'
       });
     }
-    
+
     if (password.length < 6) {
-      return res.status(400).json({ 
-        code: 'WEAK_PASSWORD', 
-        message: 'Password must be at least 6 characters' 
+      return res.status(400).json({
+        code: 'WEAK_PASSWORD',
+        message: 'Password must be at least 6 characters'
       });
     }
-    
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ 
-        code: 'INVALID_EMAIL', 
-        message: 'Please provide a valid email address' 
+      return res.status(400).json({
+        code: 'INVALID_EMAIL',
+        message: 'Please provide a valid email address'
       });
     }
 
     // Check if user already exists
     const existingUser = await getWordPressUserByEmail(email);
     if (existingUser) {
-      return res.status(409).json({ 
-        code: 'EMAIL_EXISTS', 
-        message: 'Email already registered' 
+      return res.status(409).json({
+        code: 'EMAIL_EXISTS',
+        message: 'Email already registered'
       });
     }
 
     // Create user in WordPress
     const createResult = await createWordPressUser({ name, email, password });
     if (!createResult.success) {
-      return res.status(400).json({ 
-        code: 'REGISTRATION_FAILED', 
-        message: createResult.error || 'Failed to create user' 
+      return res.status(400).json({
+        code: 'REGISTRATION_FAILED',
+        message: createResult.error || 'Failed to create user'
       });
     }
 
     const user = createResult.user;
     const token = generateAppToken(user);
 
-    res.status(201).json({ 
-      token, 
+    res.status(201).json({
+      token,
       user: {
         id: user.id,
         email: user.email,
@@ -215,9 +217,9 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Register error:', error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       code: 'REGISTRATION_FAILED',
-      message: 'Registration failed: ' + error.message 
+      message: 'Registration failed: ' + error.message
     });
   }
 });
@@ -230,9 +232,9 @@ app.post('/api/auth/google', async (req, res) => {
     const { idToken } = req.body;
 
     if (!idToken) {
-      return res.status(400).json({ 
-        code: 'MISSING_TOKEN', 
-        message: 'ID token is required' 
+      return res.status(400).json({
+        code: 'MISSING_TOKEN',
+        message: 'ID token is required'
       });
     }
 
@@ -246,9 +248,9 @@ app.post('/api/auth/google', async (req, res) => {
     const { email, name, sub: googleId } = payload;
 
     if (!email) {
-      return res.status(400).json({ 
-        code: 'INVALID_EMAIL', 
-        message: 'Email not provided by Google' 
+      return res.status(400).json({
+        code: 'INVALID_EMAIL',
+        message: 'Email not provided by Google'
       });
     }
 
@@ -264,9 +266,9 @@ app.post('/api/auth/google', async (req, res) => {
       });
 
       if (!createResult.success) {
-        return res.status(400).json({ 
-          code: 'REGISTRATION_FAILED', 
-          message: createResult.error 
+        return res.status(400).json({
+          code: 'REGISTRATION_FAILED',
+          message: createResult.error
         });
       }
 
@@ -284,8 +286,8 @@ app.post('/api/auth/google', async (req, res) => {
 
     const token = generateAppToken(user);
 
-    res.json({ 
-      token, 
+    res.json({
+      token,
       user: {
         id: user.id,
         email: user.email,
@@ -295,9 +297,9 @@ app.post('/api/auth/google', async (req, res) => {
     });
   } catch (error) {
     console.error('Google auth error:', error.message);
-    res.status(401).json({ 
-      code: 'GOOGLE_AUTH_FAILED', 
-      message: error.message 
+    res.status(401).json({
+      code: 'GOOGLE_AUTH_FAILED',
+      message: error.message
     });
   }
 });
@@ -309,13 +311,13 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const wpUser = await getWordPressUserByUsername(req.user.username);
     if (!wpUser) {
-      return res.status(404).json({ 
-        code: 'USER_NOT_FOUND', 
-        message: 'User not found' 
+      return res.status(404).json({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found'
       });
     }
 
-    res.json({ 
+    res.json({
       user: {
         id: wpUser.id,
         email: wpUser.email,
@@ -346,10 +348,10 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     const { studentInfo, markingScheme, studentPaper } = req.body;
 
     if (!studentPaper || typeof studentPaper !== 'string') {
-      return res.status(400).json({ 
-        code: 'MISSING_PAPER', 
-        error: true, 
-        message: 'Student paper is required.' 
+      return res.status(400).json({
+        code: 'MISSING_PAPER',
+        error: true,
+        message: 'Student paper is required.'
       });
     }
 
@@ -391,14 +393,87 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     }
 
     console.log(`[${requestId}] Grading completed via ${provider}. User: ${req.user.email}`);
+
+    // Best-effort: record this grading in the user's history (don't fail the request if this fails)
+    try {
+      const existingHistory = (await getUserMeta(req.user.id, 'redpen_grading_history')) || [];
+      const entry = {
+        id: requestId,
+        timestamp: new Date().toISOString(),
+        studentName: result?.extracted_info?.name || studentInfo?.name || 'Unknown',
+        regNo: result?.extracted_info?.regNo || studentInfo?.regNo || '',
+        courseCode: result?.extracted_info?.courseCode || studentInfo?.courseCode || '',
+        totalScore: result?.total_score || '',
+        grade: result?.grade || '',
+      };
+      const updatedHistory = [entry, ...existingHistory].slice(0, 100); // cap at 100 entries
+      await updateUserMeta(req.user.id, 'redpen_grading_history', updatedHistory);
+    } catch (historyError) {
+      console.error(`[${requestId}] Failed to record history:`, historyError.message);
+    }
+
     res.json(result);
   } catch (error) {
     console.error(`[${requestId}] Grading error:`, error);
-    res.status(500).json({ 
-      code: 'GRADING_FAILED', 
-      error: true, 
-      message: error.message || 'Failed to complete grading.' 
+    res.status(500).json({
+      code: 'GRADING_FAILED',
+      error: true,
+      message: error.message || 'Failed to complete grading.'
     });
+  }
+});
+
+// ========== History Endpoint ==========
+
+app.get('/api/history', authMiddleware, async (req, res) => {
+  try {
+    const history = (await getUserMeta(req.user.id, 'redpen_grading_history')) || [];
+    res.json({ history });
+  } catch (error) {
+    console.error('History fetch error:', error.message);
+    res.status(500).json({ message: 'Failed to load grading history' });
+  }
+});
+
+// ========== Settings / API Keys Endpoints ==========
+
+app.get('/api/settings/api-keys', authMiddleware, async (req, res) => {
+  try {
+    const keys = (await getUserMeta(req.user.id, 'redpen_api_keys')) || {};
+    // Never return raw keys to the client — only whether one is set, plus a masked preview
+    const mask = (key) => (key ? `••••${key.slice(-4)}` : null);
+    res.json({
+      geminiKeySet: !!keys.geminiApiKey,
+      geminiKeyPreview: mask(keys.geminiApiKey),
+      openaiKeySet: !!keys.openaiApiKey,
+      openaiKeyPreview: mask(keys.openaiApiKey),
+    });
+  } catch (error) {
+    console.error('API key fetch error:', error.message);
+    res.status(500).json({ message: 'Failed to load API key settings' });
+  }
+});
+
+app.post('/api/settings/api-keys', authMiddleware, async (req, res) => {
+  try {
+    const { geminiApiKey, openaiApiKey } = req.body;
+    const existing = (await getUserMeta(req.user.id, 'redpen_api_keys')) || {};
+
+    const updated = {
+      ...existing,
+      ...(geminiApiKey !== undefined && { geminiApiKey }),
+      ...(openaiApiKey !== undefined && { openaiApiKey }),
+    };
+
+    const ok = await updateUserMeta(req.user.id, 'redpen_api_keys', updated);
+    if (!ok) {
+      return res.status(500).json({ message: 'Failed to save API keys' });
+    }
+
+    res.json({ message: 'API keys updated successfully' });
+  } catch (error) {
+    console.error('API key save error:', error.message);
+    res.status(500).json({ message: 'Failed to save API key settings' });
   }
 });
 
@@ -406,10 +481,10 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
  * Status Endpoint
  */
 app.get('/api/status', (_req, res) => {
-  res.json({ 
+  res.json({
     status: 'ok',
-    provider, 
-    model: MODEL, 
+    provider,
+    model: MODEL,
     database: 'wordpress',
     timestamp: new Date().toISOString()
   });
