@@ -1,12 +1,9 @@
 /**
  * Centralized API configuration and utilities
- * All endpoints are routed to the WordPress REST API at redpen.empire16.com
- * Using CORS proxy for cross-origin requests
+ * All endpoints are routed through a Vercel serverless proxy,
+ * which forwards requests server-to-server to the WordPress REST API.
  */
-
-const CORS_PROXY = 'https://cors-anywhere.herokuapp.com';
-const WORDPRESS_API = 'https://redpen.empire16.com/wp-json/redpen/v1';
-const BASE_API = `${CORS_PROXY}/${WORDPRESS_API}`;
+const BASE_API = '/api/redpen';
 
 export const AUTH_TOKEN_KEY = 'yaza_auth_token';
 
