@@ -66,6 +66,7 @@ export interface User {
     role?: string;
     activeProvider?: 'gemini' | 'openai' | 'server';
     totalGraded?: number;
+    avatarUrl?: string;
 }
 export interface AuthResponse {
     token: string;
