@@ -605,6 +605,41 @@ app.post('/api/settings/profile', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Failed to save profile' });
   }
 });
+app.post('/api/settings/avatar', authMiddleware, async (req, res) => {
+  try {
+    const { imageBase64, filename, mimeType } = req.body;
+
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({ message: 'Image data and mimeType are required' });
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+      return res.status(400).json({ message: 'Only JPEG, PNG, or WebP images are allowed' });
+    }
+
+    const cleanBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    if (buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ message: 'Image must be under 5MB' });
+    }
+
+    const safeFilename = (filename || `avatar-${req.user.id}.jpg`).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const uploadResult = await uploadProfilePicture(req.user.id, buffer, safeFilename, mimeType);
+
+    if (!uploadResult.success) {
+      return res.status(500).json({ message: uploadResult.error || 'Failed to upload image' });
+    }
+
+    const existingProfile = (await getUserMeta(req.user.id, 'redpen_profile')) || {};
+    const updatedProfile = { ...existingProfile, avatarUrl: uploadResult.url };
+    await updateUserMeta(req.user.id, 'redpen_profile', updatedProfile);
+
+    res.json({ message: 'Profile picture updated', avatarUrl: uploadResult.url });
+  } catch (error) {
+    console.error('Avatar upload error:', error.message);
+    res.status(500).json({ message: 'Failed to upload profile picture' });
+  }
+});
 
 /**
  * Status Endpoint
