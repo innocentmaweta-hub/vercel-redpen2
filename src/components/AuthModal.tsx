@@ -86,7 +86,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
           </div>
 
           <div className="p-5 flex flex-col gap-4">
-            {/* Google Login temporarily disabled - CORS configuration needed
+            Google Login temporarily disabled - CORS configuration needed
             <GoogleLogin
               onSuccess={async (credentialResponse) => {
                 setLoading(true);
@@ -127,8 +127,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
               <span className="text-xs text-gray-600">OR</span>
               <div className="flex-1 h-px bg-gray-800" />
             </div>
-            */}
-
+            
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-400">
                 {error}
