@@ -687,4 +687,24 @@ async function gradeWithOpenAI(prompt, cleanScheme, schemeMime, cleanPaper, pape
     messages: [{ role: 'user', content }],
   });
 
-  return JSON.parse(response.choices[0].me
+  return JSON.parse(response.choices[0].message.content);
+}
+
+async function gradeWithGemini(prompt, cleanScheme, schemeMime, cleanPaper, paperMime, hasScheme, apiKey, model) {
+  const ai = new GoogleGenAI({ apiKey });
+  const parts = [{ text: prompt }];
+  if (hasScheme) {
+    parts.push({ inlineData: { mimeType: schemeMime, data: cleanScheme } });
+  }
+  parts.push({ inlineData: { mimeType: paperMime, data: cleanPaper } });
+
+  const response = await ai.models.generateContent({
+    model: model,
+    contents: [{ role: 'user', parts }],
+    config: { responseMimeType: 'application/json' },
+  });
+
+  return JSON.parse(response.text);
+}
+
+export default app;
