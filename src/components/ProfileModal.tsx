@@ -1,6 +1,6 @@
-import React from 'react';
-import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState } from 'react';
+import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 
 interface Props {
@@ -8,6 +8,10 @@ interface Props {
     onClose: () => void;
     onLogout: () => void;
     onUpgrade: () => void;
+    onOpenSettings: () => void;
+    onSaveProfile: (institution: string, role: string) => Promise<void>;
+    onChangePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
+    onDeleteAccount: (password: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 const TIER_CONFIG: Record<string, { icon: any; color: string; label: string; price: string }> = {
@@ -16,8 +20,102 @@ const TIER_CONFIG: Record<string, { icon: any; color: string; label: string; pri
     corporate: { icon: Crown, color: 'text-amber-400', label: 'Corporate', price: '25,000 MWK/mo' },
 };
 
-export const ProfileModal = ({ user, onClose, onLogout, onUpgrade }: Props) => {
+const PROVIDER_LABEL: Record<string, string> = {
+    gemini: 'Your Gemini API Key',
+    openai: 'Your OpenAI API Key',
+    server: 'Shared Server Key',
+};
+
+export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSettings, onSaveProfile, onChangePassword, onDeleteAccount }: Props) => {
     const tierConfig = TIER_CONFIG[user.tier] || TIER_CONFIG.free;
+
+    // Institution / role editing
+    const [editingProfile, setEditingProfile] = useState(false);
+    const [institution, setInstitution] = useState(user.institution || '');
+    const [role, setRole] = useState(user.role || '');
+    const [savingProfile, setSavingProfile] = useState(false);
+
+    // Change password
+    const [showPasswordForm, setShowPasswordForm] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState('');
+    const [changingPassword, setChangingPassword] = useState(false);
+
+    // Delete account
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deletePassword, setDeletePassword] = useState('');
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [deleteError, setDeleteError] = useState('');
+    const [deleting, setDeleting] = useState(false);
+
+    const handleSaveProfile = async () => {
+        setSavingProfile(true);
+        try {
+            await onSaveProfile(institution.trim(), role.trim());
+            setEditingProfile(false);
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordError('');
+        setPasswordSuccess('');
+
+        if (newPassword.length < 6) {
+            setPasswordError('New password must be at least 6 characters');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordError('New passwords do not match');
+            return;
+        }
+
+        setChangingPassword(true);
+        try {
+            const result = await onChangePassword(currentPassword, newPassword);
+            if (result.success) {
+                setPasswordSuccess('Password updated successfully');
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setTimeout(() => setShowPasswordForm(false), 1500);
+            } else {
+                setPasswordError(result.message || 'Failed to change password');
+            }
+        } finally {
+            setChangingPassword(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        setDeleteError('');
+        if (deleteConfirmText !== 'DELETE') {
+            setDeleteError('Type DELETE to confirm');
+            return;
+        }
+        if (!deletePassword) {
+            setDeleteError('Password is required');
+            return;
+        }
+
+        setDeleting(true);
+        try {
+            const result = await onDeleteAccount(deletePassword);
+            if (!result.success) {
+                setDeleteError(result.message || 'Failed to delete account');
+                setDeleting(false);
+            }
+            // On success, parent handles logout/redirect — no need to reset state here
+        } catch {
+            setDeleteError('Failed to delete account');
+            setDeleting(false);
+        }
+    };
 
     return (
         <motion.div
@@ -32,9 +130,9 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade }: Props) => {
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.95, y: 20 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-card border border-gray-800 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+                className="bg-card border border-gray-800 rounded-3xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto"
             >
-                <div className="flex items-center justify-between p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between p-6 border-b border-gray-800 sticky top-0 bg-card z-10">
                     <div className="flex items-center gap-2">
                         <div className="w-2 h-4 bg-accent-blue rounded-full" />
                         <h2 className="text-sm font-bold uppercase tracking-widest text-gray-300">Profile</h2>
@@ -63,6 +161,74 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade }: Props) => {
                         </div>
                     </div>
 
+                    {/* Institution & Role */}
+                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Institution & Role</span>
+                            {!editingProfile && (
+                                <button
+                                    onClick={() => setEditingProfile(true)}
+                                    className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold"
+                                >
+                                    Edit
+                                </button>
+                            )}
+                        </div>
+
+                        {editingProfile ? (
+                            <div className="space-y-2">
+                                <div className="relative">
+                                    <Building2 size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                                    <input
+                                        type="text"
+                                        value={institution}
+                                        onChange={(e) => setInstitution(e.target.value)}
+                                        placeholder="Institution (e.g. University of Malawi)"
+                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-7 pr-2 py-1.5 text-[11px] text-white focus:border-accent-blue focus:outline-none placeholder:text-gray-600"
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <Briefcase size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                                    <input
+                                        type="text"
+                                        value={role}
+                                        onChange={(e) => setRole(e.target.value)}
+                                        placeholder="Role (e.g. Lecturer, TA)"
+                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-7 pr-2 py-1.5 text-[11px] text-white focus:border-accent-blue focus:outline-none placeholder:text-gray-600"
+                                    />
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                    <button
+                                        onClick={handleSaveProfile}
+                                        disabled={savingProfile}
+                                        className="flex-1 py-1.5 bg-accent-blue text-white text-[10px] font-bold rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        {savingProfile ? <Loader2 size={11} className="animate-spin" /> : 'Save'}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setInstitution(user.institution || '');
+                                            setRole(user.role || '');
+                                            setEditingProfile(false);
+                                        }}
+                                        className="flex-1 py-1.5 bg-gray-800 text-gray-400 text-[10px] font-bold rounded-lg hover:bg-gray-700 transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-1">
+                                <p className="text-[11px] text-gray-300">
+                                    {user.institution || <span className="text-gray-600 italic">No institution set</span>}
+                                </p>
+                                <p className="text-[11px] text-gray-500">
+                                    {user.role || <span className="text-gray-600 italic">No role set</span>}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Grading Usage */}
                     <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
                         <div className="flex items-center justify-between">
@@ -81,11 +247,29 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade }: Props) => {
                                 className={`h-full rounded-full ${user.gradingLimit === Infinity ? 'w-0' : user.gradingCount / user.gradingLimit >= 0.9 ? 'bg-red-500' : user.gradingCount / user.gradingLimit >= 0.7 ? 'bg-yellow-500' : 'bg-accent-blue'}`}
                             />
                         </div>
-                        {user.tier === 'free' && (
-                            <p className="text-[10px] text-gray-600">
-                                Free tier uses your own API key. Set it in Settings.
-                            </p>
-                        )}
+                        <div className="flex items-center justify-between pt-1 border-t border-gray-800">
+                            <span className="text-[10px] text-gray-600">Total papers graded</span>
+                            <span className="text-[11px] font-bold text-gray-400">{user.totalGraded ?? 0}</span>
+                        </div>
+                    </div>
+
+                    {/* AI Provider */}
+                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Key size={14} className="text-gray-500" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">AI Provider</span>
+                            </div>
+                            <button
+                                onClick={onOpenSettings}
+                                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold"
+                            >
+                                Manage
+                            </button>
+                        </div>
+                        <p className="text-[11px] text-gray-300 mt-2">
+                            {PROVIDER_LABEL[user.activeProvider || 'server']}
+                        </p>
                     </div>
 
                     {/* Plan Details */}
@@ -123,7 +307,7 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade }: Props) => {
                     </p>
 
                     {/* Actions */}
-                    <div className="flex gap-2.5 pt-2">
+                    <div className="flex gap-2.5">
                         {user.tier !== 'corporate' && (
                             <button
                                 onClick={onUpgrade}
@@ -140,6 +324,114 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade }: Props) => {
                             <LogOut size={12} />
                             Logout
                         </button>
+                    </div>
+
+                    {/* Account Security */}
+                    <div className="border-t border-gray-800 pt-4 space-y-2">
+                        <button
+                            onClick={() => { setShowPasswordForm(!showPasswordForm); setPasswordError(''); setPasswordSuccess(''); }}
+                            className="w-full flex items-center justify-between py-2 text-[11px] font-bold text-gray-400 hover:text-white transition-colors"
+                        >
+                            <span className="flex items-center gap-2"><Lock size={13} /> Change Password</span>
+                            {showPasswordForm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+
+                        <AnimatePresence>
+                            {showPasswordForm && (
+                                <motion.form
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    onSubmit={handleChangePassword}
+                                    className="overflow-hidden space-y-2"
+                                >
+                                    <input
+                                        type="password"
+                                        value={currentPassword}
+                                        onChange={(e) => setCurrentPassword(e.target.value)}
+                                        placeholder="Current password"
+                                        required
+                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[11px] text-white focus:border-accent-blue focus:outline-none placeholder:text-gray-600"
+                                    />
+                                    <input
+                                        type="password"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        placeholder="New password (min 6 characters)"
+                                        required
+                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[11px] text-white focus:border-accent-blue focus:outline-none placeholder:text-gray-600"
+                                    />
+                                    <input
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        placeholder="Confirm new password"
+                                        required
+                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[11px] text-white focus:border-accent-blue focus:outline-none placeholder:text-gray-600"
+                                    />
+                                    {passwordError && <p className="text-[10px] text-red-400">{passwordError}</p>}
+                                    {passwordSuccess && <p className="text-[10px] text-accent-green">{passwordSuccess}</p>}
+                                    <button
+                                        type="submit"
+                                        disabled={changingPassword}
+                                        className="w-full py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        {changingPassword ? <Loader2 size={12} className="animate-spin" /> : 'Update Password'}
+                                    </button>
+                                </motion.form>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="border-t border-gray-800 pt-4">
+                        <button
+                            onClick={() => { setShowDeleteConfirm(!showDeleteConfirm); setDeleteError(''); }}
+                            className="w-full flex items-center justify-between py-2 text-[11px] font-bold text-red-500/70 hover:text-red-400 transition-colors"
+                        >
+                            <span className="flex items-center gap-2"><Trash2 size={13} /> Delete Account</span>
+                            {showDeleteConfirm ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+
+                        <AnimatePresence>
+                            {showDeleteConfirm && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden space-y-2"
+                                >
+                                    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                                        <AlertTriangle size={13} className="text-red-400 shrink-0 mt-0.5" />
+                                        <p className="text-[10px] text-red-300">
+                                            This permanently deletes your account and all grading history. This cannot be undone.
+                                        </p>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={deleteConfirmText}
+                                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                        placeholder='Type "DELETE" to confirm'
+                                        className="w-full bg-gray-900 border border-red-900/50 rounded-lg px-3 py-2 text-[11px] text-white focus:border-red-500 focus:outline-none placeholder:text-gray-600"
+                                    />
+                                    <input
+                                        type="password"
+                                        value={deletePassword}
+                                        onChange={(e) => setDeletePassword(e.target.value)}
+                                        placeholder="Enter your password"
+                                        className="w-full bg-gray-900 border border-red-900/50 rounded-lg px-3 py-2 text-[11px] text-white focus:border-red-500 focus:outline-none placeholder:text-gray-600"
+                                    />
+                                    {deleteError && <p className="text-[10px] text-red-400">{deleteError}</p>}
+                                    <button
+                                        onClick={handleDeleteAccount}
+                                        disabled={deleting}
+                                        className="w-full py-2 bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        {deleting ? <Loader2 size={12} className="animate-spin" /> : 'Permanently Delete My Account'}
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
             </motion.div>
