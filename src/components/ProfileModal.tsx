@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 
@@ -12,6 +12,7 @@ interface Props {
     onSaveProfile: (institution: string, role: string) => Promise<void>;
     onChangePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
     onDeleteAccount: (password: string) => Promise<{ success: boolean; message?: string }>;
+    onUploadAvatar: (file: File) => Promise<{ success: boolean; message?: string }>;
 }
 
 const TIER_CONFIG: Record<string, { icon: any; color: string; label: string; price: string }> = {
@@ -26,8 +27,41 @@ const PROVIDER_LABEL: Record<string, string> = {
     server: 'Shared Server Key',
 };
 
-export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSettings, onSaveProfile, onChangePassword, onDeleteAccount }: Props) => {
+export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSettings, onSaveProfile, onChangePassword, onDeleteAccount, onUploadAvatar }: Props) => {
     const tierConfig = TIER_CONFIG[user.tier] || TIER_CONFIG.free;
+
+    // Avatar upload
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [avatarError, setAvatarError] = useState('');
+    const avatarInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleAvatarPick = () => avatarInputRef.current?.click();
+
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = ''; // allow re-selecting the same file later
+
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            setAvatarError('Please choose a JPEG, PNG, or WebP image');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            setAvatarError('Image must be under 5MB');
+            return;
+        }
+
+        setAvatarError('');
+        setAvatarUploading(true);
+        try {
+            const result = await onUploadAvatar(file);
+            if (!result.success) {
+                setAvatarError(result.message || 'Failed to upload image');
+            }
+        } finally {
+            setAvatarUploading(false);
+        }
+    };
 
     // Institution / role editing
     const [editingProfile, setEditingProfile] = useState(false);
@@ -148,9 +182,34 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSetting
                 <div className="p-6 space-y-5">
                     {/* User Avatar & Name */}
                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-accent-blue/10 border border-accent-blue/20 rounded-2xl flex items-center justify-center">
-                            <UserIcon size={28} className="text-accent-blue" />
-                        </div>
+                        <button
+                            onClick={handleAvatarPick}
+                            disabled={avatarUploading}
+                            className="relative w-14 h-14 rounded-2xl overflow-hidden group shrink-0 border border-accent-blue/20"
+                            title="Change profile picture"
+                        >
+                            {user.avatarUrl ? (
+                                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full bg-accent-blue/10 flex items-center justify-center">
+                                    <UserIcon size={28} className="text-accent-blue" />
+                                </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                {avatarUploading ? (
+                                    <Loader2 size={16} className="text-white animate-spin" />
+                                ) : (
+                                    <Camera size={16} className="text-white" />
+                                )}
+                            </div>
+                        </button>
+                        <input
+                            ref={avatarInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={handleAvatarChange}
+                            className="hidden"
+                        />
                         <div>
                             <p className="text-sm font-bold text-white">{user.name}</p>
                             <p className="text-[11px] text-gray-500">{user.email}</p>
@@ -158,6 +217,7 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSetting
                                 <tierConfig.icon size={12} />
                                 <span className="text-[10px] font-bold uppercase tracking-wider">{tierConfig.label} Plan</span>
                             </div>
+                            {avatarError && <p className="text-[9px] text-red-400 mt-1">{avatarError}</p>}
                         </div>
                     </div>
 
