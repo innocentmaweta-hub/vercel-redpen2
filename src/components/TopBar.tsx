@@ -1,6 +1,6 @@
 import logo from '../assets/logo.png';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen } from 'lucide-react';
+import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, HistoryRecord, CourseSession } from '../types';
 
@@ -22,6 +22,9 @@ interface TopBarProps {
   onShowAddSchool: () => void; // Added new prop
   onShowAddDepartment: () => void; // Added new prop
   onSearchTermChange: (term: string) => void; // Added new prop
+  isLoggedIn: boolean;
+  onLogin: () => void;
+  onLogout: () => void;
 }
 
 interface DropdownItem {
@@ -172,7 +175,8 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 export const TopBar = ({
   onNew, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history,
-  onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange
+  onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
+  isLoggedIn, onLogin, onLogout
 }: TopBarProps) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{ name: string; x: number } | null>(null);
@@ -295,6 +299,13 @@ export const TopBar = ({
       </div>
 
       <div className="flex items-center gap-2 shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <button
+          onClick={isLoggedIn ? onLogout : onLogin}
+          className="px-3 py-1 bg-gray-700 text-white text-[11px] font-bold rounded-md hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer"
+        >
+          {isLoggedIn ? <LogOut size={12} /> : <LogIn size={12} />}
+          {isLoggedIn ? 'Logout' : 'Login'}
+        </button>
         <button
           onClick={onBatch}
           className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl hover:shadow-accent-blue/30 active:scale-95 transition-all duration-150 shadow-lg shadow-accent-blue/10 flex items-center gap-1.5 cursor-pointer"
