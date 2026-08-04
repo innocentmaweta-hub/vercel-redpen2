@@ -20,6 +20,7 @@ import {
   updateUserMeta,
   updateWordPressUserPassword,
   deleteWordPressUser,
+  uploadProfilePicture,
 } from './wordpress-auth.js';
 
 const app = express();
@@ -317,7 +318,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     ]);
 
     const safeUsage = usage || { tier: 'free', gradingCount: 0, gradingLimit: 5 };
-    const safeProfile = profile || { institution: '', role: '' };
+    const safeProfile = profile || { institution: '', role: '', avatarUrl: '' };
     const safeApiKeys = apiKeys || {};
 
     res.json({
@@ -331,6 +332,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         gradingLimit: safeUsage.gradingLimit ?? 5,
         institution: safeProfile.institution || '',
         role: safeProfile.role || '',
+        avatarUrl: safeProfile.avatarUrl || '',
         activeProvider: safeApiKeys.geminiApiKey ? 'gemini' : safeApiKeys.openaiApiKey ? 'openai' : 'server',
         totalGraded: Array.isArray(history) ? history.length : 0,
       }
