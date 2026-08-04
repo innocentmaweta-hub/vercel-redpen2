@@ -70,17 +70,6 @@ function saveDepartments(departments: string[]) {
     localStorage.setItem(DEPARTMENTS_KEY, JSON.stringify(departments));
 }
 
-// Define the default user
-const DEFAULT_USER: User = {
-    id: 'default-user-id',
-    name: 'Inno Maweta',
-    email: 'innomaweta1@gmail.com',
-    tier: 'personal',
-    gradingCount: 0,
-    gradingLimit: 5,
-    createdAt: new Date().toISOString()
-};
-
 export default function App() {
     const [studentInfo, setStudentInfo] = useState<StudentInfo>({
         name: '', regNo: '', program: '', year: '', courseCode: '', examDate: ''
@@ -172,7 +161,7 @@ export default function App() {
     // Search functionality
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Auth state - Now enforcing login for a specific user
+    // Auth state
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [showAuth, setShowAuth] = useState(true); // Force login
@@ -214,10 +203,14 @@ export default function App() {
                     id: data.user.id,
                     name: data.user.name || data.user.username || data.user.email,
                     email: data.user.email,
-                    tier: 'free',
-                    gradingCount: 0,
-                    gradingLimit: 5,
+                    tier: data.user.tier || 'free',
+                    gradingCount: data.user.gradingCount ?? 0,
+                    gradingLimit: data.user.gradingLimit ?? 5,
                     createdAt: new Date().toISOString(),
+                    institution: data.user.institution || '',
+                    role: data.user.role || '',
+                    activeProvider: data.user.activeProvider || 'server',
+                    totalGraded: data.user.totalGraded ?? 0,
                 });
                 setShowAuth(false);
             } catch (err) {
@@ -515,7 +508,6 @@ export default function App() {
 
             setLoading(true);
             try {
-                // Use REST API for web/browser app - proxy forwards /api/* to Express on port 3001
                 const headers = {
                     'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`,
                     'Content-Type': 'application/json'
@@ -563,6 +555,7 @@ export default function App() {
 
                 setResult(mappedResult);
                 setActiveView('grade');
+                setUser(prev => prev ? { ...prev, gradingCount: prev.gradingCount + 1 } : prev);
 
                 if (mappedResult.extracted_info) {
                     setStudentInfo(prev => ({
@@ -749,7 +742,66 @@ export default function App() {
             alert(data.message || 'Failed to save API keys');
             return;
         }
+        // Optimistically reflect which provider is now active
+        setUser(prev => prev ? {
+            ...prev,
+            activeProvider: geminiKey ? 'gemini' : openaiKey ? 'openai' : 'server'
+        } : prev);
         alert('API keys saved successfully!');
+    };
+
+    // Profile handlers (institution/role)
+    const handleSaveProfile = async (institution: string, role: string) => {
+        if (!user) return;
+        const res = await fetch('/api/settings/profile', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ institution, role }),
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.message || 'Failed to save profile');
+            return;
+        }
+        setUser(prev => prev ? { ...prev, institution, role } : prev);
+    };
+
+    // Change password handler
+    const handleChangePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            const res = await fetch('/api/auth/change-password', {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ currentPassword, newPassword }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                return { success: false, message: data.message || 'Failed to change password' };
+            }
+            return { success: true };
+        } catch (err) {
+            return { success: false, message: 'Failed to change password' };
+        }
+    };
+
+    // Delete account handler
+    const handleDeleteAccount = async (password: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            const res = await fetch('/api/auth/delete-account', {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ password }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                return { success: false, message: data.message || 'Failed to delete account' };
+            }
+            // Account deleted successfully — log the user out locally
+            handleLogout();
+            return { success: true };
+        } catch (err) {
+            return { success: false, message: 'Failed to delete account' };
+        }
     };
 
     const handleUpgrade = (tier: string) => {
@@ -1407,6 +1459,10 @@ export default function App() {
                         onClose={() => setShowProfile(false)}
                         onLogout={handleLogout}
                         onUpgrade={() => handleUpgrade('personal')}
+                        onOpenSettings={() => { setShowProfile(false); setShowSettings(true); }}
+                        onSaveProfile={handleSaveProfile}
+                        onChangePassword={handleChangePassword}
+                        onDeleteAccount={handleDeleteAccount}
                     />
                 )}
 
