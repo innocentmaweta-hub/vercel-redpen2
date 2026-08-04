@@ -1531,6 +1531,7 @@ export default function App() {
 
                 {showAuth && (
                     <AuthModal
+                        onClose={() => setShowAuth(false)}
                         onAuthSuccess={handleAuthSuccess}
                     />
                 )}
