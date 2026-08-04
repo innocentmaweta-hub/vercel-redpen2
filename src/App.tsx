@@ -173,6 +173,7 @@ export default function App() {
     const [isAutoMode, setIsAutoMode] = useState(false);
     const [isGradingInProgress, setIsGradingInProgress] = useState(false);
     const [showGradingChoice, setShowGradingChoice] = useState(false); // State for grading choice modal
+    const [upgradePromptMessage, setUpgradePromptMessage] = useState<string | null>(null);
 
     // Auth header helper
     const authHeaders = useCallback((): Record<string, string> => {
@@ -210,6 +211,7 @@ export default function App() {
                     role: data.user.role || '',
                     activeProvider: data.user.activeProvider || 'server',
                     totalGraded: data.user.totalGraded ?? 0,
+                    avatarUrl: data.user.avatarUrl || '',
                 });
                 setShowAuth(false);
             } catch (err) {
@@ -528,6 +530,10 @@ export default function App() {
                 }
                 if (response.status === 403) {
                     const data = await response.json();
+                    if (data.code === 'LIMIT_REACHED') {
+                        setUpgradePromptMessage(data.message || 'You have reached your grading limit.');
+                        return;
+                    }
                     throw new Error(data.message || 'Access denied');
                 }
                 if (!response.ok) {
@@ -763,6 +769,39 @@ export default function App() {
             return;
         }
         setUser(prev => prev ? { ...prev, institution, role } : prev);
+    };
+    // Avatar upload handler
+    const handleUploadAvatar = async (file: File): Promise<{ success: boolean; message?: string }> => {
+        if (!user) return { success: false, message: 'Not logged in' };
+
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const base64 = reader.result as string;
+                    const res = await fetch('/api/settings/avatar', {
+                        method: 'POST',
+                        headers: authHeaders(),
+                        body: JSON.stringify({
+                            imageBase64: base64,
+                            filename: file.name,
+                            mimeType: file.type,
+                        }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        resolve({ success: false, message: data.message || 'Failed to upload image' });
+                        return;
+                    }
+                    setUser(prev => prev ? { ...prev, avatarUrl: data.avatarUrl } : prev);
+                    resolve({ success: true });
+                } catch (err) {
+                    resolve({ success: false, message: 'Failed to upload image' });
+                }
+            };
+            reader.onerror = () => resolve({ success: false, message: 'Failed to read image file' });
+            reader.readAsDataURL(file);
+        });
     };
 
     // Change password handler
@@ -1435,6 +1474,50 @@ export default function App() {
                     </div>
                 </div>
             )}
+            {/* Upgrade Prompt Modal */}
+            {upgradePromptMessage && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-card rounded-3xl border border-gray-800 shadow-xl w-full max-w-sm">
+                        <div className="p-6 border-b border-gray-800 bg-sidebar/50 flex items-center gap-3">
+                            <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
+                                <AlertTriangle size={18} className="text-yellow-500" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-bold uppercase tracking-widest text-gray-300">Grading Limit Reached</h2>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-[13px] text-gray-400 leading-relaxed">{upgradePromptMessage}</p>
+                        </div>
+                        <div className="p-4 border-t border-gray-800 bg-sidebar/50 flex flex-col gap-2">
+                            <button
+                                onClick={() => {
+                                    setUpgradePromptMessage(null);
+                                    handleUpgrade('personal');
+                                }}
+                                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition-all"
+                            >
+                                Upgrade Plan
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setUpgradePromptMessage(null);
+                                    setShowSettings(true);
+                                }}
+                                className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition-all"
+                            >
+                                Add My Own API Key
+                            </button>
+                            <button
+                                onClick={() => setUpgradePromptMessage(null)}
+                                className="w-full text-gray-500 hover:text-gray-300 py-2 text-xs font-bold uppercase tracking-widest transition-all"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <AnimatePresence>
                 {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
@@ -1462,6 +1545,7 @@ export default function App() {
                         onSaveProfile={handleSaveProfile}
                         onChangePassword={handleChangePassword}
                         onDeleteAccount={handleDeleteAccount}
+                        onUploadAvatar={handleUploadAvatar}
                     />
                 )}
 
