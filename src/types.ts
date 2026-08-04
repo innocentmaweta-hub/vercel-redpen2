@@ -3,7 +3,6 @@ export interface QuestionResult {
     score: string;
     feedback: string;
 }
-
 export interface ExtractedInfo {
     name: string;
     regNo: string;
@@ -12,7 +11,6 @@ export interface ExtractedInfo {
     courseCode: string;
     examDate: string;
 }
-
 // Raw response from the AI grading API (snake_case fields)
 export interface ApiGradingResult {
     total_score?: string;
@@ -26,7 +24,6 @@ export interface ApiGradingResult {
     error?: boolean;
     message?: string;
 }
-
 export interface GradingResult {
     totalScore?: string;
     score?: string;
@@ -38,7 +35,6 @@ export interface GradingResult {
     error?: boolean;
     message?: string;
 }
-
 export interface StudentInfo {
     name: string;
     regNo: string;
@@ -47,18 +43,14 @@ export interface StudentInfo {
     courseCode: string;
     examDate: string;
 }
-
 export interface HistoryRecord {
     id: string;
     date: string;
     studentInfo: StudentInfo;
     result: GradingResult;
 }
-
 export type ActiveView = 'dashboard' | 'grade' | 'remark' | 'history';
-
 export type SubscriptionTier = 'free' | 'personal' | 'corporate';
-
 export interface User {
     id: string;
     name: string;
@@ -70,13 +62,15 @@ export interface User {
     apiProvider?: 'openai' | 'gemini';
     googleId?: string;
     createdAt: string;
+    institution?: string;
+    role?: string;
+    activeProvider?: 'gemini' | 'openai' | 'server';
+    totalGraded?: number;
 }
-
 export interface AuthResponse {
     token: string;
     user: User;
 }
-
 export interface CourseSession {
     courseCode: string;
     courseName?: string;
