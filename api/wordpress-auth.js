@@ -247,6 +247,40 @@ export async function updateUserMeta(userId, key, value) {
   }
 }
 
+/**
+ * Update a WordPress user's password (admin-privileged action)
+ */
+export async function updateWordPressUserPassword(userId, newPassword) {
+  try {
+    await axios.post(
+      `${WORDPRESS_API}/wp/v2/users/${userId}`,
+      { password: newPassword },
+      { headers: getAdminAuthHeader(), timeout: 5000 }
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Password update failed:', error.response?.data || error.message);
+    return { success: false, error: error.response?.data?.message || error.message };
+  }
+}
+
+/**
+ * Permanently delete a WordPress user (admin-privileged action)
+ */
+export async function deleteWordPressUser(userId) {
+  try {
+    await axios.delete(`${WORDPRESS_API}/wp/v2/users/${userId}`, {
+      params: { force: true },
+      headers: getAdminAuthHeader(),
+      timeout: 5000,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('User deletion failed:', error.response?.data || error.message);
+    return { success: false, error: error.response?.data?.message || error.message };
+  }
+}
+
 export default {
   authenticateWithWordPress,
   createWordPressUser,
@@ -257,4 +291,6 @@ export default {
   syncWordPressUser,
   getUserMeta,
   updateUserMeta,
+  updateWordPressUserPassword,
+  deleteWordPressUser,
 };
