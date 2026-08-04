@@ -59,75 +59,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: AuthModalProps) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.93, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.93, y: 20 }}
-          transition={{ duration: 0.2 }}
-          onClick={e => e.stopPropagation()}
-          className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center">
-                <Mail size={16} className="text-accent-blue" />
-              </div>
-              <div>
-                <p className="text-[13px] font-black text-white">{isLogin ? 'Sign In' : 'Create Account'}</p>
-                <p className="text-[10px] text-gray-500">Access your grading dashboard</p>
-              </div>
-            </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
-              <X size={15} />
-            </button>
-          </div>
-
-          <div className="p-5 flex flex-col gap-4">
-            Google Login temporarily disabled - CORS configuration needed
-            <GoogleLogin
-              onSuccess={async (credentialResponse) => {
-                setLoading(true);
-                setError("");
-
-                try {
-                  const res = await fetch(API_ENDPOINTS.auth.google, {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      idToken: credentialResponse.credential,
-                    }),
-                  });
-
-                  const data = await res.json();
-
-                  if (!res.ok) {
-                    throw new Error(data.message || "Google authentication failed");
-                  }
-
-                  localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-                  onAuthSuccess(data);
-                } catch (err: any) {
-                  setError(err.message || "Google authentication failed");
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              onError={() => {
-                setError("Google Sign-In failed");
-              }}
-            />
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-gray-800" />
-              <span className="text-xs text-gray-600">OR</span>
-              <div className="flex-1 h-px bg-gray-800" />
-            </div>
-            
+        className="fixed inset-0 z-[9999] flex
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-400">
                 {error}
