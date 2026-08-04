@@ -164,7 +164,7 @@ export default function App() {
     // Auth state
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
-    const [showAuth, setShowAuth] = useState(true); // Force login
+    const [showAuth, setShowAuth] = useState(false); // Only shown when a gated action is attempted
     const [showProfile, setShowProfile] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showBatch, setShowBatch] = useState(false);
@@ -184,8 +184,7 @@ export default function App() {
     useEffect(() => {
         const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
         if (!storedToken) {
-            setShowAuth(true);
-            return;
+            return; // No forced login — user can browse freely until they hit a gated action
         }
 
         setToken(storedToken);
@@ -218,7 +217,7 @@ export default function App() {
                 localStorage.removeItem(AUTH_TOKEN_KEY);
                 setToken(null);
                 setUser(null);
-                setShowAuth(true);
+                // No forced login here either — just fall back to browsing as a guest
             }
         })();
     }, []);
