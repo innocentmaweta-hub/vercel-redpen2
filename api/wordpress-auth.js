@@ -280,7 +280,40 @@ export async function deleteWordPressUser(userId) {
     return { success: false, error: error.response?.data?.message || error.message };
   }
 }
+/**
+ * Upload a profile picture to the WordPress media library and
+ * link it to the user via redpen_profile meta.
+ * imageBuffer: raw Buffer of the image file
+ * filename: original filename (used for extension detection)
+ * mimeType: e.g. 'image/jpeg'
+ */
+export async function uploadProfilePicture(userId, imageBuffer, filename, mimeType) {
+  try {
+    const uploadResponse = await axios.post(
+      `${WORDPRESS_API}/wp/v2/media`,
+      imageBuffer,
+      {
+        headers: {
+          ...getAdminAuthHeader(),
+          'Content-Type': mimeType,
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+        maxBodyLength: 10 * 1024 * 1024, // 10MB safety cap
+        timeout: 15000,
+      }
+    );
 
+    const mediaUrl = uploadResponse.data?.source_url;
+    if (!mediaUrl) {
+      return { success: false, error: 'Upload succeeded but no URL was returned' };
+    }
+
+    return { success: true, url: mediaUrl, mediaId: uploadResponse.data.id };
+  } catch (error) {
+    console.error('Profile picture upload failed:', error.response?.data || error.message);
+    return { success: false, error: error.response?.data?.message || error.message };
+  }
+}
 export default {
   authenticateWithWordPress,
   createWordPressUser,
@@ -293,4 +326,5 @@ export default {
   updateUserMeta,
   updateWordPressUserPassword,
   deleteWordPressUser,
+  uploadProfilePicture,
 };
