@@ -191,20 +191,65 @@ export default function App() {
         return t ? { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
     }, []);
 
-    // Enforce login for specific user
+    // Restore session by validating the stored token against the backend
     useEffect(() => {
         const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-        if (storedToken) {
-            // Validate the token belongs to our specific user
-            // For now, just check if there's a token and set the default user
-            setToken(storedToken);
-            setUser(DEFAULT_USER);
-            setShowAuth(false);
-        } else {
-            // Force login for the specific user
+        if (!storedToken) {
             setShowAuth(true);
+            return;
         }
+
+        setToken(storedToken);
+
+        (async () => {
+            try {
+                const res = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${storedToken}` }
+                });
+
+                if (!res.ok) throw new Error('Session expired');
+
+                const data = await res.json();
+                setUser({
+                    id: data.user.id,
+                    name: data.user.name || data.user.username || data.user.email,
+                    email: data.user.email,
+                    tier: 'free',
+                    gradingCount: 0,
+                    gradingLimit: 5,
+                    createdAt: new Date().toISOString(),
+                });
+                setShowAuth(false);
+            } catch (err) {
+                console.error('Failed to restore session:', err);
+                localStorage.removeItem(AUTH_TOKEN_KEY);
+                setToken(null);
+                setUser(null);
+                setShowAuth(true);
+            }
+        })();
     }, []);
+
+    // Load grading history from the backend once the user is authenticated
+    useEffect(() => {
+        if (!user || !token) return;
+
+        (async () => {
+            try {
+                const res = await fetch('/api/history', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (Array.isArray(data.history)) {
+                    setHistory(data.history);
+                    saveHistory(data.history); // local cache for offline fallback
+                }
+            } catch (err) {
+                console.error('Failed to load history from server:', err);
+            }
+        })();
+    }, [user, token]);
 
     // Auto-hide tool options bar after 6 seconds of inactivity
     useEffect(() => {
@@ -610,6 +655,14 @@ export default function App() {
         const updated = [record, ...history].slice(0, 50);
         setHistory(updated);
         saveHistory(updated);
+
+        // Sync to backend so history persists across devices
+        fetch('/api/history', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ studentInfo: record.studentInfo, result: record.result })
+        }).catch(err => console.error('Failed to sync history to server:', err));
+
         const blob = new Blob([JSON.stringify({ studentInfo, result, examinerRemarks }, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -689,10 +742,13 @@ export default function App() {
         const res = await fetch('/api/settings/api-keys', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ openaiKey, geminiKey }),
+            body: JSON.stringify({ openaiApiKey: openaiKey, geminiApiKey: geminiKey }),
         });
-        const data = await res.json();
-        if (data.user) setUser(data.user);
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.message || 'Failed to save API keys');
+            return;
+        }
         alert('API keys saved successfully!');
     };
 
@@ -739,6 +795,16 @@ export default function App() {
         const updated = [...records, ...history].slice(0, 50);
         setHistory(updated);
         saveHistory(updated);
+
+        // Sync each record to the backend so history persists across devices
+        records.forEach(record => {
+            fetch('/api/history', {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ studentInfo: record.studentInfo, result: record.result })
+            }).catch(err => console.error('Failed to sync history to server:', err));
+        });
+
         alert(`Saved ${records.length} grading results to history!`);
         setShowBatch(false);
     };
