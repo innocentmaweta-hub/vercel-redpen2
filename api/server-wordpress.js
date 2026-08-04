@@ -18,6 +18,8 @@ import {
   getWordPressUserByUsername,
   getUserMeta,
   updateUserMeta,
+  updateWordPressUserPassword,
+  deleteWordPressUser,
 } from './wordpress-auth.js';
 
 const app = express();
@@ -112,7 +114,6 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Get WordPress user by email
     const wpUser = await getWordPressUserByEmail(email);
     if (!wpUser) {
       return res.status(401).json({
@@ -121,7 +122,6 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Authenticate with WordPress
     const authResult = await authenticateWithWordPress(wpUser.username, password);
     if (!authResult.success) {
       return res.status(401).json({
@@ -130,7 +130,6 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Create user object
     const user = {
       id: wpUser.id,
       email: wpUser.email,
@@ -139,7 +138,6 @@ app.post('/api/auth/login', async (req, res) => {
       wordPressId: wpUser.id,
     };
 
-    // Generate app token
     const token = generateAppToken(user);
 
     res.json({
@@ -185,7 +183,6 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Check if user already exists
     const existingUser = await getWordPressUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({
@@ -194,7 +191,6 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Create user in WordPress
     const createResult = await createWordPressUser({ name, email, password });
     if (!createResult.success) {
       return res.status(400).json({
@@ -238,7 +234,6 @@ app.post('/api/auth/google', async (req, res) => {
       });
     }
 
-    // Verify the token with Google
     const ticket = await googleClient.verifyIdToken({
       idToken,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -254,11 +249,9 @@ app.post('/api/auth/google', async (req, res) => {
       });
     }
 
-    // Check if user exists
     let wpUser = await getWordPressUserByEmail(email);
 
     if (!wpUser) {
-      // Create new user from Google
       const createResult = await createWordPressUser({
         name: name || email.split('@')[0],
         email,
@@ -275,7 +268,6 @@ app.post('/api/auth/google', async (req, res) => {
       wpUser = createResult.user;
     }
 
-    // Generate app token
     const user = {
       id: wpUser.id,
       email: wpUser.email,
@@ -305,7 +297,7 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 /**
- * Get Current User
+ * Get Current User — now returns tier/usage/profile/AI-provider info
  */
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
@@ -317,17 +309,94 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
       });
     }
 
+    const [usage, profile, apiKeys, history] = await Promise.all([
+      getUserMeta(wpUser.id, 'redpen_usage'),
+      getUserMeta(wpUser.id, 'redpen_profile'),
+      getUserMeta(wpUser.id, 'redpen_api_keys'),
+      getUserMeta(wpUser.id, 'redpen_grading_history'),
+    ]);
+
+    const safeUsage = usage || { tier: 'free', gradingCount: 0, gradingLimit: 5 };
+    const safeProfile = profile || { institution: '', role: '' };
+    const safeApiKeys = apiKeys || {};
+
     res.json({
       user: {
         id: wpUser.id,
         email: wpUser.email,
         username: wpUser.username,
         name: wpUser.name,
+        tier: safeUsage.tier || 'free',
+        gradingCount: safeUsage.gradingCount || 0,
+        gradingLimit: safeUsage.gradingLimit ?? 5,
+        institution: safeProfile.institution || '',
+        role: safeProfile.role || '',
+        activeProvider: safeApiKeys.geminiApiKey ? 'gemini' : safeApiKeys.openaiApiKey ? 'openai' : 'server',
+        totalGraded: Array.isArray(history) ? history.length : 0,
       }
     });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Failed to get user' });
+  }
+});
+
+/**
+ * Change Password
+ */
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ code: 'MISSING_FIELDS', message: 'Current and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ code: 'WEAK_PASSWORD', message: 'New password must be at least 6 characters' });
+    }
+
+    const authResult = await authenticateWithWordPress(req.user.username, currentPassword);
+    if (!authResult.success) {
+      return res.status(401).json({ code: 'INVALID_PASSWORD', message: 'Current password is incorrect' });
+    }
+
+    const updateResult = await updateWordPressUserPassword(req.user.id, newPassword);
+    if (!updateResult.success) {
+      return res.status(500).json({ code: 'PASSWORD_UPDATE_FAILED', message: updateResult.error || 'Failed to update password' });
+    }
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error.message);
+    res.status(500).json({ message: 'Failed to change password' });
+  }
+});
+
+/**
+ * Delete Account
+ */
+app.post('/api/auth/delete-account', authMiddleware, async (req, res) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ code: 'MISSING_PASSWORD', message: 'Password confirmation is required' });
+    }
+
+    const authResult = await authenticateWithWordPress(req.user.username, password);
+    if (!authResult.success) {
+      return res.status(401).json({ code: 'INVALID_PASSWORD', message: 'Password is incorrect' });
+    }
+
+    const deleteResult = await deleteWordPressUser(req.user.id);
+    if (!deleteResult.success) {
+      return res.status(500).json({ code: 'DELETE_FAILED', message: deleteResult.error || 'Failed to delete account' });
+    }
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Delete account error:', error.message);
+    res.status(500).json({ message: 'Failed to delete account' });
   }
 });
 
@@ -345,6 +414,18 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
   console.log(`[${requestId}] Starting grading request for ${req.user.email}`);
 
   try {
+    // Check grading limit before doing any AI work
+    const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { gradingCount: 0, tier: 'free', gradingLimit: 5 };
+    const gradingLimit = usage.tier === 'corporate' ? Infinity : (usage.gradingLimit ?? 5);
+
+    if (usage.tier !== 'corporate' && (usage.gradingCount || 0) >= gradingLimit) {
+      return res.status(403).json({
+        code: 'LIMIT_REACHED',
+        error: true,
+        message: `Grading limit reached (${usage.gradingCount}/${gradingLimit}). Add your own API key in Settings, or upgrade your plan to continue.`,
+      });
+    }
+
     const { studentInfo, markingScheme, studentPaper } = req.body;
 
     if (!studentPaper || typeof studentPaper !== 'string') {
@@ -394,22 +475,18 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
 
     console.log(`[${requestId}] Grading completed via ${provider}. User: ${req.user.email}`);
 
-    // Best-effort: record this grading in the user's history (don't fail the request if this fails)
+    // Increment usage count (best-effort — don't fail the response if this fails)
+    // Note: this only tracks USAGE. The actual history record is saved separately
+    // via POST /api/history when the user clicks "Save" in the frontend.
     try {
-      const existingHistory = (await getUserMeta(req.user.id, 'redpen_grading_history')) || [];
-      const entry = {
-        id: requestId,
-        timestamp: new Date().toISOString(),
-        studentName: result?.extracted_info?.name || studentInfo?.name || 'Unknown',
-        regNo: result?.extracted_info?.regNo || studentInfo?.regNo || '',
-        courseCode: result?.extracted_info?.courseCode || studentInfo?.courseCode || '',
-        totalScore: result?.total_score || '',
-        grade: result?.grade || '',
+      const updatedUsage = {
+        tier: usage.tier || 'free',
+        gradingCount: (usage.gradingCount || 0) + 1,
+        gradingLimit: usage.gradingLimit ?? 5,
       };
-      const updatedHistory = [entry, ...existingHistory].slice(0, 100); // cap at 100 entries
-      await updateUserMeta(req.user.id, 'redpen_grading_history', updatedHistory);
-    } catch (historyError) {
-      console.error(`[${requestId}] Failed to record history:`, historyError.message);
+      await updateUserMeta(req.user.id, 'redpen_usage', updatedUsage);
+    } catch (usageError) {
+      console.error(`[${requestId}] Failed to update usage:`, usageError.message);
     }
 
     res.json(result);
@@ -423,7 +500,7 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== History Endpoint ==========
+// ========== History Endpoints ==========
 
 app.get('/api/history', authMiddleware, async (req, res) => {
   try {
@@ -435,12 +512,39 @@ app.get('/api/history', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== Settings / API Keys Endpoints ==========
+app.post('/api/history', authMiddleware, async (req, res) => {
+  try {
+    const { studentInfo, result } = req.body;
+    if (!result) {
+      return res.status(400).json({ message: 'result is required' });
+    }
+
+    const existingHistory = (await getUserMeta(req.user.id, 'redpen_grading_history')) || [];
+    const entry = {
+      id: `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      date: new Date().toISOString(),
+      studentInfo: studentInfo || {},
+      result,
+    };
+    const updatedHistory = [entry, ...existingHistory].slice(0, 50); // cap at 50 entries
+
+    const ok = await updateUserMeta(req.user.id, 'redpen_grading_history', updatedHistory);
+    if (!ok) {
+      return res.status(500).json({ message: 'Failed to save history record' });
+    }
+
+    res.status(201).json({ message: 'History record saved', entry });
+  } catch (error) {
+    console.error('History save error:', error.message);
+    res.status(500).json({ message: 'Failed to save history record' });
+  }
+});
+
+// ========== Settings / API Keys / Profile Endpoints ==========
 
 app.get('/api/settings/api-keys', authMiddleware, async (req, res) => {
   try {
     const keys = (await getUserMeta(req.user.id, 'redpen_api_keys')) || {};
-    // Never return raw keys to the client — only whether one is set, plus a masked preview
     const mask = (key) => (key ? `••••${key.slice(-4)}` : null);
     res.json({
       geminiKeySet: !!keys.geminiApiKey,
@@ -474,6 +578,29 @@ app.post('/api/settings/api-keys', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('API key save error:', error.message);
     res.status(500).json({ message: 'Failed to save API key settings' });
+  }
+});
+
+app.post('/api/settings/profile', authMiddleware, async (req, res) => {
+  try {
+    const { institution, role } = req.body;
+    const existing = (await getUserMeta(req.user.id, 'redpen_profile')) || {};
+
+    const updated = {
+      ...existing,
+      ...(institution !== undefined && { institution }),
+      ...(role !== undefined && { role }),
+    };
+
+    const ok = await updateUserMeta(req.user.id, 'redpen_profile', updated);
+    if (!ok) {
+      return res.status(500).json({ message: 'Failed to save profile' });
+    }
+
+    res.json({ message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('Profile save error:', error.message);
+    res.status(500).json({ message: 'Failed to save profile' });
   }
 });
 
@@ -560,24 +687,4 @@ async function gradeWithOpenAI(prompt, cleanScheme, schemeMime, cleanPaper, pape
     messages: [{ role: 'user', content }],
   });
 
-  return JSON.parse(response.choices[0].message.content);
-}
-
-async function gradeWithGemini(prompt, cleanScheme, schemeMime, cleanPaper, paperMime, hasScheme, apiKey, model) {
-  const ai = new GoogleGenAI({ apiKey });
-  const parts = [{ text: prompt }];
-  if (hasScheme) {
-    parts.push({ inlineData: { mimeType: schemeMime, data: cleanScheme } });
-  }
-  parts.push({ inlineData: { mimeType: paperMime, data: cleanPaper } });
-
-  const response = await ai.models.generateContent({
-    model: model,
-    contents: [{ role: 'user', parts }],
-    config: { responseMimeType: 'application/json' },
-  });
-
-  return JSON.parse(response.text);
-}
-
-export default app;
+  return JSON.parse(response.choices[0].me
