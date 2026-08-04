@@ -161,7 +161,7 @@ export const Sidebar = ({ activeView, onViewChange, onSave, onHelp, hasResult, u
         <div className="px-4">
           <button
             onClick={onProfile}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all border ${user
+            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all border overflow-hidden ${user
               ? 'bg-accent-blue/10 border-accent-blue/30 text-accent-blue hover:bg-accent-blue/20'
               : 'bg-gray-800 border-gray-700 text-gray-500 hover:bg-gray-700 hover:text-white'
               }`}
@@ -171,10 +171,25 @@ export const Sidebar = ({ activeView, onViewChange, onSave, onHelp, hasResult, u
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <User size={18} className="transition-colors" />
-            <span className="text-[8px] mt-0.5 uppercase font-bold tracking-tighter transition-colors">
-              {user ? user.name.split(' ')[0] : 'Login'}
-            </span>
+            {user?.avatarUrl ? (
+              <div className="relative w-full h-full flex flex-col items-center justify-center">
+                <img
+                  src={user.avatarUrl}
+                  alt={user.name}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <span className="relative z-10 mt-auto mb-0.5 text-[8px] font-bold uppercase tracking-tighter text-white bg-black/60 px-1 rounded-sm">
+                  {user.name.split(' ')[0]}
+                </span>
+              </div>
+            ) : (
+              <>
+                <User size={18} className="transition-colors" />
+                <span className="text-[8px] mt-0.5 uppercase font-bold tracking-tighter transition-colors">
+                  {user ? user.name.split(' ')[0] : 'Login'}
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
