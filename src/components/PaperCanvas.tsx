@@ -239,6 +239,24 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
             };
         }, []);
 
+        // Normalize a pixel size (font size, mark size, thickness) relative to canvas width,
+        // so it scales back to pixels correctly no matter how the canvas resizes.
+        const toNormalizedSize = useCallback((size: number): number => {
+            const canvas = overlayCanvasRef.current;
+
+            if (!canvas || canvas.width === 0) return size;
+
+            return size / canvas.width;
+        }, []);
+
+        const fromNormalizedSize = useCallback((normSize: number): number => {
+            const canvas = overlayCanvasRef.current;
+
+            if (!canvas) return normSize;
+
+            return normSize * canvas.width;
+        }, []);
+
         function redrawAll() {
             const canvas = overlayCanvasRef.current;
 
@@ -423,7 +441,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                             action.startPoint
                         );
 
-                        ctx.font = `${action.size}px ${action.fontFamily || 'Arial'}`;
+                        ctx.font = `${fromNormalizedSize(action.size)}px ${action.fontFamily || 'Arial'}`;
                         ctx.fillStyle = action.color;
 
                         ctx.fillText(
@@ -440,8 +458,8 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                     ) {
                         const canvasStart = fromNormalized(action.startPoint);
 
-                        const scaledSize = action.size || props.markSize;
-                        const scaledThickness = (action.thickness || props.markThickness) || 2;
+                        const scaledSize = fromNormalizedSize(action.size || toNormalizedSize(props.markSize));
+                        const scaledThickness = fromNormalizedSize(action.thickness || toNormalizedSize(props.markThickness)) || 2;
 
                         // Apply the calculated size and thickness
                         ctx.lineWidth = scaledThickness;
@@ -792,12 +810,13 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                         // Approximate text bounds (this is a simplification)
                         const ctx = canvas.getContext('2d');
                         if (ctx) {
-                            ctx.font = `${action.size}px ${action.fontFamily || 'Arial'}`;
+                            const actualFontSize = fromNormalizedSize(action.size);
+                            ctx.font = `${actualFontSize}px ${action.fontFamily || 'Arial'}`;
                             const textWidth = ctx.measureText(action.text).width;
                             
                             // Check if point is within text bounds (with some padding)
                             if (px >= canvasStart.x && px <= canvasStart.x + textWidth &&
-                                py >= canvasStart.y - action.size && py <= canvasStart.y) {
+                                py >= canvasStart.y - actualFontSize && py <= canvasStart.y) {
                                 found.push(i);
                                 break;
                             }
@@ -989,6 +1008,22 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
 
             // TEXT - Direct typing on canvas
             if (activeTool === 'text') {
+                // Commit any text already being typed before starting a new one,
+                // so clicking a new spot creates another overlay instead of losing the first
+                if (directTextInputRef.current.isActive && directTextInputRef.current.text.trim()) {
+                    const committedAction: DrawAction = {
+                        type: 'text',
+                        text: directTextInputRef.current.text,
+                        startPoint: toNormalized(directTextInputRef.current.position),
+                        color: directTextInputRef.current.color,
+                        size: toNormalizedSize(directTextInputRef.current.fontSize),
+                        fontFamily: directTextInputRef.current.fontFamily
+                    };
+
+                    actionsRef.current.push(committedAction);
+                    redoStackRef.current = [];
+                }
+
                 // Store the position where text should be placed
                 const normPos = toNormalized(canvasPos);
 
@@ -1018,7 +1053,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                                     text: directTextInputRef.current.text,
                                     startPoint: toNormalized(directTextInputRef.current.position),
                                     color: directTextInputRef.current.color,
-                                    size: directTextInputRef.current.fontSize,
+                                    size: toNormalizedSize(directTextInputRef.current.fontSize),
                                     fontFamily: directTextInputRef.current.fontFamily
                                 };
 
@@ -1090,8 +1125,8 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                     type: 'mark',
                     startPoint: normPos,
                     color: '#10b981', // green-500
-                    size: props.markSize,
-                    thickness: props.markThickness,
+                    size: toNormalizedSize(props.markSize),
+                    thickness: toNormalizedSize(props.markThickness),
                     markType: 'right'
                 };
 
@@ -1114,8 +1149,8 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                     type: 'mark',
                     startPoint: normPos,
                     color: '#ef4444', // red-500
-                    size: props.markSize,
-                    thickness: props.markThickness,
+                    size: toNormalizedSize(props.markSize),
+                    thickness: toNormalizedSize(props.markThickness),
                     markType: 'wrong'
                 };
 
@@ -1258,9 +1293,24 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
             eraserPoints.current = [];
         };
 
-        // Cancel any pending direct text input if the user switches away from the text tool
+        // Commit any pending direct text input if the user switches away from the text tool,
+        // instead of silently discarding what they typed
         useEffect(() => {
             if (activeTool !== 'text' && isListeningForText.current) {
+                if (directTextInputRef.current.isActive && directTextInputRef.current.text.trim()) {
+                    const committedAction: DrawAction = {
+                        type: 'text',
+                        text: directTextInputRef.current.text,
+                        startPoint: toNormalized(directTextInputRef.current.position),
+                        color: directTextInputRef.current.color,
+                        size: toNormalizedSize(directTextInputRef.current.fontSize),
+                        fontFamily: directTextInputRef.current.fontFamily
+                    };
+
+                    actionsRef.current.push(committedAction);
+                    redoStackRef.current = [];
+                }
+
                 directTextInputRef.current.isActive = false;
                 isListeningForText.current = false;
 
