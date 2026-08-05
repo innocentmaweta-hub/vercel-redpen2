@@ -737,25 +737,7 @@ export default function App() {
     };
 
     // Settings handlers
-    const handleSaveApiKeys = async (openaiKey: string, geminiKey: string) => {
-        if (!user) return;
-        const res = await fetch('/api/settings/api-keys', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ openaiApiKey: openaiKey, geminiApiKey: geminiKey }),
-        });
-        if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            alert(data.message || 'Failed to save API keys');
-            return;
-        }
-        // Optimistically reflect which provider is now active
-        setUser(prev => prev ? {
-            ...prev,
-            activeProvider: geminiKey ? 'gemini' : openaiKey ? 'openai' : 'server'
-        } : prev);
-        alert('API keys saved successfully!');
-    };
+    
     const handleSaveApiKeys = async (openaiKey: string, geminiKey: string) => {
     if (!user) return;
     const res = await fetch('/api/settings/api-keys', {
