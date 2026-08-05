@@ -327,7 +327,7 @@ export const TopBar = ({
         </button>
         <button
           onClick={onRefresh}
-          className="px-3 py-1 bg-yellow-600 text-white text-[11px] font-bold rounded-md hover:bg-yellow-500 hover:scale-105 hover:shadow-xl hover:shadow-yellow-600/30 active:scale-95 transition-all duration-150 shadow-lg shadow-yellow-600/20 flex items-center gap-1.5 cursor-pointer"
+          className="px-3 py-1 bg-yellow-600 text-white text-[11px] font-bold rounded-md hover:bg-yellow-500 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer"
         >
           <RotateCw size={10} />
           Refresh
@@ -336,7 +336,7 @@ export const TopBar = ({
           onClick={onSettings}
           className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all duration-150 flex items-center gap-1 shadow-lg cursor-pointer ${showSettings
             ? 'bg-gray-700 text-white scale-105'
-            : 'bg-accent-blue text-white hover:bg-blue-600 hover:scale-105 hover:shadow-xl hover:shadow-accent-blue/30 active:scale-95 shadow-accent-blue/10'
+            : 'bg-accent-blue text-white hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95'
             }`}
         >
           <SlidersHorizontal size={10} />
