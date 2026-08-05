@@ -90,6 +90,21 @@ export const YazaPanel = ({
     document.body.style.userSelect = 'none';
   };
 
+  // Auto-growing textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const MAX_TEXTAREA_HEIGHT = 200; // px — matches roughly ~8-9 lines before scrolling kicks in
+
+  const autoResizeTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto'; // reset first so shrinking works too
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  };
+
+  useEffect(() => {
+    autoResizeTextarea();
+  }, [input]);
+
   // Load prior chat history on open
   useEffect(() => {
     if (!isLoggedIn) {
@@ -306,12 +321,14 @@ export const YazaPanel = ({
       <div className="p-3 border-t border-gray-800 shrink-0">
         <div className="flex items-end gap-2 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 focus-within:border-accent-blue transition-colors">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message Yaza AI..."
             rows={1}
-            className="flex-1 bg-transparent text-[12px] text-white placeholder:text-gray-600 focus:outline-none resize-none max-h-24"
+            style={{ maxHeight: MAX_TEXTAREA_HEIGHT }}
+            className="flex-1 bg-transparent text-[12px] text-white placeholder:text-gray-600 focus:outline-none resize-none overflow-y-auto"
           />
           <button
             onClick={handleSend}
