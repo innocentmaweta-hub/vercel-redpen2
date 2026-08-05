@@ -127,7 +127,7 @@ export const YazaPanel = ({
 
     const userMsg: ChatMessage = { role: 'user', text: trimmed };
     setInput('');
-
+ 
     if (!isLoggedIn) {
       setMessages((prev) => [
         ...prev,
