@@ -501,6 +501,176 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     });
   }
 });
+// ========== Yaza AI Chat Endpoint (function-calling agent) ==========
+
+const YAZA_TOOLS = [
+  {
+    functionDeclarations: [
+      {
+        name: 'update_student_info',
+        description: "Update one or more fields of the current student's info form.",
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            name: { type: 'STRING' },
+            regNo: { type: 'STRING' },
+            program: { type: 'STRING' },
+            year: { type: 'STRING' },
+            courseCode: { type: 'STRING' },
+            examDate: { type: 'STRING' },
+          },
+        },
+      },
+      {
+        name: 'trigger_grading',
+        description: 'Run grading on the currently uploaded student paper.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            mode: { type: 'STRING', enum: ['ai', 'manual'], description: 'ai = AI grading, manual = open blank manual grading form' },
+          },
+          required: ['mode'],
+        },
+      },
+      {
+        name: 'navigate_view',
+        description: 'Switch the app to a different view/screen.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            view: { type: 'STRING', enum: ['dashboard', 'grade', 'remark', 'history'] },
+          },
+          required: ['view'],
+        },
+      },
+      {
+        name: 'edit_result_feedback',
+        description: "Change the overall feedback text of the current grading result.",
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            feedback: { type: 'STRING' },
+          },
+          required: ['feedback'],
+        },
+      },
+      {
+        name: 'edit_question_score',
+        description: 'Edit the score and/or feedback for a specific question in the current result.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            questionNumber: { type: 'NUMBER' },
+            score: { type: 'STRING' },
+            feedback: { type: 'STRING' },
+          },
+          required: ['questionNumber'],
+        },
+      },
+      {
+        name: 'save_results',
+        description: 'Save the current grading result to history.',
+        parameters: { type: 'OBJECT', properties: {} },
+      },
+      {
+        name: 'open_settings',
+        description: "Open the app's settings panel.",
+        parameters: { type: 'OBJECT', properties: {} },
+      },
+      {
+        name: 'open_profile',
+        description: "Open the user's profile panel.",
+        parameters: { type: 'OBJECT', properties: {} },
+      },
+    ],
+  },
+];
+
+app.post('/api/yaza/chat', authMiddleware, async (req, res) => {
+  try {
+    const { message, appContext, conversationHistory } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ code: 'MISSING_MESSAGE', message: 'Message is required' });
+    }
+    if (!GEMINI_KEY) {
+      return res.status(500).json({ code: 'NO_PROVIDER_CONFIGURED', message: 'AI provider not configured' });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+
+    const systemContext = `You are Yaza AI, an assistant embedded in RedPen, an exam-grading app.
+You can chat normally, and you can take actions in the app using the provided tools when the user asks you to do something (e.g. "change the student's name to X", "grade this", "save it", "go to history").
+Only call a tool when the user's message clearly asks for an action. Otherwise just respond conversationally.
+Current app state (for context, may be partial):
+${JSON.stringify(appContext || {}, null, 2)}`;
+
+    const history = Array.isArray(conversationHistory) ? conversationHistory : [];
+    const contents = [
+      { role: 'user', parts: [{ text: systemContext }] },
+      { role: 'model', parts: [{ text: 'Understood. I have the current app context and will use tools when appropriate.' }] },
+      ...history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] })),
+      { role: 'user', parts: [{ text: message }] },
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+      config: { tools: YAZA_TOOLS },
+    });
+
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+
+    const functionCalls = parts
+      .filter((p) => p.functionCall)
+      .map((p) => ({ name: p.functionCall.name, args: p.functionCall.args || {} }));
+
+    const textReply = parts
+      .filter((p) => p.text)
+      .map((p) => p.text)
+      .join('\n')
+      .trim();
+
+    // Track chat usage (best-effort)
+    try {
+      const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tier: 'free', gradingCount: 0, gradingLimit: 5 };
+      usage.chatCount = (usage.chatCount || 0) + 1;
+      await updateUserMeta(req.user.id, 'redpen_usage', usage);
+    } catch (e) {
+      console.error('Failed to update chat usage:', e.message);
+    }
+
+    // Save chat history (best-effort, capped)
+    try {
+      const existing = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || [];
+      const updated = [
+        ...existing,
+        { role: 'user', text: message, timestamp: new Date().toISOString() },
+        { role: 'assistant', text: textReply || '(action taken)', timestamp: new Date().toISOString() },
+      ].slice(-50);
+      await updateUserMeta(req.user.id, 'redpen_yaza_chat', updated);
+    } catch (e) {
+      console.error('Failed to save chat history:', e.message);
+    }
+
+    res.json({ reply: textReply, actions: functionCalls });
+  } catch (error) {
+    console.error('Yaza chat error:', error.message);
+    res.status(500).json({ code: 'YAZA_CHAT_FAILED', message: 'Yaza AI failed to respond. Please try again.' });
+  }
+});
+
+// ========== Yaza Chat History Endpoint ==========
+
+app.get('/api/yaza/history', authMiddleware, async (req, res) => {
+  try {
+    const history = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || [];
+    res.json({ history });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load chat history' });
+  }
+});
 
 // ========== History Endpoints ==========
 
