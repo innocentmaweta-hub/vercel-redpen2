@@ -58,6 +58,38 @@ export const YazaPanel = ({
   const [loadingHistory, setLoadingHistory] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Resizable width via left-edge drag
+  const MIN_WIDTH = 390;
+  const [panelWidth, setPanelWidth] = useState(MIN_WIDTH);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      // Panel is anchored to the right edge (right-4 = 16px), so width = distance from cursor to that right edge
+      const newWidth = window.innerWidth - e.clientX - 16;
+      const maxWidth = window.innerWidth - 32; // leave a little margin on the far left
+      setPanelWidth(Math.min(Math.max(newWidth, MIN_WIDTH), maxWidth));
+    };
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const startDragging = () => {
+    isDraggingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   // Load prior chat history on open
   useEffect(() => {
     if (!isLoggedIn) {
@@ -203,8 +235,15 @@ export const YazaPanel = ({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 360, opacity: 0 }}
       transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-      className="fixed top-10 right-4 bottom-4 w-[390px] bg-card rounded-3xl border border-gray-800 shadow-xl z-[9998] flex flex-col overflow-hidden"
+      style={{ width: panelWidth }}
+      className="fixed top-10 right-4 bottom-4 bg-card rounded-3xl border border-gray-800 shadow-xl z-[9998] flex flex-col overflow-hidden"
     >
+      {/* Drag handle — left edge */}
+      <div
+        onMouseDown={startDragging}
+        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-accent-blue/30 active:bg-accent-blue/50 transition-colors z-10"
+        title="Drag to resize"
+      />
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-2">
