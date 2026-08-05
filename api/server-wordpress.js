@@ -10,8 +10,8 @@ import { GoogleGenAI } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import cors from 'cors';
 import { OAuth2Client } from 'google-auth-library';
-import { createYazaRouter } from './yaza-gemini.js';
-// import { createYazaRouter } from './yaza-openrouter.js';
+// import { createYazaRouter } from './yaza-gemini.js';
+import { createYazaRouter } from './yaza-openrouter.js';
 import {
   authenticateWithWordPress,
   createWordPressUser,
