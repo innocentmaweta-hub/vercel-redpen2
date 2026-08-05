@@ -167,21 +167,16 @@ export const Sidebar = ({ activeView, onViewChange, onSave, onHelp, hasResult, u
               }`}
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              setTooltip({ label: user ? 'Profile' : 'Sign In', y: rect.top + rect.height / 2 });
+              setTooltip({ label: user ? user.name : 'Sign In', y: rect.top + rect.height / 2 });
             }}
             onMouseLeave={() => setTooltip(null)}
           >
             {user?.avatarUrl ? (
-              <div className="relative w-full h-full flex flex-col items-center justify-center">
-                <img
-                  src={user.avatarUrl}
-                  alt={user.name}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <span className="relative z-10 mt-auto mb-0.5 text-[8px] font-bold uppercase tracking-tighter text-white bg-black/60 px-1 rounded-sm">
-                  {user.name.split(' ')[0]}
-                </span>
-              </div>
+              <img
+                src={user.avatarUrl}
+                alt={user.name}
+                className="w-full h-full object-cover"
+              />
             ) : (
               <>
                 <User size={18} className="transition-colors" />
