@@ -66,8 +66,8 @@ let MODEL = null;
 
 if (GEMINI_KEY) {
   provider = 'gemini';
-  MODEL = 'gemini-2.0-flash';
-  console.log('Provider: Google Gemini (gemini-2.0-flash)');
+  MODEL = 'gemini-2.5-flash';
+  console.log('Provider: Google Gemini (gemini-2.5-flash)');
 } else if (OPENAI_KEY?.startsWith('sk-or-')) {
   provider = 'openrouter';
   openaiClient = new OpenAI({ apiKey: OPENAI_KEY, baseURL: 'https://openrouter.ai/api/v1' });
