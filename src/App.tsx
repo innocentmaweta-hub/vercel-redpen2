@@ -1570,6 +1570,28 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                     />
                 )}
 
+                {showYaza && (
+                    <YazaPanel
+                        onClose={() => setShowYaza(false)}
+                        authHeaders={authHeaders}
+                        studentInfo={studentInfo}
+                        result={result}
+                        activeView={activeView}
+                        hasStudentPaper={!!studentPaper}
+                        onUpdateStudentInfo={(updates) => setStudentInfo(prev => ({ ...prev, ...updates }))}
+                        onTriggerGrading={(mode) => {
+                            setMarkingModeState(mode);
+                            setTimeout(() => handleGrade(), 100);
+                        }}
+                        onNavigateView={setActiveView}
+                        onEditResultFeedback={(feedback) => setResult(prev => prev ? { ...prev, feedback } : prev)}
+                        onEditQuestionScore={handleYazaEditQuestionScore}
+                        onSaveResults={handleSave}
+                        onOpenSettings={() => setShowSettings(true)}
+                        onOpenProfile={() => setShowProfile(true)}
+                    />
+                )}
+
                 {showProfile && user && (
                     <ProfileModal
                         user={user}
