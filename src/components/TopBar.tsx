@@ -320,7 +320,7 @@ export const TopBar = ({
         </button>
         <button
           onClick={onBatch}
-          className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl hover:shadow-accent-blue/30 active:scale-95 transition-all duration-150 shadow-lg shadow-accent-blue/10 flex items-center gap-1.5 cursor-pointer"
+          className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer"
         >
           <Layers size={12} />
           Batch
