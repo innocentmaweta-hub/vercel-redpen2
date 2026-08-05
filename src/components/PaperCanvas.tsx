@@ -1135,18 +1135,8 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
 
             // PAN - allow panning regardless of tool if middle-click or Alt/Ctrl key is pressed, or if pan tool is selected
             if (isPanning.current) {
-                const pos = getCanvasPos(
-                    e.clientX,
-                    e.clientY
-                );
-
-                const dx =
-                    pos.x -
-                    (panStart.current?.x || 0);
-
-                const dy =
-                    pos.y -
-                    (panStart.current?.y || 0);
+                const dx = e.clientX - (panStart.current?.x ?? e.clientX);
+                const dy = e.clientY - (panStart.current?.y ?? e.clientY);
 
                 panX.current += dx;
                 panY.current += dy;
