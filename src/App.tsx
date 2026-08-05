@@ -1560,6 +1560,8 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                         result={result}
                         activeView={activeView}
                         hasStudentPaper={!!studentPaper}
+                        isLoggedIn={!!user}
+                        onRequireLogin={() => setShowAuth(true)}
                         onUpdateStudentInfo={(updates) => setStudentInfo(prev => ({ ...prev, ...updates }))}
                         onTriggerGrading={(mode) => {
                             setMarkingModeState(mode);
