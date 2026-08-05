@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles, Loader2, Bot, User as UserIcon } from 'lucide-react';
+import { X, Send, Sparkles, Loader2, Bot, User as UserIcon, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, GradingResult, ActiveView } from '../types';
 
@@ -18,6 +18,7 @@ interface Props {
   authHeaders: () => Record<string, string>;
   isLoggedIn: boolean;
   onRequireLogin: () => void;
+  sessionKey: string;
   // App state needed for context
   studentInfo: StudentInfo;
   result: GradingResult | null;
@@ -39,6 +40,7 @@ export const YazaPanel = ({
   authHeaders,
   isLoggedIn,
   onRequireLogin,
+  sessionKey,
   studentInfo,
   result,
   activeView,
@@ -105,19 +107,23 @@ export const YazaPanel = ({
     autoResizeTextarea();
   }, [input]);
 
-  // Load prior chat history on open
+  // Load prior chat history whenever the panel opens or the session changes
   useEffect(() => {
     if (!isLoggedIn) {
+      setMessages([]);
       setLoadingHistory(false);
       return;
     }
+    setLoadingHistory(true);
     (async () => {
       try {
-        const res = await fetch('/api/yaza/history', { headers: authHeaders() });
+        const res = await fetch(`/api/yaza/history?sessionKey=${encodeURIComponent(sessionKey)}`, { headers: authHeaders() });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.history)) {
             setMessages(data.history.map((m: any) => ({ role: m.role, text: m.text })));
+          } else {
+            setMessages([]);
           }
         }
       } catch (err) {
@@ -126,7 +132,7 @@ export const YazaPanel = ({
         setLoadingHistory(false);
       }
     })();
-  }, []);
+  }, [sessionKey, isLoggedIn]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -174,7 +180,7 @@ export const YazaPanel = ({
 
     const userMsg: ChatMessage = { role: 'user', text: trimmed };
     setInput('');
- 
+
     if (!isLoggedIn) {
       setMessages((prev) => [
         ...prev,
@@ -210,6 +216,7 @@ export const YazaPanel = ({
           message: trimmed,
           appContext,
           conversationHistory: messages.slice(-10), // last few turns for context
+          sessionKey,
         }),
       });
 
@@ -234,6 +241,21 @@ export const YazaPanel = ({
       setMessages((prev) => [...prev, { role: 'assistant', text: 'Failed to reach Yaza AI. Please try again.' }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!isLoggedIn) return;
+    if (!window.confirm('Clear this session\'s Yaza AI conversation? This cannot be undone.')) return;
+
+    try {
+      await fetch(`/api/yaza/history?sessionKey=${encodeURIComponent(sessionKey)}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      setMessages([]);
+    } catch (err) {
+      console.error('Failed to clear Yaza history:', err);
     }
   };
 
@@ -270,9 +292,18 @@ export const YazaPanel = ({
             <p className="text-[9px] text-gray-500">Chat &amp; take actions in the app</p>
           </div>
         </div>
-        <button onClick={onClose} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
-          <X size={15} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleClearHistory}
+            title="Clear conversation"
+            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
