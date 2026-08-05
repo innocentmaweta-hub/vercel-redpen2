@@ -468,9 +468,9 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
 
                         // Draw the mark based on type
                         if (action.markType === 'right') {
-                            // Draw a checkmark with increased size and thickness
+                            // Draw a checkmark — short left arm (1/4 the length of the long right arm)
                             ctx.beginPath();
-                            ctx.moveTo(canvasStart.x - scaledSize / 3, canvasStart.y);
+                            ctx.moveTo(canvasStart.x - scaledSize * 0.2129, canvasStart.y + scaledSize * 0.1808);
                             ctx.lineTo(canvasStart.x - scaledSize / 9, canvasStart.y + scaledSize / 3);
                             ctx.lineTo(canvasStart.x + scaledSize / 3, canvasStart.y - scaledSize / 4);
                             ctx.stroke();
