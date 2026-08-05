@@ -203,7 +203,7 @@ export const YazaPanel = ({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 360, opacity: 0 }}
       transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-      className="fixed top-0 right-0 h-full w-[360px] bg-gray-950 border-l border-gray-800 shadow-2xl z-[9998] flex flex-col"
+      className="fixed top-10 right-4 bottom-4 w-[400px] bg-card rounded-3xl border border-gray-800 shadow-xl z-[9998] flex flex-col overflow-hidden"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
