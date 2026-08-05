@@ -131,10 +131,10 @@ export default function App() {
     // Tool options
     const [penColor, setPenColor] = useState('#FF0000');
     const [penSize, setPenSize] = useState(3);
-    const [shapeColor, setShapeColor] = useState('#0000FF');
+    const [shapeColor, setShapeColor] = useState('#FF0000');
     const [shapeSize, setShapeSize] = useState(2);
     const [shapeType, setShapeType] = useState<'rectangle' | 'ellipse' | 'line' | 'triangle'>('rectangle');
-    const [textColor, setTextColor] = useState('#000000');
+    const [textColor, setTextColor] = useState('#FF0000');
     const [textSize, setTextSize] = useState(16);
     const [textFont, setTextFont] = useState('Arial');
     const [markingModeSetting, setMarkingModeSetting] = useState<'none' | 'right' | 'wrong'>('none');
