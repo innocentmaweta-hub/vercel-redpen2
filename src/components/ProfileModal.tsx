@@ -371,7 +371,7 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSetting
                         {user.tier !== 'corporate' && (
                             <button
                                 onClick={onUpgrade}
-                                className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-yellow-600/20"
+                                className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg"
                             >
                                 <Crown size={12} />
                                 {user.tier === 'free' ? 'Upgrade to Personal' : 'Upgrade to Corporate'}
