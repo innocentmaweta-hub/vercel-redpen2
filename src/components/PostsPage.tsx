@@ -233,7 +233,7 @@ export const PostsPage = ({ history, onGrade }: PostsPageProps) => {
           </div>
           <button
             onClick={onGrade}
-            className="flex items-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg shadow-accent-blue/20"
+            className="flex items-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg"
           >
             <Zap size={13} />
             Start Grading
