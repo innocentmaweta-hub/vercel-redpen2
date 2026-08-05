@@ -281,7 +281,7 @@ export const YazaPanel = ({
                 {m.role === 'user' ? <UserIcon size={12} className="text-gray-400" /> : <Bot size={12} className="text-accent-blue" />}
               </div>
               <div
-                className={`max-w-[240px] rounded-2xl px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap ${
+                className={`max-w-[85%] rounded-2xl px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap ${
                   m.role === 'user' ? 'bg-accent-blue text-white' : 'bg-gray-900 text-gray-300 border border-gray-800'
                 }`}
               >
