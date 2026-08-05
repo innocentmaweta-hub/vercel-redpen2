@@ -334,8 +334,15 @@ export default function App() {
         setModalType(null);
     };
 
+        const clearYazaSessionHistory = (key: string) => {
+        fetch(`/api/yaza/history?sessionKey=${encodeURIComponent(key)}`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+        }).catch(err => console.error('Failed to reset Yaza history for new session:', err));
+    };
     const handleNewSessionConfirm = (session: CourseSession) => {
         setCourseSession(session);
+        clearYazaSessionHistory(session.courseCode || 'general');
 
         // Add to stored sessions
         const storedSessions = loadSessions();
@@ -693,6 +700,7 @@ export default function App() {
         if (result || markingScheme || studentPaper) {
             if (!window.confirm('Start a new session? Current work will be cleared.')) return;
         }
+        clearYazaSessionHistory('general');
         setStudentInfo({ name: '', regNo: '', program: '', year: '', courseCode: '', examDate: '' });
         setMarkingScheme(null);
         setStudentPaper(null);
