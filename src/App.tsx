@@ -24,6 +24,7 @@ import { ToolOptionsBar } from './components/ToolOptionsBar';
 import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse } from './types';
 import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { YazaPanel } from './components/YazaPanel';
 
 const HISTORY_KEY = 'grading_history';
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
@@ -167,6 +168,7 @@ export default function App() {
     const [showAuth, setShowAuth] = useState(false); // Only shown when a gated action is attempted
     const [showProfile, setShowProfile] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showYaza, setShowYaza] = useState(false);
     const [showBatch, setShowBatch] = useState(false);
 
     // Auto mode
@@ -754,6 +756,36 @@ export default function App() {
         } : prev);
         alert('API keys saved successfully!');
     };
+    const handleSaveApiKeys = async (openaiKey: string, geminiKey: string) => {
+    if (!user) return;
+    const res = await fetch('/api/settings/api-keys', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openaiApiKey: openaiKey, geminiApiKey: geminiKey }),
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || 'Failed to save API keys');
+        return;
+    }
+    setUser(prev => prev ? {
+        ...prev,
+        activeProvider: geminiKey ? 'gemini' : openaiKey ? 'openai' : 'server'
+    } : prev);
+    alert('API keys saved successfully!');
+};
+
+const handleYazaEditQuestionScore = (questionNumber: number, score?: string, feedback?: string) => {
+    setResult(prev => {
+        if (!prev) return prev;
+        const questions = (prev.questions || []).map(q =>
+            q.q === questionNumber
+                ? { ...q, ...(score !== undefined && { score }), ...(feedback !== undefined && { feedback }) }
+                : q
+        );
+        return { ...prev, questions };
+    });
+};
 
     // Profile handlers (institution/role)
     const handleSaveProfile = async (institution: string, role: string) => {
@@ -949,6 +981,8 @@ export default function App() {
                 onShowAddSchool={() => setShowAddSchoolModal(true)}
                 onShowAddDepartment={() => setShowAddDepartmentModal(true)}
                 onSearchTermChange={handleSearchTermChange}
+                onToggleYaza={() => setShowYaza(v => !v)}
+                isYazaOpen={showYaza}
             />
 
             <div className="flex-1 flex min-w-0 overflow-hidden">
