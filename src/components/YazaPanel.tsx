@@ -16,6 +16,8 @@ interface YazaAction {
 interface Props {
   onClose: () => void;
   authHeaders: () => Record<string, string>;
+  isLoggedIn: boolean;
+  onRequireLogin: () => void;
   // App state needed for context
   studentInfo: StudentInfo;
   result: GradingResult | null;
@@ -35,6 +37,8 @@ interface Props {
 export const YazaPanel = ({
   onClose,
   authHeaders,
+  isLoggedIn,
+  onRequireLogin,
   studentInfo,
   result,
   activeView,
@@ -56,6 +60,10 @@ export const YazaPanel = ({
 
   // Load prior chat history on open
   useEffect(() => {
+    if (!isLoggedIn) {
+      setLoadingHistory(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch('/api/yaza/history', { headers: authHeaders() });
@@ -118,8 +126,19 @@ export const YazaPanel = ({
     if (!trimmed || loading) return;
 
     const userMsg: ChatMessage = { role: 'user', text: trimmed };
-    setMessages((prev) => [...prev, userMsg]);
     setInput('');
+
+    if (!isLoggedIn) {
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        { role: 'assistant', text: 'Please log in to use Yaza AI.' },
+      ]);
+      onRequireLogin();
+      return;
+    }
+
+    setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
     try {
