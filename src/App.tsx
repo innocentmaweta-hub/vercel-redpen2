@@ -732,8 +732,8 @@ export default function App() {
         localStorage.removeItem(AUTH_TOKEN_KEY);
         setToken(null);
         setUser(null);
-        setShowAuth(true); // Force login again
         setShowProfile(false);
+        // No forced re-login — user drops back to guest browsing, consistent with the rest of the app
     };
 
     // Settings handlers
@@ -965,6 +965,9 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 onSearchTermChange={handleSearchTermChange}
                 onToggleYaza={() => setShowYaza(v => !v)}
                 isYazaOpen={showYaza}
+                isLoggedIn={!!user}
+                onLogin={() => setShowAuth(true)}
+                onLogout={handleLogout}
             />
 
             <div className="flex-1 flex min-w-0 overflow-hidden">
