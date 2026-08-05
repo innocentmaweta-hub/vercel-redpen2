@@ -24,9 +24,7 @@ const YAZA_TOOLS = [
         description: 'Run grading on the currently uploaded student paper.',
         parameters: {
           type: 'OBJECT',
-          properties: {
-            mode: { type: 'STRING', enum: ['ai', 'manual'] },
-          },
+          properties: { mode: { type: 'STRING', enum: ['ai', 'manual'] } },
           required: ['mode'],
         },
       },
@@ -35,9 +33,7 @@ const YAZA_TOOLS = [
         description: 'Switch the app to a different view/screen.',
         parameters: {
           type: 'OBJECT',
-          properties: {
-            view: { type: 'STRING', enum: ['dashboard', 'grade', 'remark', 'history'] },
-          },
+          properties: { view: { type: 'STRING', enum: ['dashboard', 'grade', 'remark', 'history'] } },
           required: ['view'],
         },
       },
@@ -70,13 +66,17 @@ const YAZA_TOOLS = [
   },
 ];
 
+const DEFAULT_SESSION_KEY = 'general';
+const MAX_MESSAGES_PER_SESSION = 50;
+
 export function createYazaRouter({ authMiddleware, getUserMeta, updateUserMeta }) {
   const router = Router();
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
   router.post('/api/yaza/chat', authMiddleware, async (req, res) => {
     try {
-      const { message, appContext, conversationHistory } = req.body;
+      const { message, appContext, conversationHistory, sessionKey } = req.body;
+      const key = sessionKey || DEFAULT_SESSION_KEY;
 
       if (!message || typeof message !== 'string') {
         return res.status(400).json({ code: 'MISSING_MESSAGE', message: 'Message is required' });
@@ -125,13 +125,15 @@ ${JSON.stringify(appContext || {}, null, 2)}`;
       }
 
       try {
-        const existing = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || [];
+        const allSessions = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || {};
+        const existing = Array.isArray(allSessions[key]) ? allSessions[key] : [];
         const updated = [
           ...existing,
           { role: 'user', text: message, timestamp: new Date().toISOString() },
           { role: 'assistant', text: textReply || '(action taken)', timestamp: new Date().toISOString() },
-        ].slice(-50);
-        await updateUserMeta(req.user.id, 'redpen_yaza_chat', updated);
+        ].slice(-MAX_MESSAGES_PER_SESSION);
+        allSessions[key] = updated;
+        await updateUserMeta(req.user.id, 'redpen_yaza_chat', allSessions);
       } catch (e) {
         console.error('Failed to save chat history:', e.message);
       }
@@ -145,10 +147,25 @@ ${JSON.stringify(appContext || {}, null, 2)}`;
 
   router.get('/api/yaza/history', authMiddleware, async (req, res) => {
     try {
-      const history = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || [];
+      const key = req.query.sessionKey || DEFAULT_SESSION_KEY;
+      const allSessions = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || {};
+      const history = Array.isArray(allSessions[key]) ? allSessions[key] : [];
       res.json({ history });
     } catch (error) {
       res.status(500).json({ message: 'Failed to load chat history' });
+    }
+  });
+
+  router.delete('/api/yaza/history', authMiddleware, async (req, res) => {
+    try {
+      const key = req.query.sessionKey || DEFAULT_SESSION_KEY;
+      const allSessions = (await getUserMeta(req.user.id, 'redpen_yaza_chat')) || {};
+      delete allSessions[key];
+      await updateUserMeta(req.user.id, 'redpen_yaza_chat', allSessions);
+      res.json({ message: 'History cleared' });
+    } catch (error) {
+      console.error('Failed to clear chat history:', error.message);
+      res.status(500).json({ message: 'Failed to clear chat history' });
     }
   });
 
