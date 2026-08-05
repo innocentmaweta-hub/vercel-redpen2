@@ -61,7 +61,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, disabled = false, onCl
         className={`relative p-3 rounded-2xl transition-all duration-300 ${disabled
           ? 'text-gray-700 cursor-not-allowed'
           : active
-            ? 'bg-accent-blue text-white shadow-xl shadow-accent-blue/30 scale-105'
+            ? 'bg-accent-blue text-white shadow-xl scale-105'
             : 'text-gray-400 hover:bg-white/5 hover:text-white hover:shadow-lg'
           }`}
       >
