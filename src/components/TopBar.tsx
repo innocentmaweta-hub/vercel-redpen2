@@ -25,6 +25,8 @@ interface TopBarProps {
   isLoggedIn: boolean;
   onLogin: () => void;
   onLogout: () => void;
+  onToggleYaza: () => void;
+  isYazaOpen: boolean;
 }
 
 interface DropdownItem {
@@ -176,7 +178,7 @@ export const TopBar = ({
   onNew, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history,
   onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
-  isLoggedIn, onLogin, onLogout
+  isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen
 }: TopBarProps) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{ name: string; x: number } | null>(null);
@@ -305,6 +307,16 @@ export const TopBar = ({
         >
           {isLoggedIn ? <LogOut size={12} /> : <LogIn size={12} />}
           {isLoggedIn ? 'Logout' : 'Login'}
+        </button>
+        <button
+          onClick={onToggleYaza}
+          className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all duration-150 flex items-center gap-1.5 shadow-lg cursor-pointer ${isYazaOpen
+            ? 'bg-accent-blue text-white scale-105 shadow-accent-blue/30'
+            : 'bg-gray-700 text-white hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95'
+            }`}
+        >
+          <Bot size={12} />
+          Yaza AI
         </button>
         <button
           onClick={onBatch}
