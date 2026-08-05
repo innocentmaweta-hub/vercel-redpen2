@@ -141,6 +141,9 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
         // Ref to track if we're currently listening for keyboard events
         const isListeningForText = useRef(false);
 
+        // Ref to the active text keydown handler, so it can be removed if the tool changes mid-typing
+        const textKeyDownHandlerRef = useRef<((e: any) => void) | null>(null);
+
         useImperativeHandle(ref, () => ({
             clear: () => {
                 actionsRef.current = [];
@@ -301,6 +304,16 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                         }
 
                         ctx.stroke();
+                    } else if (
+                        action.type === 'pen' &&
+                        action.points &&
+                        action.points.length === 1
+                    ) {
+                        // Single click with no drag — draw a dot
+                        const dotPoint = fromNormalized(action.points[0]);
+                        ctx.beginPath();
+                        ctx.arc(dotPoint.x, dotPoint.y, action.size / 2, 0, Math.PI * 2);
+                        ctx.fill();
                     }
 
                     // SHAPES
@@ -410,9 +423,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                             action.startPoint
                         );
 
-                        // Scale text size with zoom level
-                        const scaledTextSize = action.size * zoom;
-                        ctx.font = `${scaledTextSize}px ${action.fontFamily || 'Arial'}`;
+                        ctx.font = `${action.size}px ${action.fontFamily || 'Arial'}`;
                         ctx.fillStyle = action.color;
 
                         ctx.fillText(
@@ -429,9 +440,8 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                     ) {
                         const canvasStart = fromNormalized(action.startPoint);
 
-                        // Scale the mark size and thickness according to zoom level to match shapes perfectly
-                        const scaledSize = (action.size || props.markSize) * zoom;
-                        const scaledThickness = ((action.thickness || props.markThickness) || 2) * zoom;
+                        const scaledSize = action.size || props.markSize;
+                        const scaledThickness = (action.thickness || props.markThickness) || 2;
 
                         // Apply the calculated size and thickness
                         ctx.lineWidth = scaledThickness;
@@ -463,9 +473,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
             if (directTextInputRef.current.isActive && directTextInputRef.current.text) {
                 const { position, text, fontSize, fontFamily, color } = directTextInputRef.current;
 
-                // Scale text size with zoom level
-                const scaledTextSize = fontSize * zoom;
-                ctx.font = `${scaledTextSize}px ${fontFamily || 'Arial'}`;
+                ctx.font = `${fontSize}px ${fontFamily || 'Arial'}`;
                 ctx.fillStyle = color;
 
                 ctx.fillText(
@@ -479,7 +487,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(position.x + textMetrics.width, position.y - scaledTextSize);
+                ctx.moveTo(position.x + textMetrics.width, position.y - fontSize);
                 ctx.lineTo(position.x + textMetrics.width, position.y + 5);
                 ctx.stroke();
             }
@@ -546,11 +554,8 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
 
                 resizeCanvas();
 
-                panX.current = 0;
-                panY.current = 0;
-
                 setWrapperTransform(
-                    `translate3d(0px, 0px, 0) scale(${zoom})`
+                    `translate3d(${panX.current}px, ${panY.current}px, 0) scale(${zoom})`
                 );
 
             }, 50);
@@ -1026,11 +1031,13 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                             directTextInputRef.current.isActive = false;
                             isListeningForText.current = false;
                             document.removeEventListener('keydown', handleKeyDown as any);
+                            textKeyDownHandlerRef.current = null;
                         } else if (e.key === 'Escape') {
                             // Cancel text input
                             directTextInputRef.current.isActive = false;
                             isListeningForText.current = false;
                             document.removeEventListener('keydown', handleKeyDown as any);
+                            textKeyDownHandlerRef.current = null;
                         } else if (e.key === 'Backspace') {
                             // Handle backspace
                             e.preventDefault(); // Prevent browser back navigation
@@ -1043,6 +1050,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                         }
                     };
 
+                    textKeyDownHandlerRef.current = handleKeyDown as any;
                     document.addEventListener('keydown', handleKeyDown as any);
                 }
 
@@ -1260,11 +1268,26 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
             eraserPoints.current = [];
         };
 
+        // Cancel any pending direct text input if the user switches away from the text tool
+        useEffect(() => {
+            if (activeTool !== 'text' && isListeningForText.current) {
+                directTextInputRef.current.isActive = false;
+                isListeningForText.current = false;
+
+                if (textKeyDownHandlerRef.current) {
+                    document.removeEventListener('keydown', textKeyDownHandlerRef.current);
+                    textKeyDownHandlerRef.current = null;
+                }
+
+                redrawAll();
+            }
+        }, [activeTool]);
+
         // Handle text input submission
 
         const wrapperWidth =
             containerWidth > 0
-                ? containerWidth * zoom
+                ? containerWidth
                 : '100%';
 
         const cursor =
