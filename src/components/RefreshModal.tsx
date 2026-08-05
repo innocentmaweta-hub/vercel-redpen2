@@ -65,7 +65,7 @@ export const RefreshModal = ({ onConfirm, onCancel }: Props) => {
                         </button>
                         <button
                             onClick={onConfirm}
-                            className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-yellow-600/20"
+                            className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg"
                         >
                             <RotateCcw size={12} />
                             Refresh
