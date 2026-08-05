@@ -69,7 +69,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, onUpgrade }: Props
                         <button
                             onClick={() => setTab('api-keys')}
                             className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'api-keys'
-                                ? 'bg-accent-blue text-white shadow-lg shadow-accent-blue/20'
+                                ? 'bg-accent-blue text-white shadow-lg'
                                 : 'text-gray-500 hover:text-gray-300'
                                 }`}
                         >
@@ -79,7 +79,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, onUpgrade }: Props
                         <button
                             onClick={() => setTab('subscription')}
                             className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'subscription'
-                                ? 'bg-accent-blue text-white shadow-lg shadow-accent-blue/20'
+                                ? 'bg-accent-blue text-white shadow-lg'
                                 : 'text-gray-500 hover:text-gray-300'
                                 }`}
                         >
@@ -149,7 +149,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, onUpgrade }: Props
                             <button
                                 onClick={handleSaveKeys}
                                 disabled={saving || (!openaiKey && !geminiKey)}
-                                className="w-full py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent-blue/20 disabled:opacity-50"
+                                className="w-full py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
                             >
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Key size={12} />}
                                 Save API Keys
