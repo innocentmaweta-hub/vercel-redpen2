@@ -101,7 +101,7 @@ export const Sidebar = ({ activeView, onViewChange, onSave, onHelp, hasResult, u
           <button
             onClick={onAutoModeToggle}
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all border ${isAutoMode
-              ? 'bg-accent-blue border-accent-blue text-white shadow-lg shadow-accent-blue/30 animate-pulse'
+              ? 'bg-accent-blue border-accent-blue text-white shadow-lg animate-pulse'
               : 'bg-gray-800 border-accent-blue text-white hover:bg-gray-700'
               }`}
           >
