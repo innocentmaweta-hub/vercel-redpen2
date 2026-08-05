@@ -228,10 +228,11 @@ export const YazaPanel = ({
             <Loader2 size={18} className="animate-spin" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-2 px-4">
-            <Sparkles size={28} className="text-gray-700" />
-            <p className="text-[11px] text-gray-500">
-              Ask me anything, or tell me to do something — like "grade this" or "change the student's name to..."
+          <div className="bg-card h-full rounded-3xl border border-gray-800 shadow-xl flex flex-col items-center justify-center p-8 text-center border-dashed">
+            <Sparkles size={48} className="text-gray-800 mb-4" />
+            <h3 className="text-sm font-bold uppercase tracking-widest text-gray-600">Start a Conversation</h3>
+            <p className="text-[10px] text-gray-700 mt-2 uppercase font-medium">
+              Ask me anything, or tell me to do something — like "grade this" or "change the name"
             </p>
           </div>
         ) : (
