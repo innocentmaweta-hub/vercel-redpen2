@@ -657,7 +657,7 @@ ${JSON.stringify(appContext || {}, null, 2)}`;
     res.json({ reply: textReply, actions: functionCalls });
   } catch (error) {
     console.error('Yaza chat error:', error.message);
-    res.status(500).json({ code: 'YAZA_CHAT_FAILED', message: 'Yaza AI failed to respond. Please try again.' });
+    res.status(500).json({ code: 'YAZA_CHAT_FAILED', message: `Yaza AI error: ${error.message}` });
   }
 });
 
