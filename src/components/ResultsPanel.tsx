@@ -236,7 +236,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onResultChange }: Props
       <div className="p-6 border-t border-gray-800 bg-sidebar/50">
         <button
           onClick={onPrint}
-          className="w-full bg-accent-blue text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent-blue/20"
+          className="w-full bg-accent-blue text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg"
         >
           <Printer size={16} />
           Export Marked Paper
