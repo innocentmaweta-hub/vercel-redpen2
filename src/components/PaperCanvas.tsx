@@ -980,6 +980,7 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                 }
                 
                 // Otherwise, initialize eraser points for drag-to-clear
+                isDrawing.current = true;
                 eraserPoints.current = [canvasPos]; // Initialize with current position
                 return;
             }
