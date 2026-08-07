@@ -272,7 +272,7 @@ export const TopBar = ({
       className="h-10 bg-sidebar border-b border-gray-800 flex items-center px-4 gap-4 select-none"
     >
       <div className="flex items-center gap-1.5 shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <img src={logo} alt="Logo" className="w-20 h-10 object-contain" />
+        <img src={logo} alt="Logo" className="w-17 h-14 object-contain" />
 
         <div className="flex gap-0.5 text-[11px] font-medium text-gray-400 ml-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           {menuNames.map(name => (
