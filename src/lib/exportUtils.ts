@@ -70,24 +70,40 @@ function resultRow(studentInfo: StudentInfo, result: GradingResult): (string | n
 }
 
 /**
- * Build the filename for the session's Excel workbook, based on course code.
+ * Build the filename for the semester's Excel workbook: "{academicYear}-{semester}-{label}.xlsx"
  */
-export function buildSessionExcelFilename(sessionKey: string): string {
-    return `${sanitizeFilename(sessionKey || 'general')}-session.xlsx`;
+export function buildSessionExcelFilename(academicYear: string, semester: string, sessionLabel: string): string {
+    const yr = sanitizeFilename(academicYear || 'academic-year');
+    const sem = sanitizeFilename(semester || 'semester');
+    const label = sanitizeFilename(sessionLabel || 'session');
+    return `${yr}-${sem}-${label}.xlsx`;
+}
+
+// Excel sheet names have their own restrictions (max 31 chars, no : \ / ? * [ ])
+// — separate from filename sanitization above.
+function sanitizeSheetName(name: string): string {
+    const cleaned = (name || 'Course').replace(/[:\\/?*[\]]/g, '').trim();
+    return cleaned.slice(0, 31) || 'Course';
 }
 
 /**
- * Append a graded paper's details as a new row to the session's Excel workbook.
- * If a workbook already exists in the given folder with this filename, it reads
- * and appends to it; otherwise it creates a new one with headers.
+ * Append a graded paper's details as a new row to the correct course sheet,
+ * inside the semester's Excel workbook ("{academicYear}-{semester}-{label}.xlsx").
+ *
+ * One workbook per academicYear+semester+sessionLabel combination. Within that
+ * workbook, each course gets its own sheet — matched by sanitized course name,
+ * so re-grading a paper for the same course appends to its existing sheet
+ * instead of creating a duplicate.
  */
 export async function appendResultToSessionExcel(
     folder: FileSystemDirectoryHandle | null,
-    sessionKey: string,
+    workbookKey: { academicYear: string; semester: string; sessionLabel: string },
+    courseSheetKey: string,
     studentInfo: StudentInfo,
     result: GradingResult
 ): Promise<'written' | 'downloaded'> {
-    const filename = buildSessionExcelFilename(sessionKey);
+    const filename = buildSessionExcelFilename(workbookKey.academicYear, workbookKey.semester, workbookKey.sessionLabel);
+    const sheetName = sanitizeSheetName(courseSheetKey);
     const newRow = resultRow(studentInfo, result);
 
     let workbook: XLSX.WorkBook;
@@ -100,7 +116,7 @@ export async function appendResultToSessionExcel(
             const file = await fileHandle.getFile();
             existingBuffer = await file.arrayBuffer();
         } catch {
-            existingBuffer = null; // doesn't exist yet — will create fresh
+            existingBuffer = null; // workbook doesn't exist yet — will create fresh
         }
     }
 
@@ -108,22 +124,31 @@ export async function appendResultToSessionExcel(
         workbook = XLSX.read(existingBuffer, { type: 'array' });
     } else {
         workbook = XLSX.utils.book_new();
-        const sheet = XLSX.utils.aoa_to_sheet([EXCEL_COLUMNS]);
-        XLSX.utils.book_append_sheet(workbook, sheet, 'Session');
     }
 
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const existingData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+    let existingData: any[][];
 
-    // Ensure headers exist as the first row
-    if (existingData.length === 0) {
-        existingData.push(EXCEL_COLUMNS);
+    if (workbook.SheetNames.includes(sheetName)) {
+        // Course sheet already exists in this workbook — append to it
+        const sheet = workbook.Sheets[sheetName];
+        existingData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        if (existingData.length === 0) {
+            existingData.push(EXCEL_COLUMNS);
+        }
+    } else {
+        // First result for this course in this workbook — create its sheet with headers
+        existingData = [EXCEL_COLUMNS];
     }
+
     existingData.push(newRow);
 
     const updatedSheet = XLSX.utils.aoa_to_sheet(existingData);
-    workbook.Sheets[sheetName] = updatedSheet;
+
+    if (workbook.SheetNames.includes(sheetName)) {
+        workbook.Sheets[sheetName] = updatedSheet;
+    } else {
+        XLSX.utils.book_append_sheet(workbook, updatedSheet, sheetName);
+    }
 
     const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
