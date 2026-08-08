@@ -476,27 +476,14 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
                         <p className="text-[9px] text-gray-600">1 token = 1 grading. Buy more anytime in Settings.</p>
                     </div>
 
-                    {/* Grading Usage */}
-                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
+                    {/* Total papers graded (all-time stat, no limit implied) */}
+                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <BarChart3 size={14} className="text-gray-500" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Grading Usage</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total Papers Graded</span>
                             </div>
-                            <span className="text-[11px] font-bold text-gray-300">
-                                {user.gradingCount} / {user.gradingLimit === Infinity ? '∞' : user.gradingLimit}
-                            </span>
-                        </div>
-                        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                            <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${user.gradingLimit === Infinity ? 0 : Math.min(100, (user.gradingCount / user.gradingLimit) * 100)}%` }}
-                                className={`h-full rounded-full ${user.gradingLimit === Infinity ? 'w-0' : user.gradingCount / user.gradingLimit >= 0.9 ? 'bg-red-500' : user.gradingCount / user.gradingLimit >= 0.7 ? 'bg-yellow-500' : 'bg-accent-blue'}`}
-                            />
-                        </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-gray-800">
-                            <span className="text-[10px] text-gray-600">Total papers graded</span>
-                            <span className="text-[11px] font-bold text-gray-400">{user.totalGraded ?? 0}</span>
+                            <span className="text-[11px] font-bold text-gray-300">{user.totalGraded ?? 0}</span>
                         </div>
                     </div>
 
