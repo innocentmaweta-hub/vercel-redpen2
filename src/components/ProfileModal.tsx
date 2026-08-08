@@ -198,7 +198,7 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
                 </div>
 
                 <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 items-start">
                     {/* User Avatar & Name */}
                     <div className="flex items-center gap-4">
                         <button
