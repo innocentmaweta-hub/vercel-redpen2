@@ -32,6 +32,12 @@ interface NewCourseModalProps {
   onCancel: () => void;
 }
 
+interface NewSessionModalProps {
+  currentSemesterCourse: SemesterCourse | null;
+  onConfirm: (updates: { academicYear: string; semester: string; sessionLabel: string }) => void;
+  onCancel: () => void;
+}
+
 const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
 const SEMESTERS = ['Semester 1', 'Semester 2'];
 
@@ -385,6 +391,95 @@ export const NewCourseModal = ({ currentSemesterCourse, onConfirm, onCancel }: N
             className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20"
           >
             Switch Course
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      </motion.div>
+    </Backdrop>
+  );
+};
+
+export const NewSessionModal = ({ currentSemesterCourse, onConfirm, onCancel }: NewSessionModalProps) => {
+  const [academicYear, setAcademicYear] = useState(currentSemesterCourse?.academicYear || '');
+  const [semester, setSemester] = useState(currentSemesterCourse?.semester || '');
+  const [sessionLabel, setSessionLabel] = useState('');
+  const [error, setError] = useState('');
+
+  const handleConfirm = () => {
+    if (!academicYear.trim()) { setError('Academic year is required.'); return; }
+    if (!sessionLabel.trim()) { setError('Session label is required.'); return; }
+    onConfirm({ academicYear, semester, sessionLabel });
+  };
+
+  return (
+    <Backdrop onClose={onCancel}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.93, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.93, y: 20 }}
+        transition={{ duration: 0.2 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center">
+              <BookOpen size={16} className="text-accent-blue" />
+            </div>
+            <div>
+              <p className="text-[13px] font-black text-white">New Session</p>
+              <p className="text-[10px] text-gray-500">
+                {currentSemesterCourse?.courseCode
+                  ? `Keeps course: ${currentSemesterCourse.courseCode}`
+                  : 'Set academic year, semester, and session label'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Academic Year *">
+              <select className={inputCls} value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
+                <option value="">Select academic year…</option>
+                {ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}
+              </select>
+            </Field>
+            <Field label="Semester">
+              <select className={inputCls} value={semester} onChange={(e) => setSemester(e.target.value)}>
+                <option value="">Select semester…</option>
+                {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Session Label *">
+            <input
+              className={inputCls}
+              placeholder="e.g. Assignment, End of Semester"
+              value={sessionLabel}
+              onChange={(e) => setSessionLabel(e.target.value)}
+              autoFocus
+            />
+          </Field>
+
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <AlertCircle size={12} className="text-red-400 shrink-0" />
+              <p className="text-[11px] text-red-400">{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-5">
+          <button
+            onClick={handleConfirm}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20"
+          >
+            Start New Session
             <ArrowRight size={14} />
           </button>
         </div>
