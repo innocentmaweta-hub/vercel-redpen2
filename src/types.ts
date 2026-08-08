@@ -73,11 +73,12 @@ export interface AuthResponse {
     token: string;
     user: User;
 }
-export interface CourseSession {
+export interface SemesterCourse {
     courseCode: string;
     courseName?: string;
     program?: string;
     year?: string;
+    semester?: string;
     examDate?: string;
     duration?: number;
 }
