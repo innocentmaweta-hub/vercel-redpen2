@@ -12,6 +12,7 @@ interface StoredCourse {
 interface TopBarProps {
   onNew: () => void;
   onNewCourse: () => void;
+  onNewSession: () => void;
   onNewPaper: () => void;
   onSave: () => void;
   onPrint: () => void;
@@ -184,7 +185,7 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 };
 
 export const TopBar = ({
-  onNew, onNewCourse, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
+  onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history, courses,
   onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
   isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen
@@ -220,7 +221,7 @@ export const TopBar = ({
       { label: 'Reset All', action: onNew },
     ],
     New: [
-      { label: 'New Semester', action: onNew },
+      { label: 'New Session', action: onNewSession },
       { label: 'New Course', action: onNewCourse },
       { label: 'New Paper', action: onNewPaper },
     ],
