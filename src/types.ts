@@ -79,6 +79,9 @@ export interface SemesterCourse {
     program?: string;
     year?: string;
     semester?: string;
+    academicYear?: string;
+    sessionLabel?: string;
+    customName?: string; // Fully custom workbook name — overrides academicYear-semester-sessionLabel entirely when set
     examDate?: string;
     duration?: number;
 }
