@@ -468,8 +468,8 @@ export default function App() {
         setShowNewCourseModal(false);
     };
 
-    // "New Session" — changes only academic year/semester/session label, keeps the current course untouched
-    const handleNewSession = (updates: { academicYear: string; semester: string; sessionLabel: string }) => {
+    // "New Session" — changes only academic year/semester/session label/custom name, keeps the current course untouched
+    const handleNewSession = (updates: { academicYear: string; semester: string; sessionLabel: string; customName: string }) => {
         setSemesterCourse(prev => prev ? { ...prev, ...updates } : {
             courseCode: '',
             courseName: '',
@@ -817,6 +817,7 @@ export default function App() {
                     academicYear: semesterCourse?.academicYear || '',
                     semester: semesterCourse?.semester || studentInfo.semester || '',
                     sessionLabel: semesterCourse?.sessionLabel || '',
+                    customName: semesterCourse?.customName || '',
                 };
                 const courseSheetKey = semesterCourse?.courseCode || studentInfo.courseCode || 'general';
                 await appendResultToSessionExcel(folder, workbookKey, courseSheetKey, studentInfo, result);
