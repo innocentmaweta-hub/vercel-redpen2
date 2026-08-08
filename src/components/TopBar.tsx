@@ -4,6 +4,11 @@ import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, Lo
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
 
+interface StoredCourse {
+  courseCode: string;
+  courseName: string;
+}
+
 interface TopBarProps {
   onNew: () => void;
   onNewCourse: () => void;
@@ -18,6 +23,7 @@ interface TopBarProps {
   studentInfo: StudentInfo;
   onStudentInfoUpdate: (updates: Partial<StudentInfo>) => void;
   history: HistoryRecord[];
+  courses: StoredCourse[];
   onShowOldSessions: () => void; // Added new prop
   schools: string[]; // Added schools prop
   departments: string[]; // Added departments prop
@@ -179,7 +185,7 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 
 export const TopBar = ({
   onNew, onNewCourse, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
-  hasResult, studentInfo, onStudentInfoUpdate, history,
+  hasResult, studentInfo, onStudentInfoUpdate, history, courses,
   onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
   isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen
 }: TopBarProps) => {
@@ -218,21 +224,29 @@ export const TopBar = ({
       { label: 'New Course', action: onNewCourse },
       { label: 'New Paper', action: onNewPaper },
     ],
-    Course: recentCourses.length > 0
-      ? [
-        ...recentCourses.map(code => ({
-          label: code,
-          action: () => onStudentInfoUpdate({ courseCode: code }),
-          active: studentInfo.courseCode === code
-        })),
-        { divider: true },
-        { label: 'Add New Course...', action: onNewCourse }
-      ]
-      : [
-        { label: 'No recent courses — fill the form', disabled: true },
-        { divider: true },
-        { label: 'Add New Course...', action: onNewCourse }
-      ],
+    Course: (() => {
+        const allCodes = new Set<string>([
+            ...courses.map(c => c.courseCode),
+            ...recentCourses,
+        ]);
+        const codeList = Array.from(allCodes);
+
+        return codeList.length > 0
+            ? [
+                ...codeList.map(code => ({
+                    label: code,
+                    action: () => onStudentInfoUpdate({ courseCode: code }),
+                    active: studentInfo.courseCode === code
+                })),
+                { divider: true },
+                { label: 'Add New Course...', action: onNewCourse }
+            ]
+            : [
+                { label: 'No courses yet — add one below', disabled: true },
+                { divider: true },
+                { label: 'Add New Course...', action: onNewCourse }
+            ];
+    })(),
     'Year of Study': [
       ...YEARS_OF_STUDY.map(yr => ({
         label: yr,
