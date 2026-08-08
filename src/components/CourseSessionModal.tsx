@@ -2,28 +2,37 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, X, ChevronRight, ArrowRight, AlertCircle, Search } from 'lucide-react';
 
-export interface CourseSession {
+export interface SemesterCourse {
   courseCode: string;
   courseName: string;
   program: string;
   year: string;
+  semester: string;
 }
 
-interface NewSessionModalProps {
-  onConfirm: (session: CourseSession) => void;
+interface NewSemesterModalProps {
+  onConfirm: (semesterCourse: SemesterCourse) => void;
   onSkip: () => void;
   onCancel: () => void;
 }
 
-interface ContinueSessionModalProps {
-  session: CourseSession;
+interface ContinueSemesterModalProps {
+  semesterCourse: SemesterCourse;
   uploadLabel: string;
   onContinue: () => void;
-  onNewSession: () => void;
+  onNewSemester: () => void;
   onCancel: () => void;
 }
 
-const SEMESTERS = ['Semester 1', 'Semester 2', 'Year 1', 'Year 2', 'Year 3', 'Year 4'];
+interface NewCourseModalProps {
+  currentSemesterCourse: SemesterCourse | null;
+  onConfirm: (updates: { courseCode: string; courseName: string; program: string }) => void;
+  onCancel: () => void;
+}
+
+const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
+const SEMESTERS = ['Semester 1', 'Semester 2'];
+
 const DEPARTMENTS = [
   'Computer Science & IT', 'Engineering', 'Business & Management',
   'Health Sciences', 'Education', 'Law', 'Social Sciences',
@@ -52,12 +61,12 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls = "bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700";
 
-export const NewSessionModal = ({ onConfirm, onSkip, onCancel }: NewSessionModalProps) => {
-  const [form, setForm] = useState<CourseSession>({ courseCode: '', courseName: '', program: '', year: '' });
+export const NewSemesterModal = ({ onConfirm, onSkip, onCancel }: NewSemesterModalProps) => {
+  const [form, setForm] = useState<SemesterCourse>({ courseCode: '', courseName: '', program: '', year: '', semester: '' });
   const [error, setError] = useState('');
   const [departmentSearch, setDepartmentSearch] = useState('');
 
-  const set = (k: keyof CourseSession) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set = (k: keyof SemesterCourse) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
 
   const handleConfirm = () => {
@@ -65,7 +74,6 @@ export const NewSessionModal = ({ onConfirm, onSkip, onCancel }: NewSessionModal
     onConfirm(form);
   };
 
-  // Filter departments based on search term
   const filteredDepartments = DEPARTMENTS.filter(dept =>
     dept.toLowerCase().includes(departmentSearch.toLowerCase())
   );
@@ -86,7 +94,7 @@ export const NewSessionModal = ({ onConfirm, onSkip, onCancel }: NewSessionModal
               <BookOpen size={16} className="text-accent-blue" />
             </div>
             <div>
-              <p className="text-[13px] font-black text-white">New Course Session</p>
+              <p className="text-[13px] font-black text-white">New Semester</p>
               <p className="text-[10px] text-gray-500">Enter course details before uploading</p>
             </div>
           </div>
@@ -152,12 +160,20 @@ export const NewSessionModal = ({ onConfirm, onSkip, onCancel }: NewSessionModal
             </select>
           </Field>
 
-          <Field label="Semester / Year">
-            <select className={inputCls} value={form.year} onChange={set('year')}>
-              <option value="">Select semester / year…</option>
-              {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Year of Study">
+              <select className={inputCls} value={form.year} onChange={set('year')}>
+                <option value="">Select year…</option>
+                {YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </Field>
+            <Field label="Semester">
+              <select className={inputCls} value={form.semester} onChange={set('semester')}>
+                <option value="">Select semester…</option>
+                {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+          </div>
 
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -172,7 +188,7 @@ export const NewSessionModal = ({ onConfirm, onSkip, onCancel }: NewSessionModal
             onClick={handleConfirm}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20"
           >
-            Start Session & Upload
+            Start Semester & Upload
             <ArrowRight size={14} />
           </button>
           <button
@@ -187,9 +203,9 @@ export const NewSessionModal = ({ onConfirm, onSkip, onCancel }: NewSessionModal
   );
 };
 
-export const ContinueSessionModal = ({
-  session, uploadLabel, onContinue, onNewSession, onCancel
-}: ContinueSessionModalProps) => (
+export const ContinueSemesterModal = ({
+  semesterCourse, uploadLabel, onContinue, onNewSemester, onCancel
+}: ContinueSemesterModalProps) => (
   <Backdrop onClose={onCancel}>
     <motion.div
       initial={{ opacity: 0, scale: 0.93, y: 20 }}
@@ -205,7 +221,7 @@ export const ContinueSessionModal = ({
             <BookOpen size={16} className="text-accent-blue" />
           </div>
           <div>
-            <p className="text-[13px] font-black text-white">Continue Session</p>
+            <p className="text-[13px] font-black text-white">Continue Semester</p>
             <p className="text-[10px] text-gray-500">{uploadLabel}</p>
           </div>
         </div>
@@ -216,29 +232,32 @@ export const ContinueSessionModal = ({
 
       <div className="p-5">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Active Session</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Active Semester</p>
           <div className="flex items-center gap-2">
             <span className="px-2 py-1 bg-accent-blue/10 text-accent-blue text-[11px] font-black rounded-lg border border-accent-blue/20">
-              {session.courseCode}
+              {semesterCourse.courseCode}
             </span>
-            {session.courseName && (
-              <span className="text-[12px] text-white font-semibold">{session.courseName}</span>
+            {semesterCourse.courseName && (
+              <span className="text-[12px] text-white font-semibold">{semesterCourse.courseName}</span>
             )}
           </div>
-          {(session.program || session.year) && (
-            <div className="flex gap-2 mt-2">
-              {session.program && (
-                <span className="text-[10px] text-gray-500">{session.program}</span>
+          {(semesterCourse.program || semesterCourse.year || semesterCourse.semester) && (
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {semesterCourse.program && (
+                <span className="text-[10px] text-gray-500">{semesterCourse.program}</span>
               )}
-              {session.year && (
-                <span className="text-[10px] text-gray-600">• {session.year}</span>
+              {semesterCourse.year && (
+                <span className="text-[10px] text-gray-600">• {semesterCourse.year}</span>
+              )}
+              {semesterCourse.semester && (
+                <span className="text-[10px] text-gray-600">• {semesterCourse.semester}</span>
               )}
             </div>
           )}
         </div>
 
         <p className="text-[12px] text-gray-400 mb-4">
-          Proceed uploading in this course session?
+          Proceed uploading in this semester?
         </p>
 
         <div className="flex flex-col gap-2">
@@ -246,20 +265,110 @@ export const ContinueSessionModal = ({
             onClick={onContinue}
             className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors"
           >
-            Continue in this session
+            Continue in this semester
             <ChevronRight size={14} />
           </button>
           <button
-            onClick={onNewSession}
+            onClick={onNewSemester}
             className="w-full py-2 text-[11px] font-bold text-gray-500 hover:text-gray-300 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors"
           >
-            Start new session
+            Start new semester
           </button>
         </div>
       </div>
     </motion.div>
   </Backdrop>
 );
+
+export const NewCourseModal = ({ currentSemesterCourse, onConfirm, onCancel }: NewCourseModalProps) => {
+  const [courseCode, setCourseCode] = useState('');
+  const [courseName, setCourseName] = useState('');
+  const [program, setProgram] = useState(currentSemesterCourse?.program || '');
+  const [error, setError] = useState('');
+
+  const handleConfirm = () => {
+    if (!courseCode.trim()) { setError('Course code is required.'); return; }
+    onConfirm({ courseCode, courseName, program });
+  };
+
+  return (
+    <Backdrop onClose={onCancel}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.93, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.93, y: 20 }}
+        transition={{ duration: 0.2 }}
+        onClick={e => e.stopPropagation()}
+        className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center">
+              <BookOpen size={16} className="text-accent-blue" />
+            </div>
+            <div>
+              <p className="text-[13px] font-black text-white">New Course</p>
+              <p className="text-[10px] text-gray-500">
+                {currentSemesterCourse?.year && currentSemesterCourse?.semester
+                  ? `Staying in ${currentSemesterCourse.year} • ${currentSemesterCourse.semester}`
+                  : 'Switch to a different course'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Course Code *">
+              <input
+                className={inputCls}
+                placeholder="e.g. CS301"
+                value={courseCode}
+                onChange={(e) => setCourseCode(e.target.value)}
+                autoFocus
+              />
+            </Field>
+            <Field label="Course Name">
+              <input
+                className={inputCls}
+                placeholder="e.g. Data Structures"
+                value={courseName}
+                onChange={(e) => setCourseName(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          <Field label="Program of Study">
+            <select className={inputCls} value={program} onChange={(e) => setProgram(e.target.value)}>
+              <option value="">Select program…</option>
+              {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </Field>
+
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <AlertCircle size={12} className="text-red-400 shrink-0" />
+              <p className="text-[11px] text-red-400">{error}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-5">
+          <button
+            onClick={handleConfirm}
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20"
+          >
+            Switch Course
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      </motion.div>
+    </Backdrop>
+  );
+};
 
 const Backdrop = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
   <motion.div
