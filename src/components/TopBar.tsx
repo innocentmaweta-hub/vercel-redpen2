@@ -202,12 +202,12 @@ export const TopBar = ({
   const menus: Record<string, DropdownItem[]> = {
     File: [
       { label: 'Load Session', action: onShowOldSessions }, // Updated menu item name
-    ],
-    Edit: [
+      { divider: true },
       { label: 'Save Results', action: onSave, disabled: !hasResult },
       { label: 'Save As...', action: onSave, disabled: !hasResult },
       { label: 'Print Report', action: onPrint, disabled: !hasResult },
-      { divider: true },
+    ],
+    Edit: [
       { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
       { label: 'Clear Results', action: onClearResult, disabled: !hasResult },
       { divider: true },
@@ -249,7 +249,7 @@ export const TopBar = ({
     ],
     };
 
-  const menuNames = ['File', 'Edit', 'New', 'Course', 'Year of Study', 'Semester'];
+  const menuNames = ['File', 'New', 'Edit', 'Course', 'Year of Study', 'Semester'];
 
   return (
     <div
