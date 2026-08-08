@@ -2,10 +2,12 @@ import logo from '../assets/logo.png';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { StudentInfo, HistoryRecord, CourseSession } from '../types';
+import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
 
 interface TopBarProps {
   onNew: () => void;
+  onNewCourse: () => void;
+  onNewPaper: () => void;
   onSave: () => void;
   onPrint: () => void;
   onClearResult: () => void;
@@ -176,7 +178,7 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 };
 
 export const TopBar = ({
-  onNew, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
+  onNew, onNewCourse, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history,
   onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
   isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen
@@ -199,7 +201,10 @@ export const TopBar = ({
 
   const menus: Record<string, DropdownItem[]> = {
     File: [
-      { label: 'New Session', action: () => { onNew(); } },
+      { label: 'New Semester', action: onNew },
+      { label: 'New Course', action: onNewCourse },
+      { label: 'New Paper', action: onNewPaper },
+      { divider: true },
       { label: 'Load Session', action: onShowOldSessions }, // Updated menu item name
       { divider: true },
       { label: 'Save Results', action: onSave, disabled: !hasResult },
