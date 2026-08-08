@@ -19,7 +19,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
-import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, SemesterCourse } from './components/CourseSessionModal';
+import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, NewSessionModal, SemesterCourse } from './components/CourseSessionModal';
 import { ToolOptionsBar } from './components/ToolOptionsBar';
 import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse } from './types';
 import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
@@ -170,6 +170,7 @@ export default function App() {
     const [modalType, setModalType] = useState<'new' | 'continue' | null>(null);
     const [showOldSessionModal, setShowOldSessionModal] = useState(false);
     const [showNewCourseModal, setShowNewCourseModal] = useState(false);
+    const [showNewSessionModal, setShowNewSessionModal] = useState(false);
 
     // School and department management
     const [schools, setSchools] = useState<string[]>(loadSchools());
@@ -465,6 +466,22 @@ export default function App() {
         }
 
         setShowNewCourseModal(false);
+    };
+
+    // "New Session" — changes only academic year/semester/session label, keeps the current course untouched
+    const handleNewSession = (updates: { academicYear: string; semester: string; sessionLabel: string }) => {
+        setSemesterCourse(prev => prev ? { ...prev, ...updates } : {
+            courseCode: '',
+            courseName: '',
+            program: '',
+            year: '',
+            ...updates,
+        });
+        setStudentInfo(prev => ({
+            ...prev,
+            semester: updates.semester || prev.semester,
+        }));
+        setShowNewSessionModal(false);
     };
 
     // "New Paper" — keeps the current semester + course, only clears the paper/result for the next student
@@ -1135,6 +1152,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 onShowAddDepartment={() => setShowAddDepartmentModal(true)}
                 onSearchTermChange={handleSearchTermChange}
                 onNewCourse={() => setShowNewCourseModal(true)}
+                onNewSession={() => setShowNewSessionModal(true)}
                 onNewPaper={handleNewPaper}
                 onToggleYaza={() => setShowYaza(v => !v)}
                 isYazaOpen={showYaza}
@@ -1832,6 +1850,14 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                         currentSemesterCourse={semesterCourse}
                         onConfirm={handleNewCourse}
                         onCancel={() => setShowNewCourseModal(false)}
+                    />
+                )}
+
+                {showNewSessionModal && (
+                    <NewSessionModal
+                        currentSemesterCourse={semesterCourse}
+                        onConfirm={handleNewSession}
+                        onCancel={() => setShowNewSessionModal(false)}
                     />
                 )}
             </AnimatePresence>
