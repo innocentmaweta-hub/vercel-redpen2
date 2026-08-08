@@ -70,9 +70,14 @@ function resultRow(studentInfo: StudentInfo, result: GradingResult): (string | n
 }
 
 /**
- * Build the filename for the semester's Excel workbook: "{academicYear}-{semester}-{label}.xlsx"
+ * Build the filename for the semester's Excel workbook.
+ * If customName is set, it fully replaces the academicYear-semester-label naming.
+ * Otherwise: "{academicYear}-{semester}-{label}.xlsx"
  */
-export function buildSessionExcelFilename(academicYear: string, semester: string, sessionLabel: string): string {
+export function buildSessionExcelFilename(academicYear: string, semester: string, sessionLabel: string, customName?: string): string {
+    if (customName && customName.trim()) {
+        return `${sanitizeFilename(customName)}.xlsx`;
+    }
     const yr = sanitizeFilename(academicYear || 'academic-year');
     const sem = sanitizeFilename(semester || 'semester');
     const label = sanitizeFilename(sessionLabel || 'session');
@@ -97,12 +102,12 @@ function sanitizeSheetName(name: string): string {
  */
 export async function appendResultToSessionExcel(
     folder: FileSystemDirectoryHandle | null,
-    workbookKey: { academicYear: string; semester: string; sessionLabel: string },
+    workbookKey: { academicYear: string; semester: string; sessionLabel: string; customName?: string },
     courseSheetKey: string,
     studentInfo: StudentInfo,
     result: GradingResult
 ): Promise<'written' | 'downloaded'> {
-    const filename = buildSessionExcelFilename(workbookKey.academicYear, workbookKey.semester, workbookKey.sessionLabel);
+    const filename = buildSessionExcelFilename(workbookKey.academicYear, workbookKey.semester, workbookKey.sessionLabel, workbookKey.customName);
     const sheetName = sanitizeSheetName(courseSheetKey);
     const newRow = resultRow(studentInfo, result);
 
