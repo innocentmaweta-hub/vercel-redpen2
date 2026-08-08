@@ -201,20 +201,22 @@ export const TopBar = ({
 
   const menus: Record<string, DropdownItem[]> = {
     File: [
-      { label: 'New Semester', action: onNew },
-      { label: 'New Course', action: onNewCourse },
-      { label: 'New Paper', action: onNewPaper },
-      { divider: true },
       { label: 'Load Session', action: onShowOldSessions }, // Updated menu item name
-      { divider: true },
-      { label: 'Save Results', action: onSave, disabled: !hasResult },
-      { label: 'Print Report', action: onPrint, disabled: !hasResult },
     ],
     Edit: [
+      { label: 'Save Results', action: onSave, disabled: !hasResult },
+      { label: 'Save As...', action: onSave, disabled: !hasResult },
+      { label: 'Print Report', action: onPrint, disabled: !hasResult },
+      { divider: true },
       { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
       { label: 'Clear Results', action: onClearResult, disabled: !hasResult },
       { divider: true },
       { label: 'Reset All', action: onNew },
+    ],
+    New: [
+      { label: 'New Semester', action: onNew },
+      { label: 'New Course', action: onNewCourse },
+      { label: 'New Paper', action: onNewPaper },
     ],
     Course: recentCourses.length > 0
       ? [
@@ -245,38 +247,9 @@ export const TopBar = ({
         active: studentInfo.semester === sem
       })),
     ],
-    Program: [
-      ...PROGRAMS.map(prog => ({
-        label: prog,
-        action: () => onStudentInfoUpdate({ program: prog }),
-        active: studentInfo.program === prog
-      })),
-      { divider: true },
-      { label: 'Add New Program...', action: () => { } }
-    ],
-    Department: [
-      ...DEPARTMENTS.map(dept => ({
-        label: dept,
-        action: () => {
-          // Store department details separately from the student form
-          localStorage.setItem('lastSelectedDepartment', dept);
-        },
-        active: localStorage.getItem('lastSelectedDepartment') === dept
-      })),
-      ...departments.map(dept => ({
-        label: dept,
-        action: () => {
-          // Store department details separately from the student form
-          localStorage.setItem('lastSelectedDepartment', dept);
-        },
-        active: localStorage.getItem('lastSelectedDepartment') === dept
-      })),
-      { divider: true },
-      { label: 'Add New Department...', action: onShowAddDepartment }
-    ],
-  };
+    };
 
-  const menuNames = ['File', 'Edit', 'Course', 'Year of Study', 'Semester', 'Program', 'Department'];
+  const menuNames = ['File', 'Edit', 'New', 'Course', 'Year of Study', 'Semester'];
 
   return (
     <div
