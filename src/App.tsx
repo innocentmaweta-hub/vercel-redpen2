@@ -25,6 +25,9 @@ import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView
 import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { YazaPanel } from './components/YazaPanel';
+import { getSavedFolder } from './lib/fileStorage';
+import { buildPaperPdfBlob, buildPaperPdfFilename, appendResultToSessionExcel } from './lib/exportUtils';
+import { writeFileToFolder } from './lib/fileStorage';
 
 const HISTORY_KEY = 'grading_history';
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
@@ -674,7 +677,9 @@ export default function App() {
         }
     }, [isAutoMode, studentPaper, user]);
 
-    const handleSave = () => {
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSave = async () => {
         if (!result) { alert('No grading result to save. Grade a paper first.'); return; }
 
         // Check if required student info is missing and prompt user to enter it
@@ -696,30 +701,46 @@ export default function App() {
             }
         }
 
-        const record: HistoryRecord = {
-            id: Date.now().toString(),
-            date: new Date().toISOString(),
-            studentInfo,
-            result: { ...result, feedback: result.feedback + (examinerRemarks ? `\n\nExaminer Remarks: ${examinerRemarks}` : '') }
-        };
-        const updated = [record, ...history].slice(0, 50);
-        setHistory(updated);
-        saveHistory(updated);
+        setIsSaving(true);
+        try {
+            const record: HistoryRecord = {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                studentInfo,
+                result: { ...result, feedback: result.feedback + (examinerRemarks ? `\n\nExaminer Remarks: ${examinerRemarks}` : '') }
+            };
+            const updated = [record, ...history].slice(0, 50);
+            setHistory(updated);
+            saveHistory(updated);
 
-        // Sync to backend so history persists across devices
-        fetch('/api/history', {
-            method: 'POST',
-            headers: authHeaders(),
-            body: JSON.stringify({ studentInfo: record.studentInfo, result: record.result })
-        }).catch(err => console.error('Failed to sync history to server:', err));
+            // Sync to backend so history persists across devices
+            fetch('/api/history', {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ studentInfo: record.studentInfo, result: record.result })
+            }).catch(err => console.error('Failed to sync history to server:', err));
 
-        const blob = new Blob([JSON.stringify({ studentInfo, result, examinerRemarks }, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `grading_${studentInfo.name || 'student'}_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+            // Generate the marked-paper PDF and append to the session's Excel workbook,
+            // writing both into the user's chosen save folder (or downloading as fallback)
+            try {
+                const folder = await getSavedFolder();
+                const paperImage = paperCanvasRef.current?.captureFullPaper();
+
+                if (paperImage) {
+                    const pdfBlob = buildPaperPdfBlob(paperImage);
+                    const pdfFilename = buildPaperPdfFilename(studentInfo);
+                    await writeFileToFolder(folder, pdfFilename, pdfBlob);
+                }
+
+                const sessionKey = courseSession?.courseCode || studentInfo.courseCode || 'general';
+                await appendResultToSessionExcel(folder, sessionKey, studentInfo, result);
+            } catch (exportError) {
+                console.error('Failed to export PDF/Excel:', exportError);
+                alert('Saved to history, but exporting the PDF/Excel file failed. Check the console for details.');
+            }
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleLoadRecord = (record: HistoryRecord) => {
@@ -963,7 +984,37 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
         setShowBatch(false);
     };
 
-    const handlePrint = () => window.print();
+    const handlePrint = () => {
+        const paperImage = paperCanvasRef.current?.captureFullPaper();
+
+        if (!paperImage) {
+            alert('No graded paper to print yet.');
+            return;
+        }
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Please allow popups to print.');
+            return;
+        }
+
+        printWindow.document.write(`
+            <html>
+              <head>
+                <title>${studentInfo.courseCode || 'Graded Paper'} - ${studentInfo.name || ''}</title>
+                <style>
+                  @page { margin: 0; }
+                  body { margin: 0; display: flex; align-items: center; justify-content: center; }
+                  img { max-width: 100%; height: auto; display: block; }
+                </style>
+              </head>
+              <body>
+                <img src="${paperImage}" onload="window.focus(); window.print();" />
+              </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
 
     // Handle paper upload and automatically switch to self-marked mode
     const handlePaperUpload = useCallback((base64: string, name: string) => {
