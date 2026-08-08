@@ -796,8 +796,13 @@ export default function App() {
                     await writeFileToFolder(folder, pdfFilename, pdfBlob);
                 }
 
-                const sessionKey = semesterCourse?.courseCode || studentInfo.courseCode || 'general';
-                await appendResultToSessionExcel(folder, sessionKey, studentInfo, result);
+                const workbookKey = {
+                    academicYear: semesterCourse?.academicYear || '',
+                    semester: semesterCourse?.semester || studentInfo.semester || '',
+                    sessionLabel: semesterCourse?.sessionLabel || '',
+                };
+                const courseSheetKey = semesterCourse?.courseCode || studentInfo.courseCode || 'general';
+                await appendResultToSessionExcel(folder, workbookKey, courseSheetKey, studentInfo, result);
             } catch (exportError) {
                 console.error('Failed to export PDF/Excel:', exportError);
                 alert('Saved to history, but exporting the PDF/Excel file failed. Check the console for details.');
