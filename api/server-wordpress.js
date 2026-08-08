@@ -9,6 +9,7 @@ import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import cors from 'cors';
+import { createPaymentsRouter, TOKEN_PRICING } from './payments.js';
 import { OAuth2Client } from 'google-auth-library';
 // import { createYazaRouter } from './yaza-gemini.js';
 import { createYazaRouter } from './yaza-openrouter.js';
@@ -203,6 +204,20 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const user = createResult.user;
+
+    // Grant welcome bonus tokens (best-effort, once at signup)
+    try {
+      await updateUserMeta(user.id, 'redpen_usage', {
+        tier: 'free',
+        gradingCount: 0,
+        gradingLimit: 5,
+        tokenBalance: 4,
+        chatTokenBalance: 1,
+      });
+    } catch (bonusError) {
+      console.error('Failed to grant welcome bonus:', bonusError.message);
+    }
+
     const token = generateAppToken(user);
 
     res.status(201).json({
@@ -269,6 +284,19 @@ app.post('/api/auth/google', async (req, res) => {
       }
 
       wpUser = createResult.user;
+
+      // Grant welcome bonus tokens (best-effort, once at signup)
+      try {
+        await updateUserMeta(wpUser.id, 'redpen_usage', {
+          tier: 'free',
+          gradingCount: 0,
+          gradingLimit: 5,
+          tokenBalance: 4,
+          chatTokenBalance: 1,
+        });
+      } catch (bonusError) {
+        console.error('Failed to grant welcome bonus:', bonusError.message);
+      }
     }
 
     const user = {
@@ -332,6 +360,8 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         tier: safeUsage.tier || 'free',
         gradingCount: safeUsage.gradingCount || 0,
         gradingLimit: safeUsage.gradingLimit ?? 5,
+        tokenBalance: safeUsage.tokenBalance || 0,
+        chatTokenBalance: safeUsage.chatTokenBalance || 0,
         institution: safeProfile.institution || '',
         role: safeProfile.role || '',
         avatarUrl: safeProfile.avatarUrl || '',
@@ -418,17 +448,23 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
   console.log(`[${requestId}] Starting grading request for ${req.user.email}`);
 
   try {
-    // Check grading limit before doing any AI work
-    const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { gradingCount: 0, tier: 'free', gradingLimit: 5 };
+    // Check grading limit before doing any AI work.
+    // Free allowance first (gradingLimit), then fall back to purchased tokens.
+    const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { gradingCount: 0, tier: 'free', gradingLimit: 5, tokenBalance: 0 };
     const gradingLimit = usage.tier === 'corporate' ? Infinity : (usage.gradingLimit ?? 5);
+    const withinFreeAllowance = usage.tier === 'corporate' || (usage.gradingCount || 0) < gradingLimit;
+    const hasTokens = (usage.tokenBalance || 0) >= 1;
 
-    if (usage.tier !== 'corporate' && (usage.gradingCount || 0) >= gradingLimit) {
+    if (!withinFreeAllowance && !hasTokens) {
       return res.status(403).json({
         code: 'LIMIT_REACHED',
         error: true,
-        message: `Grading limit reached (${usage.gradingCount}/${gradingLimit}). Add your own API key in Settings, or upgrade your plan to continue.`,
+        message: `You've used your free gradings (${usage.gradingCount}/${gradingLimit}) and have no tokens left. Buy tokens or add your own API key in Settings to continue.`,
       });
     }
+
+    // Whether this grading will be paid for with a token (only when free allowance is exhausted)
+    const willSpendToken = !withinFreeAllowance;
 
     const { studentInfo, markingScheme, studentPaper } = req.body;
 
@@ -479,14 +515,16 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
 
     console.log(`[${requestId}] Grading completed via ${provider}. User: ${req.user.email}`);
 
-    // Increment usage count (best-effort — don't fail the response if this fails)
+    // Increment usage count / deduct a token (best-effort — don't fail the response if this fails)
     // Note: this only tracks USAGE. The actual history record is saved separately
     // via POST /api/history when the user clicks "Save" in the frontend.
     try {
       const updatedUsage = {
+        ...usage,
         tier: usage.tier || 'free',
-        gradingCount: (usage.gradingCount || 0) + 1,
         gradingLimit: usage.gradingLimit ?? 5,
+        gradingCount: willSpendToken ? (usage.gradingCount || 0) : (usage.gradingCount || 0) + 1,
+        tokenBalance: willSpendToken ? Math.max(0, (usage.tokenBalance || 0) - 1) : (usage.tokenBalance || 0),
       };
       await updateUserMeta(req.user.id, 'redpen_usage', updatedUsage);
     } catch (usageError) {
@@ -504,6 +542,13 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
   }
 });
 app.use(createYazaRouter({ authMiddleware, getUserMeta, updateUserMeta }));
+
+app.use(createPaymentsRouter({
+  authMiddleware,
+  getUserMeta,
+  updateUserMeta,
+  appBaseUrl: process.env.APP_BASE_URL || 'https://your-app.vercel.app', // ⚠️ set APP_BASE_URL in Vercel tomorrow
+}));
 
 // ========== History Endpoints ==========
 
