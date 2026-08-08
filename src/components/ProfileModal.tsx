@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2, Camera, Coins } from 'lucide-react';
+import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2, Camera, Coins } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 
