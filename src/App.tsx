@@ -19,7 +19,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
-import { NewSessionModal, ContinueSessionModal, CourseSession } from './components/CourseSessionModal';
+import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, SemesterCourse } from './components/CourseSessionModal';
 import { ToolOptionsBar } from './components/ToolOptionsBar';
 import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse } from './types';
 import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
@@ -45,12 +45,12 @@ function saveHistory(records: HistoryRecord[]) {
 }
 
 // Session management functions
-function loadSessions(): CourseSession[] {
+function loadSessions(): SemesterCourse[] {
     try { return JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]'); }
     catch { return []; }
 }
 
-function saveSessions(sessions: CourseSession[]) {
+function saveSessions(sessions: SemesterCourse[]) {
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
@@ -76,7 +76,7 @@ function saveDepartments(departments: string[]) {
 
 export default function App() {
     const [studentInfo, setStudentInfo] = useState<StudentInfo>({
-        name: '', regNo: '', program: '', year: '', courseCode: '', examDate: ''
+        name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: ''
     });
     const [markingScheme, setMarkingScheme] = useState<{ base64: string; name: string } | null>(null);
     const [studentPaper, setStudentPaper] = useState<{ base64: string; name: string } | null>(null);
@@ -149,10 +149,11 @@ export default function App() {
     // Auto-hide timer for tool options bar
     const autoHideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const [courseSession, setCourseSession] = useState<CourseSession | null>(null);
+    const [semesterCourse, setSemesterCourse] = useState<SemesterCourse | null>(null);
     const [pendingUpload, setPendingUpload] = useState<'scheme' | 'paper' | null>(null);
     const [modalType, setModalType] = useState<'new' | 'continue' | null>(null);
     const [showOldSessionModal, setShowOldSessionModal] = useState(false);
+    const [showNewCourseModal, setShowNewCourseModal] = useState(false);
 
     // School and department management
     const [schools, setSchools] = useState<string[]>(loadSchools());
@@ -370,7 +371,7 @@ export default function App() {
 
     const openUploadModal = (type: 'scheme' | 'paper') => {
         setPendingUpload(type);
-        setModalType(courseSession ? 'continue' : 'new');
+        setModalType(semesterCourse ? 'continue' : 'new');
     };
 
     const triggerPendingUpload = () => {
@@ -386,35 +387,67 @@ export default function App() {
             headers: authHeaders(),
         }).catch(err => console.error('Failed to reset Yaza history for new session:', err));
     };
-    const handleNewSessionConfirm = (session: CourseSession) => {
-        setCourseSession(session);
-        clearYazaSessionHistory(session.courseCode || 'general');
+    const handleNewSemesterConfirm = (semester: SemesterCourse) => {
+        setSemesterCourse(semester);
+        clearYazaSessionHistory(semester.courseCode || 'general');
 
-        // Add to stored sessions
+        // Add to stored semesters
         const storedSessions = loadSessions();
-        const updatedSessions = [session, ...storedSessions.filter(s => s.courseCode !== session.courseCode)];
+        const updatedSessions = [semester, ...storedSessions.filter(s => s.courseCode !== semester.courseCode)];
         saveSessions(updatedSessions);
 
         setStudentInfo(prev => ({
             ...prev,
-            courseCode: session.courseCode || prev.courseCode,
-            program: session.program || prev.program,
-            year: session.year || prev.year,
+            courseCode: semester.courseCode || prev.courseCode,
+            program: semester.program || prev.program,
+            year: semester.year || prev.year,
+            semester: semester.semester || prev.semester,
         }));
         triggerPendingUpload();
     };
 
-    const handleSkipSession = () => {
+    const handleSkipSemester = () => {
         setPendingUpload(null);
         setModalType(null);
         if (pendingUpload === 'scheme') schemeRef.current?.triggerInput();
         else if (pendingUpload === 'paper') paperRef.current?.triggerInput();
     };
 
-    const handleContinueSession = () => triggerPendingUpload();
+    const handleContinueSemester = () => triggerPendingUpload();
 
     const handleStartNewFromContinue = () => {
         setModalType('new');
+    };
+
+    // "New Course" — keeps the current Year of Study/Semester, only changes the course itself
+    const handleNewCourse = (updates: { courseCode: string; courseName: string; program: string }) => {
+        setSemesterCourse(prev => prev ? { ...prev, ...updates } : {
+            courseCode: updates.courseCode,
+            courseName: updates.courseName,
+            program: updates.program,
+            year: '',
+            semester: '',
+        });
+        clearYazaSessionHistory(updates.courseCode || 'general');
+        setStudentInfo(prev => ({
+            ...prev,
+            courseCode: updates.courseCode || prev.courseCode,
+            program: updates.program || prev.program,
+        }));
+        setShowNewCourseModal(false);
+    };
+
+    // "New Paper" — keeps the current semester + course, only clears the paper/result for the next student
+    const handleNewPaper = () => {
+        if (result || markingScheme || studentPaper) {
+            if (!window.confirm('Start a new paper? Current work will be cleared.')) return;
+        }
+        setMarkingScheme(null);
+        setStudentPaper(null);
+        setResult(null);
+        setExaminerRemarks('');
+        setMarkingModeState('unmarked');
+        setActiveView('grade');
     };
 
     const closeModal = () => {
@@ -422,14 +455,15 @@ export default function App() {
         setModalType(null);
     };
 
-    // Function to load an old session
-    const loadOldSession = (session: CourseSession) => {
-        setCourseSession(session);
+    // Function to load a previously used semester/course
+    const loadOldSemester = (semester: SemesterCourse) => {
+        setSemesterCourse(semester);
         setStudentInfo(prev => ({
             ...prev,
-            courseCode: session.courseCode || prev.courseCode,
-            program: session.program || prev.program,
-            year: session.year || prev.year,
+            courseCode: semester.courseCode || prev.courseCode,
+            program: semester.program || prev.program,
+            year: semester.year || prev.year,
+            semester: semester.semester || prev.semester,
         }));
         setShowOldSessionModal(false);
     };
@@ -732,7 +766,7 @@ export default function App() {
                     await writeFileToFolder(folder, pdfFilename, pdfBlob);
                 }
 
-                const sessionKey = courseSession?.courseCode || studentInfo.courseCode || 'general';
+                const sessionKey = semesterCourse?.courseCode || studentInfo.courseCode || 'general';
                 await appendResultToSessionExcel(folder, sessionKey, studentInfo, result);
             } catch (exportError) {
                 console.error('Failed to export PDF/Excel:', exportError);
@@ -762,26 +796,26 @@ export default function App() {
 
     const handleNew = () => {
         if (result || markingScheme || studentPaper) {
-            if (!window.confirm('Start a new session? Current work will be cleared.')) return;
+            if (!window.confirm('Start a new semester? Current work will be cleared.')) return;
         }
         clearYazaSessionHistory('general');
-        setStudentInfo({ name: '', regNo: '', program: '', year: '', courseCode: '', examDate: '' });
+        setStudentInfo({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' });
         setMarkingScheme(null);
         setStudentPaper(null);
         setResult(null);
         setExaminerRemarks('');
-        setCourseSession(null);
+        setSemesterCourse(null);
         setActiveView('dashboard');
         setMarkingModeState('unmarked'); // Reset to unmarked
     };
 
     const handleRefresh = () => {
-        setStudentInfo({ name: '', regNo: '', program: '', year: '', courseCode: '', examDate: '' });
+        setStudentInfo({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' });
         setMarkingScheme(null);
         setStudentPaper(null);
         setResult(null);
         setExaminerRemarks('');
-        setCourseSession(null);
+        setSemesterCourse(null);
         setActiveView('dashboard');
         setMarkingModeState('unmarked'); // Reset to unmarked
         setClearCount(c => c + 1);
@@ -1064,6 +1098,8 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 onShowAddSchool={() => setShowAddSchoolModal(true)}
                 onShowAddDepartment={() => setShowAddDepartmentModal(true)}
                 onSearchTermChange={handleSearchTermChange}
+                onNewCourse={() => setShowNewCourseModal(true)}
+                onNewPaper={handleNewPaper}
                 onToggleYaza={() => setShowYaza(v => !v)}
                 isYazaOpen={showYaza}
                 isLoggedIn={!!user}
@@ -1110,17 +1146,17 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                         <>
                             <div className={`${isMaximized ? 'flex-1 p-0' : 'flex-[3] p-4'} flex flex-col gap-4 overflow-hidden`}>
 
-                                {courseSession && !isMaximized && (
+                                {semesterCourse && !isMaximized && (
                                     <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
                                         <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
                                         <span className="text-[10px] font-black text-accent-blue uppercase tracking-wider">
-                                            Session: {courseSession.courseCode}
+                                            Semester: {semesterCourse.courseCode}
                                         </span>
-                                        {courseSession.courseName && (
-                                            <span className="text-[10px] text-gray-500">— {courseSession.courseName}</span>
+                                        {semesterCourse.courseName && (
+                                            <span className="text-[10px] text-gray-500">— {semesterCourse.courseName}</span>
                                         )}
                                         <button
-                                            onClick={() => setCourseSession(null)}
+                                            onClick={() => setSemesterCourse(null)}
                                             className="ml-auto text-[9px] text-gray-600 hover:text-gray-400 uppercase font-bold tracking-wider transition-colors"
                                         >
                                             Clear
@@ -1517,7 +1553,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-900/30 rounded-xl border border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer"
-                                        onClick={() => loadOldSession(session)}
+                                        onClick={() => loadOldSemester(session)}
                                     >
                                         <div className="font-bold text-ink">{session.courseCode}</div>
                                         <div className="text-sm text-gray-400">{session.courseName || 'No course name'}</div>
@@ -1738,20 +1774,28 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 )}
 
                 {modalType === 'new' && (
-                    <NewSessionModal
-                        onConfirm={handleNewSessionConfirm}
-                        onSkip={handleSkipSession}
+                    <NewSemesterModal
+                        onConfirm={handleNewSemesterConfirm}
+                        onSkip={handleSkipSemester}
                         onCancel={closeModal}
                     />
                 )}
 
-                {modalType === 'continue' && courseSession && (
-                    <ContinueSessionModal
-                        session={courseSession}
+                {modalType === 'continue' && semesterCourse && (
+                    <ContinueSemesterModal
+                        semesterCourse={semesterCourse}
                         uploadLabel={pendingUpload === 'scheme' ? 'Uploading marking scheme' : 'Uploading student paper'}
-                        onContinue={handleContinueSession}
-                        onNewSession={handleStartNewFromContinue}
+                        onContinue={handleContinueSemester}
+                        onNewSemester={handleStartNewFromContinue}
                         onCancel={closeModal}
+                    />
+                )}
+
+                {showNewCourseModal && (
+                    <NewCourseModal
+                        currentSemesterCourse={semesterCourse}
+                        onConfirm={handleNewCourse}
+                        onCancel={() => setShowNewCourseModal(false)}
                     />
                 )}
             </AnimatePresence>
