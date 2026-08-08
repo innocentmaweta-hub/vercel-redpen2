@@ -34,6 +34,7 @@ const AUTH_TOKEN_KEY = 'yaza_auth_token';
 const SESSIONS_KEY = 'stored_sessions';
 const SCHOOLS_KEY = 'stored_schools';
 const DEPARTMENTS_KEY = 'stored_departments';
+const COURSES_KEY = 'stored_courses';
 
 function loadHistory(): HistoryRecord[] {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
@@ -72,6 +73,21 @@ function loadDepartments(): string[] {
 
 function saveDepartments(departments: string[]) {
     localStorage.setItem(DEPARTMENTS_KEY, JSON.stringify(departments));
+}
+
+// Course list management functions (independent of program of study)
+interface StoredCourse {
+    courseCode: string;
+    courseName: string;
+}
+
+function loadCourses(): StoredCourse[] {
+    try { return JSON.parse(localStorage.getItem(COURSES_KEY) || '[]'); }
+    catch { return []; }
+}
+
+function saveCourses(courses: StoredCourse[]) {
+    localStorage.setItem(COURSES_KEY, JSON.stringify(courses));
 }
 
 export default function App() {
@@ -158,6 +174,7 @@ export default function App() {
     // School and department management
     const [schools, setSchools] = useState<string[]>(loadSchools());
     const [departments, setDepartments] = useState<string[]>(loadDepartments());
+    const [courses, setCourses] = useState<StoredCourse[]>(loadCourses());
     const [showAddSchoolModal, setShowAddSchoolModal] = useState(false);
     const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
     const [newSchoolName, setNewSchoolName] = useState('');
@@ -419,12 +436,13 @@ export default function App() {
         setModalType('new');
     };
 
-    // "New Course" — keeps the current Year of Study/Semester, only changes the course itself
-    const handleNewCourse = (updates: { courseCode: string; courseName: string; program: string }) => {
-        setSemesterCourse(prev => prev ? { ...prev, ...updates } : {
+    // "New Course" — standalone from program of study; keeps the current Year/Semester,
+    // only changes the course itself, and permanently remembers the course for the dropdown.
+    const handleNewCourse = (updates: { courseCode: string; courseName: string }) => {
+        setSemesterCourse(prev => prev ? { ...prev, courseCode: updates.courseCode, courseName: updates.courseName } : {
             courseCode: updates.courseCode,
             courseName: updates.courseName,
-            program: updates.program,
+            program: '',
             year: '',
             semester: '',
         });
@@ -432,8 +450,20 @@ export default function App() {
         setStudentInfo(prev => ({
             ...prev,
             courseCode: updates.courseCode || prev.courseCode,
-            program: updates.program || prev.program,
         }));
+
+        // Persist the course so it shows up in the Course dropdown immediately,
+        // even before any paper has been graded under it.
+        const code = updates.courseCode.trim().toUpperCase();
+        if (code) {
+            setCourses(prev => {
+                const withoutDupe = prev.filter(c => c.courseCode !== code);
+                const updated = [{ courseCode: code, courseName: updates.courseName.trim() }, ...withoutDupe];
+                saveCourses(updated);
+                return updated;
+            });
+        }
+
         setShowNewCourseModal(false);
     };
 
@@ -1095,6 +1125,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 onShowOldSessions={() => setShowOldSessionModal(true)}
                 schools={schools}
                 departments={departments}
+                courses={courses}
                 onShowAddSchool={() => setShowAddSchoolModal(true)}
                 onShowAddDepartment={() => setShowAddDepartmentModal(true)}
                 onSearchTermChange={handleSearchTermChange}
