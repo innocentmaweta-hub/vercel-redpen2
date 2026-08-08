@@ -53,12 +53,21 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
     const [avatarError, setAvatarError] = useState('');
     const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
+    // Crop modal state
+    const [cropSrc, setCropSrc] = useState<string | null>(null);
+    const [cropZoom, setCropZoom] = useState(1);
+    const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+    const [isDraggingCrop, setIsDraggingCrop] = useState(false);
+    const dragStartRef = React.useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+    const cropImgRef = React.useRef<HTMLImageElement>(null);
+    const CROP_SIZE = 240; // px, size of the visible crop circle/canvas
+
     const handleAvatarPick = () => avatarInputRef.current?.click();
 
-    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
         e.target.value = ''; // allow re-selecting the same file later
+        if (!file) return;
 
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
             setAvatarError('Please choose a JPEG, PNG, or WebP image');
@@ -70,15 +79,81 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
         }
 
         setAvatarError('');
-        setAvatarUploading(true);
-        try {
-            const result = await onUploadAvatar(file);
-            if (!result.success) {
-                setAvatarError(result.message || 'Failed to upload image');
+        const reader = new FileReader();
+        reader.onload = () => {
+            setCropSrc(reader.result as string);
+            setCropZoom(1);
+            setCropOffset({ x: 0, y: 0 });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleCropPointerDown = (e: React.PointerEvent) => {
+        setIsDraggingCrop(true);
+        dragStartRef.current = { x: e.clientX, y: e.clientY, offsetX: cropOffset.x, offsetY: cropOffset.y };
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+    const handleCropPointerMove = (e: React.PointerEvent) => {
+        if (!isDraggingCrop) return;
+        const dx = e.clientX - dragStartRef.current.x;
+        const dy = e.clientY - dragStartRef.current.y;
+        setCropOffset({ x: dragStartRef.current.offsetX + dx, y: dragStartRef.current.offsetY + dy });
+    };
+    const handleCropPointerUp = () => setIsDraggingCrop(false);
+
+    const handleCropCancel = () => {
+        setCropSrc(null);
+        setCropZoom(1);
+        setCropOffset({ x: 0, y: 0 });
+    };
+
+    const handleCropConfirm = async () => {
+        const imgEl = cropImgRef.current;
+        if (!imgEl) return;
+
+        const OUTPUT_SIZE = 400; // final exported square avatar size, px
+        const canvas = document.createElement('canvas');
+        canvas.width = OUTPUT_SIZE;
+        canvas.height = OUTPUT_SIZE;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Compute how the image is currently displayed inside the CROP_SIZE viewport,
+        // matching the CSS transform used in the preview (object-fit: cover, then zoom + drag offset).
+        const naturalW = imgEl.naturalWidth;
+        const naturalH = imgEl.naturalHeight;
+        const baseScale = Math.max(CROP_SIZE / naturalW, CROP_SIZE / naturalH); // "cover" scale
+        const scale = baseScale * cropZoom;
+
+        const displayedW = naturalW * scale;
+        const displayedH = naturalH * scale;
+
+        // Top-left of the displayed image relative to the CROP_SIZE viewport's top-left
+        const imgLeft = (CROP_SIZE - displayedW) / 2 + cropOffset.x;
+        const imgTop = (CROP_SIZE - displayedH) / 2 + cropOffset.y;
+
+        // Map viewport (0,0)-(CROP_SIZE,CROP_SIZE) back to source image pixel coordinates
+        const sx = (0 - imgLeft) / scale;
+        const sy = (0 - imgTop) / scale;
+        const sSize = CROP_SIZE / scale;
+
+        ctx.drawImage(imgEl, sx, sy, sSize, sSize, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+        canvas.toBlob(async (blob) => {
+            if (!blob) return;
+            const croppedFile = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+
+            setAvatarUploading(true);
+            try {
+                const result = await onUploadAvatar(croppedFile);
+                if (!result.success) {
+                    setAvatarError(result.message || 'Failed to upload image');
+                }
+            } finally {
+                setAvatarUploading(false);
+                handleCropCancel();
             }
-        } finally {
-            setAvatarUploading(false);
-        }
+        }, 'image/jpeg', 0.9);
     };
 
     // Institution / role editing
@@ -170,6 +245,74 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
     };
 
     return (
+        <>
+        {cropSrc && (
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-6"
+            >
+                <div className="bg-card border border-gray-800 rounded-3xl shadow-2xl w-full max-w-xs p-6 space-y-4">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-gray-300 text-center">Crop Photo</h3>
+
+                    <div
+                        className="relative mx-auto rounded-full overflow-hidden border-2 border-accent-blue/40 cursor-grab active:cursor-grabbing touch-none select-none"
+                        style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                        onPointerDown={handleCropPointerDown}
+                        onPointerMove={handleCropPointerMove}
+                        onPointerUp={handleCropPointerUp}
+                        onPointerLeave={handleCropPointerUp}
+                    >
+                        <img
+                            ref={cropImgRef}
+                            src={cropSrc}
+                            alt="Crop preview"
+                            draggable={false}
+                            className="absolute top-1/2 left-1/2 max-w-none"
+                            style={{
+                                transform: `translate(-50%, -50%) translate(${cropOffset.x}px, ${cropOffset.y}px) scale(${cropZoom})`,
+                                width: CROP_SIZE,
+                                height: CROP_SIZE,
+                                objectFit: 'cover',
+                            }}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500 shrink-0">Zoom</span>
+                        <input
+                            type="range"
+                            min={1}
+                            max={3}
+                            step={0.05}
+                            value={cropZoom}
+                            onChange={(e) => setCropZoom(Number(e.target.value))}
+                            className="flex-1 accent-accent-blue"
+                        />
+                    </div>
+
+                    {avatarError && <p className="text-[10px] text-red-400 text-center">{avatarError}</p>}
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleCropCancel}
+                            disabled={avatarUploading}
+                            className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleCropConfirm}
+                            disabled={avatarUploading}
+                            className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-1.5"
+                        >
+                            {avatarUploading ? <Loader2 size={12} className="animate-spin" /> : 'Save Photo'}
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        )}
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -510,5 +653,6 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
                 </div>
             </motion.div>
         </motion.div>
+        </>
     );
 };
