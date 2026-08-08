@@ -10,28 +10,28 @@ function sanitizeFilename(name: string): string {
 
 /**
  * Generate a single-page PDF from a full-paper image (paper + annotations),
- * sized to match the image's aspect ratio (A4-ish portrait by default).
+ * sized to exactly match the image's real pixel dimensions/aspect ratio.
  */
-export function buildPaperPdfBlob(imageDataUrl: string): Blob {
-    // Determine image pixel size from the data URL so the PDF page matches its aspect ratio
-    const img = new Image();
-    img.src = imageDataUrl;
+export function buildPaperPdfBlob(imageDataUrl: string): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const naturalW = img.naturalWidth;
+            const naturalH = img.naturalHeight;
 
-    // jsPDF needs synchronous dimensions; since the image was just captured from an
-    // already-loaded <img>/<canvas>, decoding is effectively instant, but to be safe
-    // we fall back to A4 proportions if dimensions aren't available yet.
-    const naturalW = img.width || 1240;
-    const naturalH = img.height || 1754;
+            const pdf = new jsPDF({
+                orientation: naturalH >= naturalW ? 'portrait' : 'landscape',
+                unit: 'pt',
+                format: [naturalW, naturalH],
+            });
 
-    const pdf = new jsPDF({
-        orientation: naturalH >= naturalW ? 'portrait' : 'landscape',
-        unit: 'pt',
-        format: [naturalW, naturalH],
+            pdf.addImage(imageDataUrl, 'JPEG', 0, 0, naturalW, naturalH);
+
+            resolve(pdf.output('blob'));
+        };
+        img.onerror = () => reject(new Error('Failed to load paper image for PDF export'));
+        img.src = imageDataUrl;
     });
-
-    pdf.addImage(imageDataUrl, 'JPEG', 0, 0, naturalW, naturalH);
-
-    return pdf.output('blob');
 }
 
 /**
