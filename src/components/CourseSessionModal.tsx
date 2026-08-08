@@ -8,6 +8,8 @@ export interface SemesterCourse {
   program: string;
   year: string;
   semester: string;
+  academicYear: string; // e.g. "2026/27 academic year"
+  sessionLabel: string; // e.g. "Assignment", "End of Semester" — used in saved session filenames
 }
 
 interface NewSemesterModalProps {
@@ -32,6 +34,18 @@ interface NewCourseModalProps {
 
 const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
 const SEMESTERS = ['Semester 1', 'Semester 2'];
+
+function getAcademicYearOptions(): string[] {
+  const currentYear = new Date().getFullYear();
+  const options: string[] = [];
+  for (let y = currentYear - 10; y <= currentYear + 10; y++) {
+    const shortNext = String((y + 1) % 100).padStart(2, '0');
+    options.push(`${y}/${shortNext} academic year`);
+  }
+  return options;
+}
+
+const ACADEMIC_YEARS = getAcademicYearOptions();
 
 const DEPARTMENTS = [
   'Computer Science & IT', 'Engineering', 'Business & Management',
@@ -62,7 +76,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 const inputCls = "bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700";
 
 export const NewSemesterModal = ({ onConfirm, onSkip, onCancel }: NewSemesterModalProps) => {
-  const [form, setForm] = useState<SemesterCourse>({ courseCode: '', courseName: '', program: '', year: '', semester: '' });
+  const [form, setForm] = useState<SemesterCourse>({ courseCode: '', courseName: '', program: '', year: '', semester: '', academicYear: '', sessionLabel: '' });
   const [error, setError] = useState('');
   const [departmentSearch, setDepartmentSearch] = useState('');
 
@@ -172,6 +186,23 @@ export const NewSemesterModal = ({ onConfirm, onSkip, onCancel }: NewSemesterMod
                 <option value="">Select semester…</option>
                 {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Academic Year">
+              <select className={inputCls} value={form.academicYear} onChange={set('academicYear')}>
+                <option value="">Select academic year…</option>
+                {ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}
+              </select>
+            </Field>
+            <Field label="Session Label">
+              <input
+                className={inputCls}
+                placeholder="e.g. Assignment, End of Semester"
+                value={form.sessionLabel}
+                onChange={set('sessionLabel')}
+              />
             </Field>
           </div>
 
