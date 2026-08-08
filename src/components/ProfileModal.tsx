@@ -182,7 +182,7 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.95, y: 20 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-card border border-gray-800 rounded-3xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto"
+                className="bg-card border border-gray-800 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto"
             >
                 <div className="flex items-center justify-between p-6 border-b border-gray-800 sticky top-0 bg-card z-10">
                     <div className="flex items-center gap-2">
@@ -197,7 +197,8 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
                     </button>
                 </div>
 
-                <div className="p-6 space-y-5">
+                <div className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
                     {/* User Avatar & Name */}
                     <div className="flex items-center gap-4">
                         <button
@@ -504,6 +505,7 @@ export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSavePr
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                    </div>
                     </div>
                 </div>
             </motion.div>
