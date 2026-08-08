@@ -39,7 +39,8 @@ export interface StudentInfo {
     name: string;
     regNo: string;
     program: string;
-    year: string;
+    year: string; // Year of Study (e.g. "Year 1"–"Year 4")
+    semester?: string; // Semester 1 / Semester 2
     courseCode: string;
     examDate: string;
 }
