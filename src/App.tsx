@@ -16,7 +16,7 @@ import { HelpModal } from './components/HelpModal';
 import { RefreshModal } from './components/RefreshModal';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
 import { NewSessionModal, ContinueSessionModal, CourseSession } from './components/CourseSessionModal';
@@ -176,6 +176,7 @@ export default function App() {
     const [isGradingInProgress, setIsGradingInProgress] = useState(false);
     const [showGradingChoice, setShowGradingChoice] = useState(false); // State for grading choice modal
     const [upgradePromptMessage, setUpgradePromptMessage] = useState<string | null>(null);
+    const [paymentStatusMessage, setPaymentStatusMessage] = useState<string | null>(null);
 
     // Auth header helper
     const authHeaders = useCallback((): Record<string, string> => {
@@ -246,6 +247,48 @@ export default function App() {
             }
         })();
     }, [user, token]);
+    // Detect return from PayChangu checkout and verify the pending transaction
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('payment_callback') !== '1') return;
+
+        const pendingTxRef = localStorage.getItem(PENDING_TX_KEY);
+
+        // Clean the URL regardless of outcome, so a refresh doesn't re-trigger this
+        window.history.replaceState({}, '', window.location.pathname);
+
+        if (!pendingTxRef) {
+            return; // Nothing to verify (e.g. user navigated here manually)
+        }
+
+        // Wait until we know the logged-in user before verifying (token needs to be restored first)
+        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (!storedToken) {
+            localStorage.removeItem(PENDING_TX_KEY);
+            return;
+        }
+
+        (async () => {
+            try {
+                const res = await fetch('/api/payments/verify', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${storedToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ txRef: pendingTxRef }),
+                });
+                const data = await res.json().catch(() => ({}));
+                localStorage.removeItem(PENDING_TX_KEY);
+
+                if (data.credited) {
+                    setPaymentStatusMessage(`Success! ${data.tokens} token(s) added. New balance: ${data.newBalance}.`);
+                } else {
+                    setPaymentStatusMessage(data.message || 'We could not confirm your payment yet. If money was deducted, please contact support.');
+                }
+            } catch (err) {
+                localStorage.removeItem(PENDING_TX_KEY);
+                setPaymentStatusMessage('We could not confirm your payment. If money was deducted, please contact support.');
+            }
+        })();
+    }, []);
 
     // Auto-hide tool options bar after 6 seconds of inactivity
     useEffect(() => {
