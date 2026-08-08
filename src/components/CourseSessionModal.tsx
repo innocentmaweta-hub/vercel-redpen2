@@ -10,6 +10,7 @@ export interface SemesterCourse {
   semester: string;
   academicYear: string; // e.g. "2026/27 academic year"
   sessionLabel: string; // e.g. "Assignment", "End of Semester" — used in saved session filenames
+  customName?: string; // Fully custom workbook name — overrides academicYear-semester-sessionLabel entirely when set
 }
 
 interface NewSemesterModalProps {
@@ -34,7 +35,7 @@ interface NewCourseModalProps {
 
 interface NewSessionModalProps {
   currentSemesterCourse: SemesterCourse | null;
-  onConfirm: (updates: { academicYear: string; semester: string; sessionLabel: string }) => void;
+  onConfirm: (updates: { academicYear: string; semester: string; sessionLabel: string; customName: string }) => void;
   onCancel: () => void;
 }
 
@@ -403,12 +404,15 @@ export const NewSessionModal = ({ currentSemesterCourse, onConfirm, onCancel }: 
   const [academicYear, setAcademicYear] = useState(currentSemesterCourse?.academicYear || '');
   const [semester, setSemester] = useState(currentSemesterCourse?.semester || '');
   const [sessionLabel, setSessionLabel] = useState('');
+  const [customName, setCustomName] = useState('');
   const [error, setError] = useState('');
 
   const handleConfirm = () => {
-    if (!academicYear.trim()) { setError('Academic year is required.'); return; }
-    if (!sessionLabel.trim()) { setError('Session label is required.'); return; }
-    onConfirm({ academicYear, semester, sessionLabel });
+    if (!customName.trim() && !academicYear.trim()) {
+      setError('Enter a custom name, or select an academic year.');
+      return;
+    }
+    onConfirm({ academicYear, semester, sessionLabel, customName });
   };
 
   return (
@@ -456,13 +460,22 @@ export const NewSessionModal = ({ currentSemesterCourse, onConfirm, onCancel }: 
             </Field>
           </div>
 
-          <Field label="Session Label *">
+          <Field label="Session Label">
             <input
               className={inputCls}
               placeholder="e.g. Assignment, End of Semester"
               value={sessionLabel}
               onChange={(e) => setSessionLabel(e.target.value)}
               autoFocus
+            />
+          </Field>
+
+          <Field label="Custom Name (overrides the above)">
+            <input
+              className={inputCls}
+              placeholder="e.g. Midterm Batch 2 — leave blank to use Academic Year/Semester/Label"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
             />
           </Field>
 
