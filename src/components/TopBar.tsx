@@ -37,7 +37,8 @@ interface DropdownItem {
   active?: boolean;
 }
 
-const SEMESTERS = ['Semester 1', 'Semester 2', 'Year 1', 'Year 2', 'Year 3', 'Year 4'];
+const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
+const SEMESTERS = ['Semester 1', 'Semester 2'];
 const PROGRAMS = [
   'BSc Computer Science', 'BSc Software Engineering', 'BSc Information Technology',
   'BEng Electrical Engineering', 'BEng Civil Engineering',
@@ -205,7 +206,7 @@ export const TopBar = ({
       { label: 'Print Report', action: onPrint, disabled: !hasResult },
     ],
     Edit: [
-      { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', courseCode: '', examDate: '' }) },
+      { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
       { label: 'Clear Results', action: onClearResult, disabled: !hasResult },
       { divider: true },
       { label: 'Reset All', action: onNew },
@@ -225,14 +226,19 @@ export const TopBar = ({
         { divider: true },
         { label: 'Add New Course...', action: () => { } }
       ],
+    'Year of Study': [
+      ...YEARS_OF_STUDY.map(yr => ({
+        label: yr,
+        action: () => onStudentInfoUpdate({ year: yr }),
+        active: studentInfo.year === yr
+      })),
+    ],
     Semester: [
       ...SEMESTERS.map(sem => ({
         label: sem,
-        action: () => onStudentInfoUpdate({ year: sem }),
-        active: studentInfo.year === sem
+        action: () => onStudentInfoUpdate({ semester: sem }),
+        active: studentInfo.semester === sem
       })),
-      { divider: true },
-      { label: 'Add New Semester...', action: () => { } }
     ],
     Program: [
       ...PROGRAMS.map(prog => ({
@@ -265,7 +271,7 @@ export const TopBar = ({
     ],
   };
 
-  const menuNames = ['File', 'Edit', 'Course', 'Semester', 'Program', 'Department'];
+  const menuNames = ['File', 'Edit', 'Course', 'Year of Study', 'Semester', 'Program', 'Department'];
 
   return (
     <div
