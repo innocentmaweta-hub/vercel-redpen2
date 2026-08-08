@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2, Camera } from 'lucide-react';
+import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, import { X, User as UserIcon, Star, Zap, Crown, Shield, BarChart3, LogOut, Building2, Briefcase, Key, Lock, Trash2, ChevronDown, ChevronUp, AlertTriangle, Loader2, Camera, Coins } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 
@@ -7,12 +7,12 @@ interface Props {
     user: User;
     onClose: () => void;
     onLogout: () => void;
-    onUpgrade: () => void;
     onOpenSettings: () => void;
     onSaveProfile: (institution: string, role: string) => Promise<void>;
     onChangePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
     onDeleteAccount: (password: string) => Promise<{ success: boolean; message?: string }>;
     onUploadAvatar: (file: File) => Promise<{ success: boolean; message?: string }>;
+    authHeaders: () => Record<string, string>;
 }
 
 const TIER_CONFIG: Record<string, { icon: any; color: string; label: string; price: string }> = {
@@ -27,8 +27,26 @@ const PROVIDER_LABEL: Record<string, string> = {
     server: 'Shared Server Key',
 };
 
-export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSettings, onSaveProfile, onChangePassword, onDeleteAccount, onUploadAvatar }: Props) => {
+export const ProfileModal = ({ user, onClose, onLogout, onOpenSettings, onSaveProfile, onChangePassword, onDeleteAccount, onUploadAvatar, authHeaders }: Props) => {
     const tierConfig = TIER_CONFIG[user.tier] || TIER_CONFIG.free;
+
+    // Token balance
+    const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+    const [loadingBalance, setLoadingBalance] = useState(true);
+
+    React.useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch('/api/payments/balance', { headers: authHeaders() });
+                const data = await res.json().catch(() => ({}));
+                setTokenBalance(data.tokenBalance ?? 0);
+            } catch {
+                setTokenBalance(null);
+            } finally {
+                setLoadingBalance(false);
+            }
+        })();
+    }, []);
 
     // Avatar upload
     const [avatarUploading, setAvatarUploading] = useState(false);
@@ -289,6 +307,31 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSetting
                         )}
                     </div>
 
+                    {/* Token Balance */}
+                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Coins size={14} className="text-yellow-400" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Token Balance</span>
+                            </div>
+                            <button
+                                onClick={onOpenSettings}
+                                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold"
+                            >
+                                Buy More
+                            </button>
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                            {loadingBalance ? (
+                                <Loader2 size={16} className="animate-spin text-gray-500" />
+                            ) : (
+                                <span className="text-2xl font-bold text-white">{tokenBalance ?? 0}</span>
+                            )}
+                            <span className="text-[10px] text-gray-500 font-medium">tokens</span>
+                        </div>
+                        <p className="text-[9px] text-gray-600">1 token = 1 grading. Buy more anytime in Settings.</p>
+                    </div>
+
                     {/* Grading Usage */}
                     <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
                         <div className="flex items-center justify-between">
@@ -332,35 +375,6 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSetting
                         </p>
                     </div>
 
-                    {/* Plan Details */}
-                    <div className="space-y-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Subscription</p>
-
-                        <div className="grid grid-cols-3 gap-2">
-                            {['free', 'personal', 'corporate'].map((tier) => {
-                                const cfg = TIER_CONFIG[tier];
-                                const isCurrent = user.tier === tier;
-                                const Icon = cfg.icon;
-                                return (
-                                    <div
-                                        key={tier}
-                                        className={`rounded-xl p-3 border text-center ${isCurrent
-                                            ? 'border-accent-blue bg-accent-blue/5'
-                                            : 'border-gray-800 bg-gray-900/30 opacity-60'
-                                            }`}
-                                    >
-                                        <Icon size={16} className={`mx-auto ${cfg.color}`} />
-                                        <p className={`text-[10px] font-bold mt-1 ${cfg.color}`}>{cfg.label}</p>
-                                        <p className="text-[9px] text-gray-600 mt-0.5">{cfg.price}</p>
-                                        {isCurrent && (
-                                            <span className="text-[8px] text-accent-blue font-bold uppercase tracking-wider">Current</span>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
                     {/* Account Created */}
                     <p className="text-[9px] text-gray-700 text-center">
                         Member since {new Date(user.createdAt).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
@@ -368,15 +382,13 @@ export const ProfileModal = ({ user, onClose, onLogout, onUpgrade, onOpenSetting
 
                     {/* Actions */}
                     <div className="flex gap-2.5">
-                        {user.tier !== 'corporate' && (
-                            <button
-                                onClick={onUpgrade}
-                                className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg"
-                            >
-                                <Crown size={12} />
-                                {user.tier === 'free' ? 'Upgrade to Personal' : 'Upgrade to Corporate'}
-                            </button>
-                        )}
+                        <button
+                            onClick={onOpenSettings}
+                            className="flex-1 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg"
+                        >
+                            <Coins size={12} />
+                            Buy Tokens
+                        </button>
                         <button
                             onClick={onLogout}
                             className="flex-1 py-2.5 bg-gray-800 hover:bg-red-500/20 text-gray-400 hover:text-red-400 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
