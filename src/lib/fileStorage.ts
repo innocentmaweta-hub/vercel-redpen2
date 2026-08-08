@@ -79,13 +79,14 @@ export async function clearSaveFolder(): Promise<void> {
 
 // Write a file (Blob) into the saved folder, or trigger a normal download if no folder is available.
 export async function writeFileToFolder(folder: FileSystemDirectoryHandle | null, filename: string, blob: Blob): Promise<'written' | 'downloaded'> {
-    if (folder) {
+    if (folder && blob instanceof Blob) {
         try {
             // @ts-ignore
             const fileHandle = await folder.getFileHandle(filename, { create: true });
             // @ts-ignore
             const writable = await fileHandle.createWritable();
-            await writable.write(blob);
+            // Some Chrome versions require the explicit write-params shape rather than a bare Blob
+            await writable.write({ type: 'write', data: blob });
             await writable.close();
             return 'written';
         } catch (err) {
@@ -95,6 +96,11 @@ export async function writeFileToFolder(folder: FileSystemDirectoryHandle | null
     }
 
     // Fallback: normal browser download
+    if (!(blob instanceof Blob)) {
+        console.error(`writeFileToFolder: expected a Blob for ${filename}, got:`, blob);
+        throw new Error(`Invalid file data for ${filename}`);
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
