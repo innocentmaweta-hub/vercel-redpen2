@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { GoogleGenAI } from '@google/genai';
+import { TOKEN_PRICING } from './payments.js';
 
 const YAZA_TOOLS = [
   {
@@ -85,6 +86,19 @@ export function createYazaRouter({ authMiddleware, getUserMeta, updateUserMeta }
         return res.status(500).json({ code: 'NO_PROVIDER_CONFIGURED', message: 'AI provider not configured' });
       }
 
+      // Check chat token balance (dedicated chat tokens first, then shared token balance)
+      const preUsage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tier: 'free', chatTokenBalance: 0, tokenBalance: 0 };
+      const chatBalance = preUsage.chatTokenBalance || 0;
+      const generalBalance = preUsage.tokenBalance || 0;
+      const cost = TOKEN_PRICING.CHAT_TOKEN_COST;
+
+      if (chatBalance + generalBalance < cost) {
+        return res.status(403).json({
+          code: 'LIMIT_REACHED',
+          message: "You're out of chat tokens. Buy more tokens to keep chatting with Yaza AI.",
+        });
+      }
+
       const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
 
       const systemContext = `You are Yaza AI, an assistant embedded in RedPen, an exam-grading app.
@@ -117,9 +131,19 @@ ${JSON.stringify(appContext || {}, null, 2)}`;
       const textReply = parts.filter((p) => p.text).map((p) => p.text).join('\n').trim();
 
       try {
-        const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tier: 'free', gradingCount: 0, gradingLimit: 5 };
-        usage.chatCount = (usage.chatCount || 0) + 1;
-        await updateUserMeta(req.user.id, 'redpen_usage', usage);
+        const latestUsage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tier: 'free', gradingCount: 0, gradingLimit: 5 };
+        latestUsage.chatCount = (latestUsage.chatCount || 0) + 1;
+
+        // Deduct from chatTokenBalance first, then spill over into the shared tokenBalance
+        let remainingCost = TOKEN_PRICING.CHAT_TOKEN_COST;
+        const fromChatBalance = Math.min(latestUsage.chatTokenBalance || 0, remainingCost);
+        latestUsage.chatTokenBalance = (latestUsage.chatTokenBalance || 0) - fromChatBalance;
+        remainingCost -= fromChatBalance;
+        if (remainingCost > 0) {
+          latestUsage.tokenBalance = Math.max(0, (latestUsage.tokenBalance || 0) - remainingCost);
+        }
+
+        await updateUserMeta(req.user.id, 'redpen_usage', latestUsage);
       } catch (e) {
         console.error('Failed to update chat usage:', e.message);
       }
