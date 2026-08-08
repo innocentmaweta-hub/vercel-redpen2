@@ -512,7 +512,6 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     } catch (usageError) {
       console.error(`[${requestId}] Failed to update usage:`, usageError.message);
     }
-    }
 
     res.json(result);
   } catch (error) {
