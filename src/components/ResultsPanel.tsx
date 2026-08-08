@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { GradingResult } from '../types';
-import { ChevronRight, Award, AlertCircle, Printer, Edit3 } from 'lucide-react';
+import { ChevronRight, Award, AlertCircle, Printer, Edit3, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface Props {
   result: GradingResult | null;
   loading: boolean;
   onPrint: () => void;
+  onSave: () => void;
+  isSaving?: boolean;
   onResultChange?: (result: GradingResult) => void; // Added callback for result changes
 }
 
-export const ResultsPanel = ({ result, loading, onPrint, onResultChange }: Props) => {
+export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onResultChange }: Props) => {
   const [editableResult, setEditableResult] = useState<GradingResult | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -233,13 +235,25 @@ export const ResultsPanel = ({ result, loading, onPrint, onResultChange }: Props
         </div>
       </div>
 
-      <div className="p-6 border-t border-gray-800 bg-sidebar/50">
+      <div className="p-6 border-t border-gray-800 bg-sidebar/50 flex gap-2.5">
+        <button
+          onClick={onSave}
+          disabled={isSaving}
+          className="flex-1 bg-accent-green text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-green-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+        >
+          {isSaving ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Save size={16} />
+          )}
+          {isSaving ? 'Saving...' : 'Save'}
+        </button>
         <button
           onClick={onPrint}
-          className="w-full bg-accent-blue text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg"
+          className="flex-1 bg-accent-blue text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg"
         >
           <Printer size={16} />
-          Export Marked Paper
+          Print
         </button>
       </div>
     </div>
