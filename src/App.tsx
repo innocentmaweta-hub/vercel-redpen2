@@ -1477,6 +1477,8 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                     result={result}
                                     loading={loading}
                                     onPrint={handlePrint}
+                                    onSave={handleSave}
+                                    isSaving={isSaving}
                                     onResultChange={setResult} // Allow manual editing of results
                                 />
                             </div>
