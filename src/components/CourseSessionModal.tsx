@@ -26,7 +26,7 @@ interface ContinueSemesterModalProps {
 
 interface NewCourseModalProps {
   currentSemesterCourse: SemesterCourse | null;
-  onConfirm: (updates: { courseCode: string; courseName: string; program: string }) => void;
+  onConfirm: (updates: { courseCode: string; courseName: string }) => void;
   onCancel: () => void;
 }
 
@@ -283,12 +283,11 @@ export const ContinueSemesterModal = ({
 export const NewCourseModal = ({ currentSemesterCourse, onConfirm, onCancel }: NewCourseModalProps) => {
   const [courseCode, setCourseCode] = useState('');
   const [courseName, setCourseName] = useState('');
-  const [program, setProgram] = useState(currentSemesterCourse?.program || '');
   const [error, setError] = useState('');
 
   const handleConfirm = () => {
     if (!courseCode.trim()) { setError('Course code is required.'); return; }
-    onConfirm({ courseCode, courseName, program });
+    onConfirm({ courseCode, courseName });
   };
 
   return (
@@ -340,13 +339,6 @@ export const NewCourseModal = ({ currentSemesterCourse, onConfirm, onCancel }: N
               />
             </Field>
           </div>
-
-          <Field label="Program of Study">
-            <select className={inputCls} value={program} onChange={(e) => setProgram(e.target.value)}>
-              <option value="">Select program…</option>
-              {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </Field>
 
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
