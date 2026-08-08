@@ -727,7 +727,7 @@ export default function App() {
                 const paperImage = paperCanvasRef.current?.captureFullPaper();
 
                 if (paperImage) {
-                    const pdfBlob = buildPaperPdfBlob(paperImage);
+                    const pdfBlob = await buildPaperPdfBlob(paperImage);
                     const pdfFilename = buildPaperPdfFilename(studentInfo);
                     await writeFileToFolder(folder, pdfFilename, pdfBlob);
                 }
