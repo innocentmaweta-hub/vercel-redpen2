@@ -22,19 +22,18 @@ export const StudentForm = ({ info, onChange }: Props) => {
   }, [selectedDepartment]);
 
   const handleChange = (field: keyof StudentInfo, value: string) => {
-    // Basic input validation
-    let validatedValue = value.trim();
+    let validatedValue = value;
 
     if (field === 'regNo') {
-      validatedValue = validatedValue.toUpperCase();
-      if (validatedValue && !/^[A-Z0-9/-]{3,15}$/.test(validatedValue)) return;
+      // Allow typing freely; just uppercase and strip characters that could never be valid
+      validatedValue = validatedValue.toUpperCase().replace(/[^A-Z0-9/-]/g, '');
     } else if (field === 'courseCode') {
-      validatedValue = validatedValue.toUpperCase();
-      if (validatedValue && !/^[A-Z]{2,4}\d{3,4}$/.test(validatedValue)) return;
-    } else if (field === 'examDate') {
-      if (validatedValue && !/^\d{4}-\d{2}-\d{2}$/.test(validatedValue)) return;
+      // Allow typing freely; just uppercase and strip characters that could never be valid
+      validatedValue = validatedValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
     }
-    // 'year' and 'semester' come from fixed dropdowns below, so no regex needed
+    // 'examDate' comes from a native date input, which already enforces its own format —
+    // no need to re-validate it here (the old check was blocking valid partial typing).
+    // 'year' and 'semester' come from fixed dropdowns, so no regex needed.
 
     onChange({ ...info, [field]: validatedValue });
   };
