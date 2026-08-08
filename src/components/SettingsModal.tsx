@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, CreditCard, Check, Coins, Loader2, Eye, EyeOff } from 'lucide-react';
+import { X, Key, CreditCard, Check, Coins, Loader2, Eye, EyeOff, FolderOpen, FolderCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User } from '../types';
+import { isFileSystemAccessSupported, pickSaveFolder, getSavedFolder, clearSaveFolder } from '../lib/fileStorage';
 
 interface Props {
     user: User | null;
@@ -10,7 +11,7 @@ interface Props {
     authHeaders: () => Record<string, string>;
 }
 
-type Tab = 'api-keys' | 'tokens';
+type Tab = 'api-keys' | 'tokens' | 'save-location';
 
 const MWK_PER_TOKEN = 100;
 const MIN_PURCHASE_MWK = 100;
@@ -24,6 +25,33 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
     const [showOpenai, setShowOpenai] = useState(false);
     const [showGemini, setShowGemini] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    // Save location state
+    const [folderName, setFolderName] = useState<string | null>(null);
+    const [checkingFolder, setCheckingFolder] = useState(true);
+    const fsSupported = isFileSystemAccessSupported();
+
+    useEffect(() => {
+        if (!fsSupported) {
+            setCheckingFolder(false);
+            return;
+        }
+        (async () => {
+            const folder = await getSavedFolder();
+            setFolderName(folder ? (folder as any).name : null);
+            setCheckingFolder(false);
+        })();
+    }, []);
+
+    const handlePickFolder = async () => {
+        const folder = await pickSaveFolder();
+        if (folder) setFolderName((folder as any).name);
+    };
+
+    const handleClearFolder = async () => {
+        await clearSaveFolder();
+        setFolderName(null);
+    };
 
     // Token purchase state
     const [tokenBalance, setTokenBalance] = useState<number | null>(null);
@@ -145,6 +173,16 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
                         >
                             <Coins size={12} />
                             Tokens
+                        </button>
+                        <button
+                            onClick={() => setTab('save-location')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'save-location'
+                                ? 'bg-accent-blue text-white shadow-lg'
+                                : 'text-gray-500 hover:text-gray-300'
+                                }`}
+                        >
+                            <FolderOpen size={12} />
+                            Save To
                         </button>
                     </div>
 
@@ -278,7 +316,61 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
                                 {buying ? 'Redirecting to PayChangu...' : 'Buy Tokens'}
                             </button>
                         </div>
-                    )}
+                    ) : tab === 'save-location' ? (
+                        <div className="space-y-4">
+                            {!fsSupported ? (
+                                <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 space-y-2">
+                                    <p className="text-[11px] text-yellow-500/90 font-bold">Not supported in this browser</p>
+                                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                                        Automatic folder saving works in Chrome and Edge only. In this browser, saved PDFs and the session spreadsheet will download normally instead — you can find them in your browser's Downloads folder.
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                                        Choose a folder where graded papers (PDF) and the session spreadsheet (Excel) will be saved automatically every time you click Save.
+                                    </p>
+
+                                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-4 flex items-center gap-3">
+                                        {checkingFolder ? (
+                                            <Loader2 size={16} className="animate-spin text-gray-500" />
+                                        ) : folderName ? (
+                                            <>
+                                                <FolderCheck size={18} className="text-accent-green shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-bold text-white truncate">{folderName}</p>
+                                                    <p className="text-[9px] text-gray-500">Selected save folder</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FolderOpen size={18} className="text-gray-600 shrink-0" />
+                                                <p className="text-[11px] text-gray-500">No folder selected yet</p>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handlePickFolder}
+                                            className="flex-1 py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg"
+                                        >
+                                            <FolderOpen size={12} />
+                                            {folderName ? 'Change Folder' : 'Choose Folder'}
+                                        </button>
+                                        {folderName && (
+                                            <button
+                                                onClick={handleClearFolder}
+                                                className="py-2.5 px-4 bg-gray-800 text-gray-400 text-[11px] font-bold rounded-xl hover:bg-gray-700 transition-all"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    ) : null}
                 </div>
             </motion.div>
         </motion.div>
