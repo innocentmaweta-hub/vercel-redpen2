@@ -226,12 +226,12 @@ export const TopBar = ({
           active: studentInfo.courseCode === code
         })),
         { divider: true },
-        { label: 'Add New Course...', action: () => { } }
+        { label: 'Add New Course...', action: onNewCourse }
       ]
       : [
         { label: 'No recent courses — fill the form', disabled: true },
         { divider: true },
-        { label: 'Add New Course...', action: () => { } }
+        { label: 'Add New Course...', action: onNewCourse }
       ],
     'Year of Study': [
       ...YEARS_OF_STUDY.map(yr => ({
