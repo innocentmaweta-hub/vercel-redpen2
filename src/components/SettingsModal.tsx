@@ -253,7 +253,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
                                 Save API Keys
                             </button>
                         </div>
-                    ) : (
+                    ) : tab === 'tokens' ? (
                         <div className="space-y-4">
                             {/* Current Balance */}
                             <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-4 flex items-center justify-between">
