@@ -205,13 +205,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     const user = createResult.user;
 
-    // Grant welcome bonus tokens (best-effort, once at signup)
+    // Grant 5 free grading tokens at signup
     try {
       await updateUserMeta(user.id, 'redpen_usage', {
-        tier: 'free',
-        gradingCount: 0,
-        gradingLimit: 5,
-        tokenBalance: 4,
+        tokenBalance: 5,
         chatTokenBalance: 1,
       });
     } catch (bonusError) {
@@ -285,13 +282,10 @@ app.post('/api/auth/google', async (req, res) => {
 
       wpUser = createResult.user;
 
-      // Grant welcome bonus tokens (best-effort, once at signup)
+      // Grant 5 free grading tokens at signup
       try {
         await updateUserMeta(wpUser.id, 'redpen_usage', {
-          tier: 'free',
-          gradingCount: 0,
-          gradingLimit: 5,
-          tokenBalance: 4,
+          tokenBalance: 5,
           chatTokenBalance: 1,
         });
       } catch (bonusError) {
@@ -347,7 +341,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
       getUserMeta(wpUser.id, 'redpen_grading_history'),
     ]);
 
-    const safeUsage = usage || { tier: 'free', gradingCount: 0, gradingLimit: 5 };
+    const safeUsage = usage || { tokenBalance: 0, chatTokenBalance: 0 };
     const safeProfile = profile || { institution: '', role: '', avatarUrl: '' };
     const safeApiKeys = apiKeys || {};
 
@@ -357,9 +351,6 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         email: wpUser.email,
         username: wpUser.username,
         name: wpUser.name,
-        tier: safeUsage.tier || 'free',
-        gradingCount: safeUsage.gradingCount || 0,
-        gradingLimit: safeUsage.gradingLimit ?? 5,
         tokenBalance: safeUsage.tokenBalance || 0,
         chatTokenBalance: safeUsage.chatTokenBalance || 0,
         institution: safeProfile.institution || '',
@@ -448,23 +439,17 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
   console.log(`[${requestId}] Starting grading request for ${req.user.email}`);
 
   try {
-    // Check grading limit before doing any AI work.
-    // Free allowance first (gradingLimit), then fall back to purchased tokens.
-    const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { gradingCount: 0, tier: 'free', gradingLimit: 5, tokenBalance: 0 };
-    const gradingLimit = usage.tier === 'corporate' ? Infinity : (usage.gradingLimit ?? 5);
-    const withinFreeAllowance = usage.tier === 'corporate' || (usage.gradingCount || 0) < gradingLimit;
+    // Check token balance before doing any AI work.
+    const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tokenBalance: 0 };
     const hasTokens = (usage.tokenBalance || 0) >= 1;
 
-    if (!withinFreeAllowance && !hasTokens) {
+    if (!hasTokens) {
       return res.status(403).json({
         code: 'LIMIT_REACHED',
         error: true,
-        message: `You've used your free gradings (${usage.gradingCount}/${gradingLimit}) and have no tokens left. Buy tokens or add your own API key in Settings to continue.`,
+        message: `You're out of tokens. Buy more tokens or add your own API key in Settings to continue grading.`,
       });
     }
-
-    // Whether this grading will be paid for with a token (only when free allowance is exhausted)
-    const willSpendToken = !withinFreeAllowance;
 
     const { studentInfo, markingScheme, studentPaper } = req.body;
 
@@ -521,14 +506,12 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
     try {
       const updatedUsage = {
         ...usage,
-        tier: usage.tier || 'free',
-        gradingLimit: usage.gradingLimit ?? 5,
-        gradingCount: willSpendToken ? (usage.gradingCount || 0) : (usage.gradingCount || 0) + 1,
-        tokenBalance: willSpendToken ? Math.max(0, (usage.tokenBalance || 0) - 1) : (usage.tokenBalance || 0),
+        tokenBalance: Math.max(0, (usage.tokenBalance || 0) - 1),
       };
       await updateUserMeta(req.user.id, 'redpen_usage', updatedUsage);
     } catch (usageError) {
       console.error(`[${requestId}] Failed to update usage:`, usageError.message);
+    }
     }
 
     res.json(result);
