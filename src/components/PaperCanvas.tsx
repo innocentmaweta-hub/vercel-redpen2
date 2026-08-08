@@ -48,6 +48,7 @@ export interface PaperCanvasHandle {
     redo: () => void;
     restart: () => void;
     captureCanvas: () => string | null; // Add method to capture canvas as data URL
+    captureFullPaper: () => string | null; // Composite: original paper image + all annotations, at full resolution
 }
 
 interface Point {
@@ -184,6 +185,33 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                 if (!canvas) return null;
 
                 return canvas.toDataURL();
+            },
+
+            captureFullPaper: () => {
+                const img = imageRef.current;
+                const overlay = overlayCanvasRef.current;
+
+                if (!img || !overlay || !img.naturalWidth || !img.naturalHeight) return null;
+
+                // Render at the image's true resolution for print/PDF quality,
+                // not the (possibly zoomed/shrunk) on-screen display size.
+                const fullCanvas = document.createElement('canvas');
+                fullCanvas.width = img.naturalWidth;
+                fullCanvas.height = img.naturalHeight;
+
+                const ctx = fullCanvas.getContext('2d');
+                if (!ctx) return null;
+
+                // 1. Draw the original paper photo
+                ctx.drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
+
+                // 2. Draw the annotation overlay on top, scaled from its display size
+                //    up to the full natural resolution so marks line up correctly.
+                if (overlay.width > 0 && overlay.height > 0) {
+                    ctx.drawImage(overlay, 0, 0, overlay.width, overlay.height, 0, 0, fullCanvas.width, fullCanvas.height);
+                }
+
+                return fullCanvas.toDataURL('image/jpeg', 0.92);
             }
         }));
 
