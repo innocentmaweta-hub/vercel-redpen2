@@ -1657,12 +1657,12 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                         user={user}
                         onClose={() => setShowProfile(false)}
                         onLogout={handleLogout}
-                        onUpgrade={() => handleUpgrade('personal')}
                         onOpenSettings={() => { setShowProfile(false); setShowSettings(true); }}
                         onSaveProfile={handleSaveProfile}
                         onChangePassword={handleChangePassword}
                         onDeleteAccount={handleDeleteAccount}
                         onUploadAvatar={handleUploadAvatar}
+                        authHeaders={authHeaders}
                     />
                 )}
 
