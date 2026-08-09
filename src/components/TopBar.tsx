@@ -36,6 +36,9 @@ interface TopBarProps {
   onLogout: () => void;
   onToggleYaza: () => void;
   isYazaOpen: boolean;
+  onViewChange: (view: 'dashboard' | 'grade' | 'history' | 'remark') => void;
+  onProfile: () => void;
+  onLoadRecord: (record: HistoryRecord) => void;
 }
 
 interface DropdownItem {
@@ -134,6 +137,88 @@ const Dropdown = ({
   );
 };
 
+interface SearchAction {
+  label: string;
+  icon: any;
+  action: () => void;
+}
+
+interface SearchDropdownProps {
+  query: string;
+  actions: SearchAction[];
+  historyResults: HistoryRecord[];
+  onSelectAction: (action: SearchAction) => void;
+  onSelectHistory: (record: HistoryRecord) => void;
+  onClose: () => void;
+}
+
+const SearchDropdown = ({ query, actions, historyResults, onSelectAction, onSelectHistory, onClose }: SearchDropdownProps) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const timerId = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => {
+      clearTimeout(timerId);
+      document.removeEventListener('mousedown', handler);
+    };
+  }, [onClose]);
+
+  const hasResults = actions.length > 0 || historyResults.length > 0;
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: -6, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, scale: 0.97 }}
+      transition={{ duration: 0.13 }}
+      className="absolute top-full left-0 right-0 mt-1 z-[9999] bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden max-h-[400px] overflow-y-auto"
+    >
+      {!hasResults ? (
+        <div className="px-4 py-6 text-center text-[11px] text-gray-600">
+          No matches for "{query}"
+        </div>
+      ) : (
+        <>
+          {actions.length > 0 && (
+            <div className="py-1.5">
+              <p className="px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600">Actions</p>
+              {actions.map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => onSelectAction(a)}
+                  className="w-full text-left px-4 py-1.5 text-[11px] font-medium flex items-center gap-2.5 text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                >
+                  <a.icon size={13} className="text-gray-500 shrink-0" />
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {historyResults.length > 0 && (
+            <div className="py-1.5 border-t border-gray-800/70">
+              <p className="px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600">History</p>
+              {historyResults.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => onSelectHistory(r)}
+                  className="w-full text-left px-4 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                >
+                  <span className="text-[11px] font-medium truncate">{r.studentInfo?.name || 'Unnamed'}</span>
+                  <span className="text-[9px] text-gray-600 shrink-0 ml-2">{r.studentInfo?.courseCode || ''}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </motion.div>
+  );
+};
+
 const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) => {
   const [status, setStatus] = useState<{ provider: string; model: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -188,11 +273,14 @@ export const TopBar = ({
   onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history, courses,
   onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
-  isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen
+  isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen,
+  onViewChange, onProfile, onLoadRecord
 }: TopBarProps) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{ name: string; x: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
 
   const handleMenuClick = (name: string, e: React.MouseEvent<HTMLButtonElement>) => {
@@ -205,6 +293,52 @@ export const TopBar = ({
   const closeMenu = useCallback(() => setActiveMenu(null), []);
 
   const recentCourses = getRecentCourses(history);
+
+  const allActions: SearchAction[] = [
+    { label: 'Dashboard', icon: LayoutGrid, action: () => onViewChange('dashboard') },
+    { label: 'Grade', icon: Zap, action: () => onViewChange('grade') },
+    { label: 'Remark', icon: PenLine, action: () => onViewChange('remark') },
+    { label: 'History', icon: HistoryIcon, action: () => onViewChange('history') },
+    { label: 'Profile', icon: User, action: onProfile },
+    { label: 'Save Results', icon: Save, action: onSave },
+    { label: 'Print Report', icon: Printer, action: onPrint },
+    { label: 'Settings', icon: SlidersHorizontal, action: onSettings },
+    { label: 'Batch Grading', icon: Layers, action: onBatch },
+    { label: 'Refresh', icon: RotateCw, action: onRefresh },
+    { label: 'New Session', icon: BookOpen, action: onNewSession },
+    { label: 'New Course', icon: Plus, action: onNewCourse },
+    { label: 'New Paper', icon: FolderOpen, action: onNewPaper },
+    { label: 'Yaza AI', icon: Bot, action: onToggleYaza },
+    { label: isLoggedIn ? 'Logout' : 'Login', icon: isLoggedIn ? LogOut : LogIn, action: isLoggedIn ? onLogout : onLogin },
+  ];
+
+  const matchedActions = searchQuery.trim()
+    ? allActions.filter(a => a.label.toLowerCase().includes(searchQuery.trim().toLowerCase())).slice(0, 6)
+    : [];
+
+  const matchedHistory = searchQuery.trim()
+    ? history.filter(r => {
+        const q = searchQuery.trim().toLowerCase();
+        return (
+          r.studentInfo?.name?.toLowerCase().includes(q) ||
+          r.studentInfo?.regNo?.toLowerCase().includes(q) ||
+          r.studentInfo?.courseCode?.toLowerCase().includes(q)
+        );
+      }).slice(0, 6)
+    : [];
+
+  const handleSelectSearchAction = (a: SearchAction) => {
+    a.action();
+    setSearchQuery('');
+    setShowSearchResults(false);
+  };
+
+  const handleSelectSearchHistory = (r: HistoryRecord) => {
+    onLoadRecord(r);
+    onViewChange('grade');
+    setSearchQuery('');
+    setShowSearchResults(false);
+  };
 
   const menus: Record<string, DropdownItem[]> = {
     File: [
@@ -292,10 +426,29 @@ export const TopBar = ({
           <Search className="absolute left-3 top-1.5 text-gray-500" size={12} />
           <input
             type="text"
-            placeholder="Search documents, results, or history"
-            onChange={(e) => onSearchTermChange(e.target.value)}
+            placeholder="Search actions, students, or courses"
+            value={searchQuery}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearchQuery(value);
+              onSearchTermChange(value);
+              setShowSearchResults(value.trim().length > 0);
+            }}
+            onFocus={() => { if (searchQuery.trim()) setShowSearchResults(true); }}
             className="w-full bg-[#252526] border border-[#3e3e42] rounded-md py-1 pl-9 pr-3 text-[11px] focus:border-accent-blue focus:outline-none transition-all text-ink"
           />
+          <AnimatePresence>
+            {showSearchResults && (
+              <SearchDropdown
+                query={searchQuery}
+                actions={matchedActions}
+                historyResults={matchedHistory}
+                onSelectAction={handleSelectSearchAction}
+                onSelectHistory={handleSelectSearchHistory}
+                onClose={() => setShowSearchResults(false)}
+              />
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
