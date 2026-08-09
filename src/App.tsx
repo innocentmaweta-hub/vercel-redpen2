@@ -114,22 +114,23 @@ export default function App() {
         // Cycle through the three marking modes: unmarked -> self -> ai -> unmarked
         if (markingMode === 'unmarked') {
             setMarkingModeState('self');
-            // Initialize with placeholders for manual entry when switching to self mode
+            // Initialize with empty fields for manual entry — ghosted placeholders
+            // in ResultsPanel handle showing hint text, so no fake values here.
             if (studentPaper) {
                 setResult({
                     score: '',
-                    totalScore: '_/100',
+                    totalScore: '',
                     percentage: '',
                     grade: '',
-                    feedback: 'Manually type the recommendations of this paper here',
+                    feedback: '',
                     questions: [],
                     extracted_info: {
-                        name: studentInfo.name || 'Enter student name',
-                        regNo: studentInfo.regNo || 'Enter registration number',
-                        program: studentInfo.program || 'Enter program',
-                        year: studentInfo.year || 'Enter year',
-                        courseCode: studentInfo.courseCode || 'Enter course code',
-                        examDate: studentInfo.examDate || 'Enter exam date'
+                        name: studentInfo.name || '',
+                        regNo: studentInfo.regNo || '',
+                        program: studentInfo.program || '',
+                        year: studentInfo.year || '',
+                        courseCode: studentInfo.courseCode || '',
+                        examDate: studentInfo.examDate || ''
                     }
                 });
             }
@@ -618,18 +619,20 @@ export default function App() {
             }
 
             setActiveView('grade');
-            // Initialize result with placeholders for manual input, mimicking the AI result structure
+            // Initialize result with genuinely empty fields — ResultsPanel's built-in
+            // ghosted placeholder styling handles showing hint text, so nothing here
+            // is real fake data that could accidentally get saved.
             setResult({
                 score: '',
-                totalScore: '_/100',
+                totalScore: '',
                 percentage: '',
                 grade: '',
-                feedback: 'Manually type the recommendations of this paper here',
+                feedback: '',
                 questions: [
-                    { q: 1, score: '_/_', feedback: 'Enter feedback for question 1' },
-                    { q: 2, score: '_/_', feedback: 'Enter feedback for question 2' },
-                    { q: 3, score: '_/_', feedback: 'Enter feedback for question 3' },
-                    { q: 4, score: '_/_', feedback: 'Enter feedback for question 4' }
+                    { q: 1, score: '', feedback: '' },
+                    { q: 2, score: '', feedback: '' },
+                    { q: 3, score: '', feedback: '' },
+                    { q: 4, score: '', feedback: '' }
                 ],
                 extracted_info: undefined  // Don't populate with placeholder student info
             });
@@ -1405,22 +1408,23 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                                     // Cycle through the three marking modes: unmarked -> self -> ai -> unmarked
                                                     if (markingMode === 'unmarked') {
                                                         setMarkingModeState('self');
-                                                        // Initialize with placeholders for manual entry when switching to self mode
+                                                        // Initialize with empty fields for manual entry — ghosted placeholders
+                                                        // in ResultsPanel handle showing hint text, so no fake values here.
                                                         if (studentPaper) {
                                                             setResult({
                                                                 score: '',
-                                                                totalScore: '_/100',
+                                                                totalScore: '',
                                                                 percentage: '',
                                                                 grade: '',
-                                                                feedback: 'Manually type the recommendations of this paper here',
+                                                                feedback: '',
                                                                 questions: [],
                                                                 extracted_info: {
-                                                                    name: studentInfo.name || 'Enter student name',
-                                                                    regNo: studentInfo.regNo || 'Enter registration number',
-                                                                    program: studentInfo.program || 'Enter program',
-                                                                    year: studentInfo.year || 'Enter year',
-                                                                    courseCode: studentInfo.courseCode || 'Enter course code',
-                                                                    examDate: studentInfo.examDate || 'Enter exam date'
+                                                                    name: studentInfo.name || '',
+                                                                    regNo: studentInfo.regNo || '',
+                                                                    program: studentInfo.program || '',
+                                                                    year: studentInfo.year || '',
+                                                                    courseCode: studentInfo.courseCode || '',
+                                                                    examDate: studentInfo.examDate || ''
                                                                 }
                                                             });
                                                         }
