@@ -130,7 +130,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 value={currentResult?.totalScore || ''}
                 onChange={(e) => handleInputChange('totalScore', e.target.value)}
                 placeholder={isSelfMarked ? '_/100' : undefined}
-                className="text-3xl font-mono font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full"
+                className="text-3xl font-mono font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
               />
             ) : (
               <span className={`text-3xl font-mono font-bold ${isSelfMarked && !currentResult?.totalScore ? ghostClass : 'text-ink'}`}>
@@ -146,7 +146,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 value={isSelfMarked && !currentResult?.grade ? '' : currentResult?.grade || ''}
                 onChange={(e) => handleInputChange('grade', e.target.value)}
                 placeholder={isSelfMarked && !currentResult?.grade ? '_' : undefined}
-                className="text-3xl font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full"
+                className="text-3xl font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
               />
             ) : (
               <span className={`text-3xl font-bold ${isSelfMarked && !currentResult?.grade
@@ -189,7 +189,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                     updateResult({ ...currentResult!, questions: updatedQuestions });
                   }}
                   placeholder={isSelfMarked && !q.score ? '_/_' : undefined}
-                  className="text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border border-gray-700 focus:border-accent-blue focus:outline-none w-16 text-center"
+                  className="text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border border-gray-700 focus:border-accent-blue focus:outline-none w-16 text-center placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
                 />
               ) : (
                 <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${isSelfMarked && !q.score
@@ -209,7 +209,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                   updateResult({ ...currentResult!, questions: updatedQuestions });
                 }}
                 placeholder={isSelfMarked && !q.feedback ? 'Enter feedback for question' : undefined}
-                className="w-full text-xs text-gray-400 group-hover:text-gray-200 leading-relaxed italic transition-colors font-medium bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none"
+                className="w-full text-xs text-gray-400 group-hover:text-gray-200 leading-relaxed italic transition-colors font-medium bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none placeholder:text-gray-600 placeholder:opacity-60"
                 rows={2}
               />
             ) : (
@@ -231,11 +231,11 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
               }`}>Summary Report</span>
           </div>
           {isEditing ? (
-            <textarea
+            <<textarea
               value={isSelfMarked && !currentResult?.feedback ? '' : currentResult?.feedback || ''}
               onChange={(e) => handleInputChange('feedback', e.target.value)}
               placeholder={isSelfMarked && !currentResult?.feedback ? 'Manually type the recommendations of this paper here' : undefined}
-              className="w-full text-[11px] text-gray-500 group-hover:text-gray-300 leading-relaxed font-medium transition-colors bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none"
+              className="w-full text-[11px] text-gray-500 group-hover:text-gray-300 leading-relaxed font-medium transition-colors bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none placeholder:text-gray-600 placeholder:opacity-60"
               rows={3}
             />
           ) : (
