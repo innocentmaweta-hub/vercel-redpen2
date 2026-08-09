@@ -1,19 +1,11 @@
 import logo from '../assets/logo.png';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, Clock, User as UserIcon, Command } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
-
-interface StoredCourse {
-  courseCode: string;
-  courseName: string;
-}
+import { StudentInfo, HistoryRecord, CourseSession, ActiveView } from '../types';
 
 interface TopBarProps {
   onNew: () => void;
-  onNewCourse: () => void;
-  onNewSession: () => void;
-  onNewPaper: () => void;
   onSave: () => void;
   onPrint: () => void;
   onClearResult: () => void;
@@ -24,7 +16,6 @@ interface TopBarProps {
   studentInfo: StudentInfo;
   onStudentInfoUpdate: (updates: Partial<StudentInfo>) => void;
   history: HistoryRecord[];
-  courses: StoredCourse[];
   onShowOldSessions: () => void; // Added new prop
   schools: string[]; // Added schools prop
   departments: string[]; // Added departments prop
@@ -36,6 +27,9 @@ interface TopBarProps {
   onLogout: () => void;
   onToggleYaza: () => void;
   isYazaOpen: boolean;
+  onViewChange: (view: ActiveView) => void;
+  onProfile: () => void;
+  onLoadHistoryRecord: (record: HistoryRecord) => void;
 }
 
 interface DropdownItem {
@@ -46,8 +40,15 @@ interface DropdownItem {
   active?: boolean;
 }
 
-const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
-const SEMESTERS = ['Semester 1', 'Semester 2'];
+interface SearchAction {
+  id: string;
+  label: string;
+  keywords: string;
+  icon: any;
+  action: () => void;
+}
+
+const SEMESTERS = ['Semester 1', 'Semester 2', 'Year 1', 'Year 2', 'Year 3', 'Year 4'];
 const PROGRAMS = [
   'BSc Computer Science', 'BSc Software Engineering', 'BSc Information Technology',
   'BEng Electrical Engineering', 'BEng Civil Engineering',
@@ -185,15 +186,20 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 };
 
 export const TopBar = ({
-  onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
-  hasResult, studentInfo, onStudentInfoUpdate, history, courses,
+  onNew, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
+  hasResult, studentInfo, onStudentInfoUpdate, history,
   onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
-  isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen
+  isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen,
+  onViewChange, onProfile, onLoadHistoryRecord
 }: TopBarProps) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{ name: string; x: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Search dropdown state
+  const [searchValue, setSearchValue] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const handleMenuClick = (name: string, e: React.MouseEvent<HTMLButtonElement>) => {
     if (activeMenu?.name === name) { setActiveMenu(null); return; }
@@ -206,65 +212,144 @@ export const TopBar = ({
 
   const recentCourses = getRecentCourses(history);
 
+  // ========== Command palette actions ==========
+  const searchActions: SearchAction[] = useMemo(() => [
+    { id: 'dashboard', label: 'Dashboard', keywords: 'home overview', icon: LayoutGrid, action: () => onViewChange('dashboard') },
+    { id: 'grade', label: 'Grade', keywords: 'grading upload paper evaluate', icon: Zap, action: () => onViewChange('grade') },
+    { id: 'remark', label: 'Remark', keywords: 'comments notes', icon: PenLine, action: () => onViewChange('remark') },
+    { id: 'history', label: 'History', keywords: 'past records saved', icon: Clock, action: () => onViewChange('history') },
+    { id: 'new', label: 'New Session', keywords: 'start fresh reset', icon: Layers, action: onNew },
+    { id: 'save', label: 'Save Results', keywords: 'store persist', icon: Layers, action: onSave },
+    { id: 'print', label: 'Print Report', keywords: 'export pdf', icon: Layers, action: onPrint },
+    { id: 'refresh', label: 'Refresh', keywords: 'clear reload', icon: RotateCw, action: onRefresh },
+    { id: 'settings', label: 'Settings', keywords: 'api keys provider config', icon: SlidersHorizontal, action: onSettings },
+    { id: 'batch', label: 'Batch Grade', keywords: 'multiple papers bulk', icon: Layers, action: onBatch },
+    { id: 'yaza', label: 'Yaza AI', keywords: 'assistant chat agent', icon: Bot, action: onToggleYaza },
+    { id: 'profile', label: isLoggedIn ? 'Profile' : 'Sign In', keywords: 'account user login', icon: UserIcon, action: isLoggedIn ? onProfile : onLogin },
+    { id: 'old-sessions', label: 'Load Session', keywords: 'previous course open', icon: FolderOpen, action: onShowOldSessions },
+  ], [onViewChange, onNew, onSave, onPrint, onRefresh, onSettings, onBatch, onToggleYaza, isLoggedIn, onProfile, onLogin, onShowOldSessions]);
+
+  const query = searchValue.trim().toLowerCase();
+
+  const matchedActions = useMemo(() => {
+    if (!query) return [];
+    return searchActions.filter(a =>
+      a.label.toLowerCase().includes(query) || a.keywords.toLowerCase().includes(query)
+    ).slice(0, 5);
+  }, [query, searchActions]);
+
+  const matchedHistory = useMemo(() => {
+    if (!query) return [];
+    return history.filter(r =>
+      (r.studentInfo?.name || '').toLowerCase().includes(query) ||
+      (r.studentInfo?.regNo || '').toLowerCase().includes(query) ||
+      (r.studentInfo?.courseCode || '').toLowerCase().includes(query)
+    ).slice(0, 5);
+  }, [query, history]);
+
+  const hasSearchResults = matchedActions.length > 0 || matchedHistory.length > 0;
+
+  const handleSearchChange = (value: string) => {
+    setSearchValue(value);
+    setShowSearchDropdown(true);
+    onSearchTermChange(value);
+  };
+
+  const handleActionClick = (action: SearchAction) => {
+    action.action();
+    setSearchValue('');
+    setShowSearchDropdown(false);
+    onSearchTermChange('');
+  };
+
+  const handleHistoryClick = (record: HistoryRecord) => {
+    onLoadHistoryRecord(record);
+    setSearchValue('');
+    setShowSearchDropdown(false);
+    onSearchTermChange('');
+  };
+
+  // Close the search dropdown when clicking outside it
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const menus: Record<string, DropdownItem[]> = {
     File: [
+      { label: 'New Session', action: () => { onNew(); } },
       { label: 'Load Session', action: onShowOldSessions }, // Updated menu item name
       { divider: true },
       { label: 'Save Results', action: onSave, disabled: !hasResult },
-      { label: 'Save As...', action: onSave, disabled: !hasResult },
       { label: 'Print Report', action: onPrint, disabled: !hasResult },
     ],
     Edit: [
-      { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
+      { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', courseCode: '', examDate: '' }) },
       { label: 'Clear Results', action: onClearResult, disabled: !hasResult },
       { divider: true },
       { label: 'Reset All', action: onNew },
     ],
-    New: [
-      { label: 'New Session', action: onNewSession },
-      { label: 'New Course', action: onNewCourse },
-      { label: 'New Paper', action: onNewPaper },
-    ],
-    Course: (() => {
-        const allCodes = new Set<string>([
-            ...courses.map(c => c.courseCode),
-            ...recentCourses,
-        ]);
-        const codeList = Array.from(allCodes);
-
-        return codeList.length > 0
-            ? [
-                ...codeList.map(code => ({
-                    label: code,
-                    action: () => onStudentInfoUpdate({ courseCode: code }),
-                    active: studentInfo.courseCode === code
-                })),
-                { divider: true },
-                { label: 'Add New Course...', action: onNewCourse }
-            ]
-            : [
-                { label: 'No courses yet — add one below', disabled: true },
-                { divider: true },
-                { label: 'Add New Course...', action: onNewCourse }
-            ];
-    })(),
-    'Year of Study': [
-      ...YEARS_OF_STUDY.map(yr => ({
-        label: yr,
-        action: () => onStudentInfoUpdate({ year: yr }),
-        active: studentInfo.year === yr
-      })),
-    ],
+    Course: recentCourses.length > 0
+      ? [
+        ...recentCourses.map(code => ({
+          label: code,
+          action: () => onStudentInfoUpdate({ courseCode: code }),
+          active: studentInfo.courseCode === code
+        })),
+        { divider: true },
+        { label: 'Add New Course...', action: () => { } }
+      ]
+      : [
+        { label: 'No recent courses — fill the form', disabled: true },
+        { divider: true },
+        { label: 'Add New Course...', action: () => { } }
+      ],
     Semester: [
       ...SEMESTERS.map(sem => ({
         label: sem,
-        action: () => onStudentInfoUpdate({ semester: sem }),
-        active: studentInfo.semester === sem
+        action: () => onStudentInfoUpdate({ year: sem }),
+        active: studentInfo.year === sem
       })),
+      { divider: true },
+      { label: 'Add New Semester...', action: () => { } }
     ],
-    };
+    Program: [
+      ...PROGRAMS.map(prog => ({
+        label: prog,
+        action: () => onStudentInfoUpdate({ program: prog }),
+        active: studentInfo.program === prog
+      })),
+      { divider: true },
+      { label: 'Add New Program...', action: () => { } }
+    ],
+    Department: [
+      ...DEPARTMENTS.map(dept => ({
+        label: dept,
+        action: () => {
+          // Store department details separately from the student form
+          localStorage.setItem('lastSelectedDepartment', dept);
+        },
+        active: localStorage.getItem('lastSelectedDepartment') === dept
+      })),
+      ...departments.map(dept => ({
+        label: dept,
+        action: () => {
+          // Store department details separately from the student form
+          localStorage.setItem('lastSelectedDepartment', dept);
+        },
+        active: localStorage.getItem('lastSelectedDepartment') === dept
+      })),
+      { divider: true },
+      { label: 'Add New Department...', action: onShowAddDepartment }
+    ],
+  };
 
-  const menuNames = ['File', 'New', 'Edit', 'Course', 'Year of Study', 'Semester'];
+  const menuNames = ['File', 'Edit', 'Course', 'Semester', 'Program', 'Department'];
 
   return (
     <div
@@ -288,14 +373,72 @@ export const TopBar = ({
       </div>
 
       <div className="flex-1 flex justify-center">
-        <div className="relative w-full max-w-lg" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div ref={searchContainerRef} className="relative w-full max-w-lg" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <Search className="absolute left-3 top-1.5 text-gray-500" size={12} />
           <input
             type="text"
             placeholder="Search documents, results, or history"
-            onChange={(e) => onSearchTermChange(e.target.value)}
+            value={searchValue}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={() => searchValue && setShowSearchDropdown(true)}
             className="w-full bg-[#252526] border border-[#3e3e42] rounded-md py-1 pl-9 pr-3 text-[11px] focus:border-accent-blue focus:outline-none transition-all text-ink"
           />
+
+          <AnimatePresence>
+            {showSearchDropdown && query && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                transition={{ duration: 0.12 }}
+                className="absolute top-full left-0 right-0 mt-1.5 bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-[9999] max-h-80 overflow-y-auto"
+              >
+                {!hasSearchResults ? (
+                  <div className="px-4 py-6 text-center text-[11px] text-gray-600">No matches found</div>
+                ) : (
+                  <>
+                    {matchedActions.length > 0 && (
+                      <div className="py-1.5">
+                        <p className="px-3 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
+                          <Command size={9} /> Actions
+                        </p>
+                        {matchedActions.map(a => (
+                          <button
+                            key={a.id}
+                            onClick={() => handleActionClick(a)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-gray-300 hover:bg-white/5 hover:text-white transition-colors text-left"
+                          >
+                            <a.icon size={13} className="text-accent-blue shrink-0" />
+                            {a.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {matchedHistory.length > 0 && (
+                      <div className="py-1.5 border-t border-gray-800/70">
+                        <p className="px-3 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
+                          <Clock size={9} /> History
+                        </p>
+                        {matchedHistory.map(r => (
+                          <button
+                            key={r.id}
+                            onClick={() => handleHistoryClick(r)}
+                            className="w-full flex items-center justify-between gap-2.5 px-3 py-2 text-[12px] text-gray-300 hover:bg-white/5 hover:text-white transition-colors text-left"
+                          >
+                            <span className="truncate">
+                              {r.studentInfo?.name || 'Unknown Student'}
+                              <span className="text-gray-600"> · {r.studentInfo?.courseCode || '—'}</span>
+                            </span>
+                            <span className="text-[10px] font-mono text-gray-600 shrink-0">{r.result?.grade}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
