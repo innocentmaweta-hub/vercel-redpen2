@@ -1130,7 +1130,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
 
     return (
         <div className="flex flex-col bg-bg-dark h-screen overflow-hidden text-ink border-4 border-gray-900 shadow-2xl">
-            <TopBar
+           <TopBar
                 onNew={handleNew}
                 onSave={handleSave}
                 onPrint={handlePrint}
@@ -1160,6 +1160,12 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 isLoggedIn={!!user}
                 onLogin={() => setShowAuth(true)}
                 onLogout={handleLogout}
+                onViewChange={setActiveView}
+                onProfile={() => {
+                    if (!user) setShowAuth(true);
+                    else setShowProfile(true);
+                }}
+                onLoadRecord={handleLoadRecord}
             />
 
             <div className="flex-1 flex min-w-0 overflow-hidden">
