@@ -43,30 +43,59 @@ export function buildPaperPdfFilename(studentInfo: StudentInfo): string {
     return `${course}-${name}.pdf`;
 }
 
-const EXCEL_COLUMNS = [
+// Fixed columns that always appear first, regardless of question count
+const BASE_COLUMNS = [
     'Student Name',
     'Reg No',
     'Course Code',
     'Program',
     'Year',
+    'Semester',
     'Exam Date',
     'Total Score',
     'Grade',
+    'Percentage',
+    'Summary Feedback',
     'Date Graded',
 ];
 
-function resultRow(studentInfo: StudentInfo, result: GradingResult): (string | number)[] {
-    return [
+// Builds "Q1 Score", "Q1 Feedback", "Q2 Score", "Q2 Feedback", ... for N questions
+function questionColumns(count: number): string[] {
+    const cols: string[] = [];
+    for (let i = 1; i <= count; i++) {
+        cols.push(`Q${i} Score`, `Q${i} Feedback`);
+    }
+    return cols;
+}
+
+function fullColumns(questionCount: number): string[] {
+    return [...BASE_COLUMNS, ...questionColumns(questionCount)];
+}
+
+function resultRow(studentInfo: StudentInfo, result: GradingResult, questionCount: number): (string | number)[] {
+    const base = [
         studentInfo.name || '',
         studentInfo.regNo || '',
         studentInfo.courseCode || '',
         studentInfo.program || '',
         studentInfo.year || '',
+        studentInfo.semester || '',
         studentInfo.examDate || '',
         result.totalScore || result.score || '',
         result.grade || '',
+        result.percentage || '',
+        result.feedback || '',
         new Date().toLocaleString(),
     ];
+
+    const questions = result.questions || [];
+    const questionCells: (string | number)[] = [];
+    for (let i = 0; i < questionCount; i++) {
+        const q = questions[i];
+        questionCells.push(q?.score || '', q?.feedback || '');
+    }
+
+    return [...base, ...questionCells];
 }
 
 /**
@@ -109,7 +138,7 @@ export async function appendResultToSessionExcel(
 ): Promise<'written' | 'downloaded'> {
     const filename = buildSessionExcelFilename(workbookKey.academicYear, workbookKey.semester, workbookKey.sessionLabel, workbookKey.customName);
     const sheetName = sanitizeSheetName(courseSheetKey);
-    const newRow = resultRow(studentInfo, result);
+    const incomingQuestionCount = (result.questions || []).length;
 
     let workbook: XLSX.WorkBook;
     let existingBuffer: ArrayBuffer | null = null;
@@ -132,19 +161,38 @@ export async function appendResultToSessionExcel(
     }
 
     let existingData: any[][];
+    let existingQuestionCount = 0;
 
     if (workbook.SheetNames.includes(sheetName)) {
-        // Course sheet already exists in this workbook — append to it
+        // Course sheet already exists — figure out how many question-columns it currently has,
+        // so we can grow the header (and pad older rows) if this paper has more questions.
         const sheet = workbook.Sheets[sheetName];
         existingData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
         if (existingData.length === 0) {
-            existingData.push(EXCEL_COLUMNS);
+            existingData = [fullColumns(incomingQuestionCount)];
+            existingQuestionCount = incomingQuestionCount;
+        } else {
+            existingQuestionCount = Math.max(0, Math.floor((existingData[0].length - BASE_COLUMNS.length) / 2));
         }
     } else {
         // First result for this course in this workbook — create its sheet with headers
-        existingData = [EXCEL_COLUMNS];
+        existingData = [fullColumns(incomingQuestionCount)];
+        existingQuestionCount = incomingQuestionCount;
     }
 
+    const finalQuestionCount = Math.max(existingQuestionCount, incomingQuestionCount);
+
+    // If this paper has more questions than the sheet currently supports, widen the
+    // header and pad every existing row with blank cells for the new question columns.
+    if (finalQuestionCount > existingQuestionCount) {
+        existingData[0] = fullColumns(finalQuestionCount);
+        const extraCells = (finalQuestionCount - existingQuestionCount) * 2;
+        for (let i = 1; i < existingData.length; i++) {
+            existingData[i] = [...existingData[i], ...Array(extraCells).fill('')];
+        }
+    }
+
+    const newRow = resultRow(studentInfo, result, finalQuestionCount);
     existingData.push(newRow);
 
     const updatedSheet = XLSX.utils.aoa_to_sheet(existingData);
