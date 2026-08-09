@@ -16,24 +16,23 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
   const [editableResult, setEditableResult] = useState<GradingResult | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Update editable result when prop changes
+  // Sync from parent when a fresh result arrives (e.g. new grading, loaded history record)
   useEffect(() => {
     if (result) {
       setEditableResult(result);
     }
   }, [result]);
 
-  // Save changes back to parent - only when editing finishes or result changes externally
-  useEffect(() => {
-    if (editableResult && onResultChange) {
-      // Use a ref to prevent loop: only propagate changes that originated from user editing
-      onResultChange(editableResult);
-    }
-  }, [result]); // Only re-sync when the parent's result prop changes, not on every edit
+  // Every edit updates local state AND immediately propagates to the parent,
+  // so whatever is on screen is exactly what Save will persist.
+  const updateResult = (updated: GradingResult) => {
+    setEditableResult(updated);
+    onResultChange?.(updated);
+  };
 
   const handleInputChange = (field: keyof GradingResult, value: string) => {
     if (editableResult) {
-      setEditableResult({
+      updateResult({
         ...editableResult,
         [field]: value
       });
@@ -86,6 +85,10 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
     );
   }
 
+  // Ghosted styling for unfilled placeholder text — dimmer + italic, so it reads
+  // as "not filled in yet" rather than real content.
+  const ghostClass = "text-gray-600 italic opacity-60";
+
   return (
     <div className="bg-card h-full rounded-3xl border border-gray-800 shadow-xl flex flex-col overflow-hidden">
       <div className="p-6 border-b border-gray-800 bg-sidebar/50">
@@ -130,7 +133,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 className="text-3xl font-mono font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full"
               />
             ) : (
-              <span className="text-3xl font-mono font-bold text-ink">
+              <span className={`text-3xl font-mono font-bold ${isSelfMarked && !currentResult?.totalScore ? ghostClass : 'text-ink'}`}>
                 {isSelfMarked && !isEditing && !currentResult?.totalScore ? '_/100' : currentResult?.totalScore}
               </span>
             )}
@@ -146,11 +149,13 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 className="text-3xl font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full"
               />
             ) : (
-              <span className={`text-3xl font-bold ${currentResult?.grade?.startsWith('A')
-                ? 'text-accent-green'
-                : isSelfMarked
-                  ? 'text-gray-400'
-                  : 'text-accent-blue'
+              <span className={`text-3xl font-bold ${isSelfMarked && !currentResult?.grade
+                ? ghostClass
+                : currentResult?.grade?.startsWith('A')
+                  ? 'text-accent-green'
+                  : isSelfMarked
+                    ? 'text-gray-400'
+                    : 'text-accent-blue'
                 }`}>
                 {isSelfMarked && !isEditing && !currentResult?.grade ? '_' : currentResult?.grade}
               </span>
@@ -181,13 +186,16 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                   onChange={(e) => {
                     const updatedQuestions = [...(currentResult?.questions || [])];
                     updatedQuestions[idx] = { ...updatedQuestions[idx], score: e.target.value };
-                    setEditableResult({ ...currentResult!, questions: updatedQuestions });
+                    updateResult({ ...currentResult!, questions: updatedQuestions });
                   }}
                   placeholder={isSelfMarked && !q.score ? '_/_' : undefined}
                   className="text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border border-gray-700 focus:border-accent-blue focus:outline-none w-16 text-center"
                 />
               ) : (
-                <span className="text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border border-gray-800">
+                <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${isSelfMarked && !q.score
+                  ? `${ghostClass} bg-gray-900/50 border-gray-800`
+                  : 'text-ink bg-gray-900 border-gray-800'
+                  }`}>
                   {isSelfMarked && !isEditing && !q.score ? '_/_' : q.score} pts
                 </span>
               )}
@@ -198,14 +206,17 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 onChange={(e) => {
                   const updatedQuestions = [...(currentResult?.questions || [])];
                   updatedQuestions[idx] = { ...updatedQuestions[idx], feedback: e.target.value };
-                  setEditableResult({ ...currentResult!, questions: updatedQuestions });
+                  updateResult({ ...currentResult!, questions: updatedQuestions });
                 }}
                 placeholder={isSelfMarked && !q.feedback ? 'Enter feedback for question' : undefined}
                 className="w-full text-xs text-gray-400 group-hover:text-gray-200 leading-relaxed italic transition-colors font-medium bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none"
                 rows={2}
               />
             ) : (
-              <p className="text-xs text-gray-400 group-hover:text-gray-200 leading-relaxed italic transition-colors font-medium">
+              <p className={`text-xs leading-relaxed italic transition-colors font-medium ${isSelfMarked && !q.feedback
+                ? ghostClass
+                : 'text-gray-400 group-hover:text-gray-200'
+                }`}>
                 "{isSelfMarked && !isEditing && !q.feedback ? 'Enter feedback for question' : q.feedback}"
               </p>
             )}
@@ -228,7 +239,10 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
               rows={3}
             />
           ) : (
-            <p className="text-[11px] text-gray-500 group-hover:text-gray-300 leading-relaxed font-medium transition-colors">
+            <p className={`text-[11px] leading-relaxed font-medium transition-colors ${isSelfMarked && !currentResult?.feedback
+              ? ghostClass
+              : 'text-gray-500 group-hover:text-gray-300'
+              }`}>
               {isSelfMarked && !isEditing && !currentResult?.feedback ? 'Manually type the recommendations of this paper here' : currentResult?.feedback}
             </p>
           )}
