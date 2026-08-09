@@ -87,18 +87,32 @@ export const StudentForm = ({ info, onChange }: Props) => {
         onChange={(e) => handleChange('program', e.target.value)}
       />
 
-      {/* Row 3: Year of Study / Semester */}
+      {/* Row 3: Year of Study (+ Academic Year beside it once picked) / Semester */}
       <div className="grid grid-cols-2 gap-4">
-        <select
-          className={selectClass}
-          value={info.year}
-          onChange={(e) => handleChange('year', e.target.value)}
-        >
-          <option value="">Year of Study</option>
-          {YEARS_OF_STUDY.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+        <div className="flex gap-2">
+          <select
+            className={selectClass}
+            value={info.year}
+            onChange={(e) => handleChange('year', e.target.value)}
+          >
+            <option value="">Year of Study</option>
+            {YEARS_OF_STUDY.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {info.year && (
+            <select
+              className={selectClass}
+              value={info.academicYear || ''}
+              onChange={(e) => handleChange('academicYear', e.target.value)}
+            >
+              <option value="">Academic Year</option>
+              {ACADEMIC_YEARS.map((ay) => (
+                <option key={ay} value={ay}>{ay}</option>
+              ))}
+            </select>
+          )}
+        </div>
         <select
           className={selectClass}
           value={info.semester || ''}
@@ -110,20 +124,6 @@ export const StudentForm = ({ info, onChange }: Props) => {
           ))}
         </select>
       </div>
-
-      {/* Secondary: Academic Year — only appears once a Year of Study is picked */}
-      {info.year && (
-        <select
-          className={selectClass}
-          value={info.academicYear || ''}
-          onChange={(e) => handleChange('academicYear', e.target.value)}
-        >
-          <option value="">Academic Year</option>
-          {ACADEMIC_YEARS.map((ay) => (
-            <option key={ay} value={ay}>{ay}</option>
-          ))}
-        </select>
-      )}
 
       {/* Row 4: Course Code / Exam Date */}
       <div className="grid grid-cols-2 gap-4">
