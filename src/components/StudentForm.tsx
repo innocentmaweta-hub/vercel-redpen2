@@ -87,7 +87,7 @@ export const StudentForm = ({ info, onChange }: Props) => {
         onChange={(e) => handleChange('program', e.target.value)}
       />
 
-      {/* Row 3: Year of Study / Academic Year */}
+      {/* Row 3: Year of Study / Semester */}
       <div className="grid grid-cols-2 gap-4">
         <select
           className={selectClass}
@@ -101,26 +101,6 @@ export const StudentForm = ({ info, onChange }: Props) => {
         </select>
         <select
           className={selectClass}
-          value={info.academicYear || ''}
-          onChange={(e) => handleChange('academicYear', e.target.value)}
-        >
-          <option value="">Academic Year</option>
-          {ACADEMIC_YEARS.map((ay) => (
-            <option key={ay} value={ay}>{ay}</option>
-          ))}
-        </select>
-      </div>
-
-      {(info.year || info.academicYear) && (
-        <p className="text-[11px] text-gray-500 px-1">
-          {info.year || '—'} - {info.academicYear || '—'}
-        </p>
-      )}
-
-      {/* Row 3b: Semester */}
-      <div className="grid grid-cols-2 gap-4">
-        <select
-          className={selectClass}
           value={info.semester || ''}
           onChange={(e) => handleChange('semester', e.target.value)}
         >
@@ -130,6 +110,20 @@ export const StudentForm = ({ info, onChange }: Props) => {
           ))}
         </select>
       </div>
+
+      {/* Secondary: Academic Year — only appears once a Year of Study is picked */}
+      {info.year && (
+        <select
+          className={selectClass}
+          value={info.academicYear || ''}
+          onChange={(e) => handleChange('academicYear', e.target.value)}
+        >
+          <option value="">Academic Year</option>
+          {ACADEMIC_YEARS.map((ay) => (
+            <option key={ay} value={ay}>{ay}</option>
+          ))}
+        </select>
+      )}
 
       {/* Row 4: Course Code / Exam Date */}
       <div className="grid grid-cols-2 gap-4">
