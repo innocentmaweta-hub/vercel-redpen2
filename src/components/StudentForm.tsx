@@ -9,6 +9,18 @@ interface Props {
 const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
 const SEMESTERS = ['Semester 1', 'Semester 2'];
 
+function getAcademicYearOptions(): string[] {
+  const currentYear = new Date().getFullYear();
+  const options: string[] = [];
+  for (let y = currentYear - 10; y <= currentYear + 10; y++) {
+    const shortNext = String((y + 1) % 100).padStart(2, '0');
+    options.push(`${y}/${shortNext} academic year`);
+  }
+  return options;
+}
+
+const ACADEMIC_YEARS = getAcademicYearOptions();
+
 export const StudentForm = ({ info, onChange }: Props) => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>(() => {
     return localStorage.getItem('lastSelectedDepartment') || '';
@@ -75,7 +87,7 @@ export const StudentForm = ({ info, onChange }: Props) => {
         onChange={(e) => handleChange('program', e.target.value)}
       />
 
-      {/* Row 3: Year of Study / Semester */}
+      {/* Row 3: Year of Study / Academic Year */}
       <div className="grid grid-cols-2 gap-4">
         <select
           className={selectClass}
@@ -87,6 +99,26 @@ export const StudentForm = ({ info, onChange }: Props) => {
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
+        <select
+          className={selectClass}
+          value={info.academicYear || ''}
+          onChange={(e) => handleChange('academicYear', e.target.value)}
+        >
+          <option value="">Academic Year</option>
+          {ACADEMIC_YEARS.map((ay) => (
+            <option key={ay} value={ay}>{ay}</option>
+          ))}
+        </select>
+      </div>
+
+      {(info.year || info.academicYear) && (
+        <p className="text-[11px] text-gray-500 px-1">
+          {info.year || '—'} - {info.academicYear || '—'}
+        </p>
+      )}
+
+      {/* Row 3b: Semester */}
+      <div className="grid grid-cols-2 gap-4">
         <select
           className={selectClass}
           value={info.semester || ''}
