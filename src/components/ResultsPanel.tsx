@@ -231,8 +231,8 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
               }`}>Summary Report</span>
           </div>
           {isEditing ? (
-            <<textarea
-              value={isSelfMarked && !currentResult?.feedback ? '' : currentResult?.feedback || ''}
+              <textarea
+                value={isSelfMarked && !currentResult?.feedback ? '' : currentResult?.feedback || ''}
               onChange={(e) => handleInputChange('feedback', e.target.value)}
               placeholder={isSelfMarked && !currentResult?.feedback ? 'Manually type the recommendations of this paper here' : undefined}
               className="w-full text-[11px] text-gray-500 group-hover:text-gray-300 leading-relaxed font-medium transition-colors bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none placeholder:text-gray-600 placeholder:opacity-60"
