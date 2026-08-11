@@ -1200,7 +1200,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                 onLoad={handleLoadRecord}
                                 onDelete={handleDeleteRecord}
                                 sessions={loadSessions()}
-                                onLoadSession={loadOldSession}
+                                onLoadSession={loadOldSemester}
                             />
                         </div>
                     ) : activeView === 'remark' ? (
