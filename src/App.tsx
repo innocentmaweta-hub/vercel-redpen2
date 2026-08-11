@@ -1195,7 +1195,13 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                         }} />
                     ) : activeView === 'history' ? (
                         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
-                            <HistoryPanel history={history} onLoad={handleLoadRecord} onDelete={handleDeleteRecord} />
+                            <HistoryPanel
+                                history={history}
+                                onLoad={handleLoadRecord}
+                                onDelete={handleDeleteRecord}
+                                sessions={loadSessions()}
+                                onLoadSession={loadOldSession}
+                            />
                         </div>
                     ) : activeView === 'remark' ? (
                         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
