@@ -1,9 +1,9 @@
 /**
  * Deterministic validation and calculation for AI grading results.
  *
- * The AI is responsible for evaluating answers and proposing per-question
- * scores. The server is responsible for validating those scores and deriving
- * totals/percentages/grades so model arithmetic cannot corrupt a result.
+ * The AI proposes per-question scores. The server validates those scores and
+ * derives totals, percentages, and grades so model arithmetic cannot corrupt
+ * a saved or displayed result.
  */
 
 export const DEFAULT_GRADE_SCALE = [
@@ -24,7 +24,8 @@ function finiteNonNegativeNumber(value) {
 
 function parseScore(value) {
   if (typeof value === 'number') {
-    return finiteNonNegativeNumber(value);
+    const score = finiteNonNegativeNumber(value);
+    return score === null ? null : { score, maximum: null };
   }
 
   if (typeof value !== 'string') return null;
@@ -49,10 +50,8 @@ function parseTotal(value) {
 }
 
 /**
- * Validate an AI result and replace all derived numerical fields with values
- * calculated from the question scores.
- *
- * Returns { ok: true, result } or { ok: false, error }.
+ * Numeric scores from the AI are intentionally rejected unless they carry a
+ * maximum. A score such as 7 is otherwise impossible to interpret safely.
  */
 export function validateAndNormalizeGradingResult(rawResult, gradeScale = DEFAULT_GRADE_SCALE) {
   if (!rawResult || typeof rawResult !== 'object' || Array.isArray(rawResult)) {
@@ -63,30 +62,30 @@ export function validateAndNormalizeGradingResult(rawResult, gradeScale = DEFAUL
     return { ok: false, error: 'AI grading result contains no question scores.' };
   }
 
-  const questions = rawResult.questions.map((question, index) => {
-    if (!question || typeof question !== 'object') {
-      throw new Error(`Question ${index + 1} is invalid.`);
-    }
-
-    const parsed = parseScore(question.score);
-    if (!parsed) {
-      throw new Error(`Question ${index + 1} has an invalid score.`);
-    }
-
-    return {
-      ...question,
-      q: question.q ?? index + 1,
-      score: `${parsed.score}/${parsed.maximum}`,
-      _score: parsed.score,
-      _maximum: parsed.maximum,
-    };
-  });
-
   try {
+    const questions = rawResult.questions.map((question, index) => {
+      if (!question || typeof question !== 'object') {
+        throw new Error(`Question ${index + 1} is invalid.`);
+      }
+
+      const parsed = parseScore(question.score);
+      if (!parsed || parsed.maximum === null) {
+        throw new Error(`Question ${index + 1} has an invalid score. Scores must use the X/Y format.`);
+      }
+
+      return {
+        ...question,
+        q: question.q ?? index + 1,
+        score: `${parsed.score}/${parsed.maximum}`,
+        _score: parsed.score,
+        _maximum: parsed.maximum,
+      };
+    });
+
     const totalScore = questions.reduce((sum, question) => sum + question._score, 0);
     const totalMaximum = questions.reduce((sum, question) => sum + question._maximum, 0);
 
-    if (!Number.isFinite(totalScore) || !Number.isFinite(totalMaximum) || totalMaximum <= 0) {
+    if (!Number.isFinite(totalScore) || !Number.isFinite(totalMaximum) || totalMaximum <= 0 || totalScore > totalMaximum) {
       return { ok: false, error: 'AI grading result has an invalid total.' };
     }
 
@@ -114,10 +113,6 @@ export function validateAndNormalizeGradingResult(rawResult, gradeScale = DEFAUL
   }
 }
 
-/**
- * Validate the optional total supplied by the model. This is intentionally
- * diagnostic only: the server must always use the recalculated total.
- */
 export function compareModelTotal(rawResult, normalizedResult) {
   const supplied = parseTotal(rawResult?.total_score);
   if (!supplied) return { supplied: null, matches: false };
