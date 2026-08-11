@@ -87,7 +87,7 @@ export const StudentForm = ({ info, onChange }: Props) => {
         onChange={(e) => handleChange('program', e.target.value)}
       />
 
-      {/* Row 3: Year of Study (+ Academic Year beside it once picked) / Semester */}
+      {/* Row 3: Year of Study (+ Semester beside it once picked) / Academic Year */}
       <div className="grid grid-cols-2 gap-4">
         <div className="flex gap-2">
           <select
@@ -103,24 +103,24 @@ export const StudentForm = ({ info, onChange }: Props) => {
           {info.year && (
             <select
               className={selectClass}
-              value={info.academicYear || ''}
-              onChange={(e) => handleChange('academicYear', e.target.value)}
+              value={info.semester || ''}
+              onChange={(e) => handleChange('semester', e.target.value)}
             >
-              <option value="">Academic Year</option>
-              {ACADEMIC_YEARS.map((ay) => (
-                <option key={ay} value={ay}>{ay}</option>
+              <option value="">Semester</option>
+              {SEMESTERS.map((s) => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           )}
         </div>
         <select
           className={selectClass}
-          value={info.semester || ''}
-          onChange={(e) => handleChange('semester', e.target.value)}
+          value={info.academicYear || ''}
+          onChange={(e) => handleChange('academicYear', e.target.value)}
         >
-          <option value="">Semester</option>
-          {SEMESTERS.map((s) => (
-            <option key={s} value={s}>{s}</option>
+          <option value="">Academic Year</option>
+          {ACADEMIC_YEARS.map((ay) => (
+            <option key={ay} value={ay}>{ay}</option>
           ))}
         </select>
       </div>
