@@ -30,14 +30,12 @@ test('rejects missing question scores', () => {
   assert.match(result.error, /no question scores/i);
 });
 
-test('accepts numeric scores and derives grade at a boundary', () => {
+test('rejects numeric scores without a maximum', () => {
   const result = validateAndNormalizeGradingResult({
     questions: [{ q: 1, score: 75 }, { q: 2, score: '0/25' }],
   });
-  assert.equal(result.ok, true);
-  assert.equal(result.result.total_score, '75/100');
-  assert.equal(result.result.percentage, 75);
-  assert.equal(result.result.grade, 'A');
+  assert.equal(result.ok, false);
+  assert.match(result.error, /X\/Y format/i);
 });
 
 test('keeps the default grade scale deterministic', () => {
