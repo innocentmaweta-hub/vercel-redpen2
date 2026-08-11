@@ -100,18 +100,16 @@ export const StudentForm = ({ info, onChange }: Props) => {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
-          {info.year && (
-            <select
-              className={selectClass}
-              value={info.semester || ''}
-              onChange={(e) => handleChange('semester', e.target.value)}
-            >
-              <option value="">Semester</option>
-              {SEMESTERS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          )}
+          <select
+            className={selectClass}
+            value={info.semester || ''}
+            onChange={(e) => handleChange('semester', e.target.value)}
+          >
+            <option value="">Semester</option>
+            {SEMESTERS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
         <select
           className={selectClass}
