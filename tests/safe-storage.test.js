@@ -7,7 +7,7 @@ import {
   getStoredString,
   setStoredString,
   removeStoredString,
-} from '../src/lib/safeStorage.ts';
+} from '../src/lib/safeStorage.js';
 
 function installStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
