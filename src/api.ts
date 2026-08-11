@@ -25,6 +25,10 @@ export const API_ENDPOINTS = {
     login: `${BASE_API}/auth/login`,
     register: `${BASE_API}/auth/register`,
     google: `${BASE_API}/auth/google`,
+    verifyEmail: `${BASE_API}/auth/verify-email`,
+    resendVerification: `${BASE_API}/auth/resend-verification`,
+    forgotPassword: `${BASE_API}/auth/forgot-password`,
+    resetPassword: `${BASE_API}/auth/reset-password`,
   },
   grading: {
     grade: `${BASE_API}/grade`,
@@ -72,31 +76,29 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 }
 
-async function readApiError(response: Response): Promise<string> {
+async function readApiError(response: Response): Promise<{ message: string; code?: string }> {
   const contentType = response.headers.get('content-type') || '';
-
   if (contentType.includes('application/json')) {
     const body = await response.json().catch(() => null);
-    if (body?.message) return String(body.message);
-    if (body?.error) return String(body.error);
+    if (body?.message) return { message: String(body.message), code: body?.code };
+    if (body?.error) return { message: String(body.error), code: body?.code };
   } else {
     const text = await response.text().catch(() => '');
-    if (text.trim()) return text.trim().slice(0, 500);
+    if (text.trim()) return { message: text.trim().slice(0, 500) };
   }
-
-  return `API request failed: ${response.status}`;
+  return { message: `API request failed: ${response.status}` };
 }
-
 export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
   const response = await apiFetch(url, {
     method: 'POST',
     body: JSON.stringify(body),
   });
-
   if (!response.ok) {
-    throw new Error(await readApiError(response));
+    const { message, code } = await readApiError(response);
+    const error: any = new Error(message);
+    if (code) error.code = code;
+    throw error;
   }
-
   return response.json();
 }
 
