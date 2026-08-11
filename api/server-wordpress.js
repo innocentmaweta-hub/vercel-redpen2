@@ -25,6 +25,7 @@ import {
   deleteWordPressUser,
   uploadProfilePicture,
 } from './wordpress-auth.js';
+import { validateAndNormalizeGradingResult, compareModelTotal } from './grading-validation.js';
 
 const app = express();
 
@@ -500,6 +501,33 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
 
     console.log(`[${requestId}] Grading completed via ${provider}. User: ${req.user.email}`);
 
+    // Never trust the AI's own arithmetic. Recompute total/percentage/grade
+    // deterministically from the per-question scores before this result can
+    // ever be saved, displayed, or exported.
+    const validation = validateAndNormalizeGradingResult(result);
+
+    if (!validation.ok) {
+      console.error(`[${requestId}] AI grading result failed validation: ${validation.error}`);
+      // Don't charge a token for a result we're refusing to use.
+      return res.status(502).json({
+        code: 'INVALID_GRADING_RESULT',
+        error: true,
+        message: `AI returned an invalid grading result: ${validation.error}. Please try again.`,
+      });
+    }
+
+    const normalizedResult = validation.result;
+
+    // Log (don't act on) any mismatch between what the AI claimed and what we computed —
+    // useful signal for grading-quality monitoring, never used to decide the actual result.
+    const totalComparison = compareModelTotal(result, normalizedResult);
+    if (totalComparison.supplied && !totalComparison.matches) {
+      console.warn(
+        `[${requestId}] AI-claimed total (${totalComparison.supplied.score}/${totalComparison.supplied.maximum}) ` +
+        `did not match computed total (${normalizedResult.total_score}). Using computed value.`
+      );
+    }
+
     // Increment usage count / deduct a token (best-effort — don't fail the response if this fails)
     // Note: this only tracks USAGE. The actual history record is saved separately
     // via POST /api/history when the user clicks "Save" in the frontend.
@@ -513,7 +541,7 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
       console.error(`[${requestId}] Failed to update usage:`, usageError.message);
     }
 
-    res.json(result);
+    res.json(normalizedResult);
   } catch (error) {
     console.error(`[${requestId}] Grading error:`, error);
     res.status(500).json({
