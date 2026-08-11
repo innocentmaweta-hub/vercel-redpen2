@@ -27,6 +27,8 @@ import {
 } from './wordpress-auth.js';
 import { validateAndNormalizeGradingResult, compareModelTotal } from './grading-validation.js';
 import { GRADING_IDEMPOTENCY_HEADER, normalizeGradingIdempotencyKey, getCompletedGrading, rememberCompletedGrading } from './grading-idempotency.js';
+import { generateSixDigitCode, createCodeRecord, verifyCodeRecord } from './auth-tokens.js';
+import { sendEmail, verificationEmailHtml, resetEmailHtml } from './email.js';
 
 const app = express();
 
@@ -144,6 +146,17 @@ app.post('/api/auth/login', async (req, res) => {
       wordPressId: wpUser.id,
     };
 
+    // Accounts with no verification record are pre-existing users from before
+    // this feature — treat them as already verified so nobody gets locked out.
+    const verificationMeta = await getUserMeta(wpUser.id, 'redpen_email_verification');
+    if (verificationMeta && verificationMeta.verified === false) {
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email before signing in.',
+        email: wpUser.email,
+      });
+    }
+
     const token = generateAppToken(user);
 
     res.json({
@@ -217,16 +230,26 @@ app.post('/api/auth/register', async (req, res) => {
       console.error('Failed to grant welcome bonus:', bonusError.message);
     }
 
-    const token = generateAppToken(user);
+    // Require email verification before this account can log in.
+    try {
+      const verificationCode = generateSixDigitCode();
+      await updateUserMeta(user.id, 'redpen_email_verification', {
+        verified: false,
+        pending: createCodeRecord(verificationCode),
+      });
+      await sendEmail({
+        to: user.email,
+        subject: 'Verify your RedPen account',
+        html: verificationEmailHtml(user.name, verificationCode),
+      });
+    } catch (verificationError) {
+      console.error('Failed to set up email verification:', verificationError.message);
+    }
 
     res.status(201).json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        username: user.username,
-      }
+      requiresVerification: true,
+      email: user.email,
+      message: 'Account created. Enter the code we emailed you to finish signing in.',
     });
   } catch (error) {
     console.error('Register error:', error.message);
@@ -293,8 +316,14 @@ app.post('/api/auth/google', async (req, res) => {
       } catch (bonusError) {
         console.error('Failed to grant welcome bonus:', bonusError.message);
       }
-    }
 
+      // Google has already confirmed this email belongs to the user.
+      try {
+        await updateUserMeta(wpUser.id, 'redpen_email_verification', { verified: true, pending: null });
+      } catch (verifiedMetaError) {
+        console.error('Failed to mark Google account as verified:', verifiedMetaError.message);
+      }
+    }
     const user = {
       id: wpUser.id,
       email: wpUser.email,
@@ -432,6 +461,170 @@ app.post('/api/auth/delete-account', authMiddleware, async (req, res) => {
  */
 app.post('/api/auth/logout', (_req, res) => {
   res.json({ message: 'Logged out successfully' });
+});
+
+/**
+ * Verify an account's email with the code sent at registration.
+ * Succeeds by returning a normal login token, same shape as /api/auth/login.
+ */
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ code: 'MISSING_FIELDS', message: 'Email and code are required' });
+    }
+
+    const wpUser = await getWordPressUserByEmail(email);
+    if (!wpUser) {
+      return res.status(400).json({ code: 'INVALID_CODE', message: 'Invalid or expired code' });
+    }
+
+    const verificationMeta = (await getUserMeta(wpUser.id, 'redpen_email_verification')) || {};
+    const check = verifyCodeRecord(verificationMeta.pending, code);
+
+    if (!check.ok) {
+      if (verificationMeta.pending) {
+        verificationMeta.pending.attempts = (verificationMeta.pending.attempts || 0) + 1;
+        await updateUserMeta(wpUser.id, 'redpen_email_verification', verificationMeta);
+      }
+      return res.status(400).json({ code: 'INVALID_CODE', message: check.reason });
+    }
+
+    await updateUserMeta(wpUser.id, 'redpen_email_verification', { verified: true, pending: null });
+
+    const user = {
+      id: wpUser.id,
+      email: wpUser.email,
+      username: wpUser.username,
+      name: wpUser.name || wpUser.email.split('@')[0],
+      wordPressId: wpUser.id,
+    };
+    const token = generateAppToken(user);
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, name: user.name, username: user.username },
+    });
+  } catch (error) {
+    console.error('Verify email error:', error.message);
+    res.status(500).json({ message: 'Failed to verify email' });
+  }
+});
+
+/**
+ * Resend a fresh verification code for an unverified account.
+ */
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ code: 'MISSING_EMAIL', message: 'Email is required' });
+    }
+
+    const wpUser = await getWordPressUserByEmail(email);
+    if (!wpUser) {
+      // Don't reveal whether the account exists.
+      return res.json({ message: 'If that account exists and is unverified, a new code has been sent.' });
+    }
+
+    const existingMeta = (await getUserMeta(wpUser.id, 'redpen_email_verification')) || {};
+    if (existingMeta.verified) {
+      return res.json({ message: 'This account is already verified. Please sign in.' });
+    }
+
+    const code = generateSixDigitCode();
+    await updateUserMeta(wpUser.id, 'redpen_email_verification', {
+      verified: false,
+      pending: createCodeRecord(code),
+    });
+
+    await sendEmail({
+      to: email,
+      subject: 'Your RedPen verification code',
+      html: verificationEmailHtml(wpUser.name || email, code),
+    });
+
+    res.json({ message: 'If that account exists and is unverified, a new code has been sent.' });
+  } catch (error) {
+    console.error('Resend verification error:', error.message);
+    res.status(500).json({ message: 'Failed to resend verification code' });
+  }
+});
+
+/**
+ * Request a password reset code. Always responds the same way regardless
+ * of whether the email is registered, to avoid leaking which emails exist.
+ */
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const genericResponse = { message: 'If that email is registered, a reset code has been sent.' };
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ code: 'MISSING_EMAIL', message: 'Email is required' });
+    }
+
+    const wpUser = await getWordPressUserByEmail(email);
+    if (!wpUser) {
+      return res.json(genericResponse);
+    }
+
+    const code = generateSixDigitCode();
+    await updateUserMeta(wpUser.id, 'redpen_password_reset', createCodeRecord(code));
+
+    await sendEmail({
+      to: email,
+      subject: 'Reset your RedPen password',
+      html: resetEmailHtml(wpUser.name || email, code),
+    });
+
+    res.json(genericResponse);
+  } catch (error) {
+    console.error('Forgot password error:', error.message);
+    res.status(500).json(genericResponse);
+  }
+});
+
+/**
+ * Consume a reset code and set a new password.
+ */
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ code: 'MISSING_FIELDS', message: 'Email, code, and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ code: 'WEAK_PASSWORD', message: 'New password must be at least 6 characters' });
+    }
+
+    const wpUser = await getWordPressUserByEmail(email);
+    if (!wpUser) {
+      return res.status(400).json({ code: 'INVALID_CODE', message: 'Invalid or expired code' });
+    }
+
+    const resetMeta = await getUserMeta(wpUser.id, 'redpen_password_reset');
+    const check = verifyCodeRecord(resetMeta, code);
+
+    if (!check.ok) {
+      if (resetMeta) {
+        resetMeta.attempts = (resetMeta.attempts || 0) + 1;
+        await updateUserMeta(wpUser.id, 'redpen_password_reset', resetMeta);
+      }
+      return res.status(400).json({ code: 'INVALID_CODE', message: check.reason });
+    }
+
+    const updateResult = await updateWordPressUserPassword(wpUser.id, newPassword);
+    if (!updateResult.success) {
+      return res.status(500).json({ message: updateResult.error || 'Failed to reset password' });
+    }
+
+    await updateUserMeta(wpUser.id, 'redpen_password_reset', null);
+
+    res.json({ message: 'Password reset successfully. You can now sign in.' });
+  } catch (error) {
+    console.error('Reset password error:', error.message);
+    res.status(500).json({ message: 'Failed to reset password' });
+  }
 });
 
 // ========== Grading Endpoint ==========
