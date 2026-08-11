@@ -60,7 +60,7 @@ export async function getWordPressUserByUsername(username) {
     return (
       response.data.find(
         (u) => u.username === username || u.slug === username
-      ) || response.data[0] || null
+      ) || null
     );
   } catch (error) {
     console.error('Error fetching WordPress user by username:', error.response?.data || error.message);
