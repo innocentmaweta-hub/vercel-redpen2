@@ -26,6 +26,7 @@ import {
   uploadProfilePicture,
 } from './wordpress-auth.js';
 import { validateAndNormalizeGradingResult, compareModelTotal } from './grading-validation.js';
+import { GRADING_IDEMPOTENCY_HEADER, normalizeGradingIdempotencyKey, getCompletedGrading, rememberCompletedGrading } from './grading-idempotency.js';
 
 const app = express();
 
@@ -439,6 +440,16 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   console.log(`[${requestId}] Starting grading request for ${req.user.email}`);
 
+  const idempotencyKey = normalizeGradingIdempotencyKey(req.headers[GRADING_IDEMPOTENCY_HEADER]);
+
+  if (idempotencyKey) {
+    const cached = getCompletedGrading(idempotencyKey);
+    if (cached) {
+      console.log(`[${requestId}] Returning cached result for idempotency key ${idempotencyKey} (no token charged, no AI call made)`);
+      return res.json(cached);
+    }
+  }
+
   try {
     // Check token balance before doing any AI work.
     const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tokenBalance: 0 };
@@ -539,6 +550,10 @@ app.post('/api/grade', authMiddleware, async (req, res) => {
       await updateUserMeta(req.user.id, 'redpen_usage', updatedUsage);
     } catch (usageError) {
       console.error(`[${requestId}] Failed to update usage:`, usageError.message);
+    }
+
+    if (idempotencyKey) {
+      rememberCompletedGrading(idempotencyKey, normalizedResult);
     }
 
     res.json(normalizedResult);
