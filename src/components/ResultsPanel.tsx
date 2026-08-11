@@ -3,6 +3,51 @@ import { GradingResult } from '../types';
 import { ChevronRight, Award, AlertCircle, Printer, Edit3, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 
+// Mirrors the server's DEFAULT_GRADE_SCALE (grading-validation.js) so a manual
+// edit to a question score recomputes the total/grade the same way the server would.
+const GRADE_SCALE = [
+  { min: 80, grade: 'A+' },
+  { min: 75, grade: 'A' },
+  { min: 70, grade: 'B+' },
+  { min: 65, grade: 'B' },
+  { min: 60, grade: 'C+' },
+  { min: 55, grade: 'C' },
+  { min: 50, grade: 'D' },
+  { min: 0, grade: 'F' },
+];
+
+function parseQuestionScore(value: string | undefined): { score: number; maximum: number } | null {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const score = Number(match[1]);
+  const maximum = Number(match[2]);
+  if (!Number.isFinite(score) || !Number.isFinite(maximum) || maximum <= 0) return null;
+  return { score, maximum };
+}
+
+// Recomputes totalScore/percentage/grade from the current set of question scores.
+// Only questions with a valid "X/Y" score are counted — a question left blank
+// (e.g. still being typed) doesn't distort the running total.
+function recalculateFromQuestions(questions: any[]): { totalScore: string; percentage: string; grade: string } | null {
+  const parsed = questions.map(q => parseQuestionScore(q.score)).filter((p): p is { score: number; maximum: number } => p !== null);
+  if (parsed.length === 0) return null;
+
+  const totalScore = parsed.reduce((sum, p) => sum + p.score, 0);
+  const totalMaximum = parsed.reduce((sum, p) => sum + p.maximum, 0);
+  if (totalMaximum <= 0) return null;
+
+  const percentage = Number(((totalScore / totalMaximum) * 100).toFixed(2));
+  const scale = [...GRADE_SCALE].sort((a, b) => b.min - a.min);
+  const gradeEntry = scale.find(entry => percentage >= entry.min) || scale[scale.length - 1];
+
+  return {
+    totalScore: `${Number(totalScore.toFixed(2))}/${Number(totalMaximum.toFixed(2))}`,
+    percentage: String(percentage),
+    grade: gradeEntry.grade,
+  };
+}
+
 interface Props {
   result: GradingResult | null;
   loading: boolean;
@@ -186,7 +231,17 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                   onChange={(e) => {
                     const updatedQuestions = [...(currentResult?.questions || [])];
                     updatedQuestions[idx] = { ...updatedQuestions[idx], score: e.target.value };
-                    updateResult({ ...currentResult!, questions: updatedQuestions });
+
+                    // Manual corrections to any question must always win — recompute
+                    // total/percentage/grade from the corrected set, don't leave the
+                    // AI's original total silently stale.
+                    const recalculated = recalculateFromQuestions(updatedQuestions);
+
+                    updateResult({
+                      ...currentResult!,
+                      questions: updatedQuestions,
+                      ...(recalculated ? recalculated : {}),
+                    });
                   }}
                   placeholder={isSelfMarked && !q.score ? '_/_' : undefined}
                   className="text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border border-gray-700 focus:border-accent-blue focus:outline-none w-16 text-center placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
