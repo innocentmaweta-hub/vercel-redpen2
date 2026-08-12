@@ -1258,7 +1258,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                             />
                                         </div>
                                         <div className="flex-1">
-                                            <StudentForm info={studentInfo} onChange={setStudentInfo} />
+                                            <StudentForm info={studentInfo} onChange={setStudentInfo} courses={courses} />
                                         </div>
                                     </div>
                                 )}
