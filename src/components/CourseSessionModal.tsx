@@ -14,6 +14,7 @@ export interface SemesterCourse {
 }
 
 interface NewSemesterModalProps {
+  courses: { courseCode: string; courseName: string }[];
   onConfirm: (semesterCourse: SemesterCourse) => void;
   onSkip: () => void;
   onCancel: () => void;
@@ -82,10 +83,11 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls = "bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700";
 
-export const NewSemesterModal = ({ onConfirm, onSkip, onCancel }: NewSemesterModalProps) => {
+export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSemesterModalProps) => {
   const [form, setForm] = useState<SemesterCourse>({ courseCode: '', courseName: '', program: '', year: '', semester: '', academicYear: '', sessionLabel: '' });
   const [error, setError] = useState('');
   const [departmentSearch, setDepartmentSearch] = useState('');
+  const [courseMode, setCourseMode] = useState<'select' | 'custom'>(courses.length > 0 ? 'select' : 'custom');
 
   const set = (k: keyof SemesterCourse) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -125,25 +127,66 @@ export const NewSemesterModal = ({ onConfirm, onSkip, onCancel }: NewSemesterMod
         </div>
 
         <div className="p-5 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Course Code *">
-              <input
+          {courseMode === 'select' && courses.length > 0 ? (
+            <Field label="Course *">
+              <select
                 className={inputCls}
-                placeholder="e.g. CS301"
                 value={form.courseCode}
-                onChange={set('courseCode')}
+                onChange={(e) => {
+                  const chosen = courses.find(c => c.courseCode === e.target.value);
+                  setForm(prev => ({
+                    ...prev,
+                    courseCode: chosen?.courseCode || '',
+                    courseName: chosen?.courseName || '',
+                  }));
+                }}
                 autoFocus
-              />
+              >
+                <option value="">Select a course…</option>
+                {courses.map(c => (
+                  <option key={c.courseCode} value={c.courseCode}>
+                    {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => { setCourseMode('custom'); setForm(prev => ({ ...prev, courseCode: '', courseName: '' })); }}
+                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold mt-1"
+              >
+                + Add a new course instead
+              </button>
             </Field>
-            <Field label="Course Name">
-              <input
-                className={inputCls}
-                placeholder="e.g. Data Structures"
-                value={form.courseName}
-                onChange={set('courseName')}
-              />
-            </Field>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Course Code *">
+                <input
+                  className={inputCls}
+                  placeholder="e.g. CS301"
+                  value={form.courseCode}
+                  onChange={set('courseCode')}
+                  autoFocus
+                />
+              </Field>
+              <Field label="Course Name">
+                <input
+                  className={inputCls}
+                  placeholder="e.g. Data Structures"
+                  value={form.courseName}
+                  onChange={set('courseName')}
+                />
+              </Field>
+              {courses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCourseMode('select')}
+                  className="col-span-2 text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold text-left"
+                >
+                  ← Choose an existing course instead
+                </button>
+              )}
+            </div>
+          )}
 
           <Field label="Department">
             <div className="relative">
