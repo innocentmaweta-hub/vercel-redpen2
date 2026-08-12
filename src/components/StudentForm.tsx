@@ -33,6 +33,10 @@ export const StudentForm = ({ info, onChange }: Props) => {
   const [courseCodeDraft, setCourseCodeDraft] = useState(info.courseCode || '');
   const [pendingCourseCode, setPendingCourseCode] = useState<string | null>(null);
 
+  // Same idea for Academic Year / Semester — these determine which workbook
+  // a result is saved into, so a change is confirmed before it's applied.
+  const [pendingWorkbookChange, setPendingWorkbookChange] = useState<{ field: 'academicYear' | 'semester'; value: string } | null>(null);
+
   useEffect(() => {
     setCourseCodeDraft(info.courseCode || '');
   }, [info.courseCode]);
@@ -94,6 +98,27 @@ export const StudentForm = ({ info, onChange }: Props) => {
     setPendingCourseCode(null);
   };
 
+  const requestWorkbookChange = (field: 'academicYear' | 'semester', value: string) => {
+    const current = info[field] || '';
+    if (value === current) return; // reselecting the same value, nothing to confirm
+    if (value === '') {
+      handleChange(field, ''); // clearing doesn't create/route to a different workbook
+      return;
+    }
+    setPendingWorkbookChange({ field, value });
+  };
+
+  const confirmWorkbookChange = () => {
+    if (pendingWorkbookChange) {
+      handleChange(pendingWorkbookChange.field, pendingWorkbookChange.value);
+    }
+    setPendingWorkbookChange(null);
+  };
+
+  const cancelWorkbookChange = () => {
+    setPendingWorkbookChange(null);
+  };
+
   return (
     <>
     <div className="bg-card p-6 rounded-3xl border border-gray-800 shadow-xl space-y-1">
@@ -144,8 +169,8 @@ export const StudentForm = ({ info, onChange }: Props) => {
           </select>
           <select
             className={selectClass}
-            value={info.semester || ''}
-            onChange={(e) => handleChange('semester', e.target.value)}
+            value={(pendingWorkbookChange?.field === 'semester' ? pendingWorkbookChange.value : info.semester) || ''}
+            onChange={(e) => requestWorkbookChange('semester', e.target.value)}
           >
             <option value="">Semester</option>
             {SEMESTERS.map((s) => (
@@ -155,8 +180,8 @@ export const StudentForm = ({ info, onChange }: Props) => {
         </div>
         <select
           className={selectClass}
-          value={info.academicYear || ''}
-          onChange={(e) => handleChange('academicYear', e.target.value)}
+          value={(pendingWorkbookChange?.field === 'academicYear' ? pendingWorkbookChange.value : info.academicYear) || ''}
+          onChange={(e) => requestWorkbookChange('academicYear', e.target.value)}
         >
           <option value="">Academic Year</option>
           {ACADEMIC_YEARS.map((ay) => (
@@ -210,6 +235,39 @@ export const StudentForm = ({ info, onChange }: Props) => {
             </button>
             <button
               onClick={confirmCourseChange}
+              className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all"
+            >
+              Confirm Change
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {pendingWorkbookChange !== null && (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <div className="bg-card border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle size={16} className="text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Change {pendingWorkbookChange.field === 'academicYear' ? 'Academic Year' : 'Semester'}?</p>
+              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                Switching to <span className="text-gray-300 font-mono">{pendingWorkbookChange.value}</span> will route future
+                grades into a different semester workbook — creating a new one if it doesn't already exist.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={cancelWorkbookChange}
+              className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmWorkbookChange}
               className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all"
             >
               Confirm Change
