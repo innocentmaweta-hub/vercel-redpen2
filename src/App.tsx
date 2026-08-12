@@ -485,11 +485,19 @@ export default function App() {
         setShowNewSessionModal(false);
     };
 
-    // "New Paper" — keeps the current semester + course, only clears the paper/result for the next student
+    // "New Paper" — keeps session + course context (academic year, semester, course code, exam date)
+    // but clears everything specific to the previous student: name, reg no, program,
+    // plus the paper/result itself.
     const handleNewPaper = () => {
         if (result || markingScheme || studentPaper) {
             if (!window.confirm('Start a new paper? Current work will be cleared.')) return;
         }
+        setStudentInfo(prev => ({
+            ...prev,
+            name: '',
+            regNo: '',
+            program: '',
+        }));
         setMarkingScheme(null);
         setStudentPaper(null);
         setResult(null);
@@ -1846,6 +1854,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
 
                 {modalType === 'new' && (
                     <NewSemesterModal
+                        courses={courses}
                         onConfirm={handleNewSemesterConfirm}
                         onSkip={handleSkipSemester}
                         onCancel={closeModal}
