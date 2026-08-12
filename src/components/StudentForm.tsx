@@ -179,28 +179,26 @@ export const StudentForm = ({ info, onChange, courses }: Props) => {
 
      {/* Row 4: Course / Exam Date */}
       <div className="grid grid-cols-2 gap-4">
-        {courseFieldMode === 'select' && courses.length > 0 ? (
-          <div className="flex flex-col gap-1">
-            <select
-              className={selectClass}
-              value={info.courseCode || ''}
-              onChange={(e) => requestCourseChange(e.target.value)}
-            >
-              <option value="">Course</option>
-              {courses.map((c) => (
-                <option key={c.courseCode} value={c.courseCode}>
-                  {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => setCourseFieldMode('custom')}
-              className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold text-left"
-            >
-              + Add a new course
-            </button>
-          </div>
+       {courseFieldMode === 'select' && courses.length > 0 ? (
+          <select
+            className={selectClass}
+            value={info.courseCode || ''}
+            onChange={(e) => {
+              if (e.target.value === '__new__') {
+                setCourseFieldMode('custom');
+                return;
+              }
+              requestCourseChange(e.target.value);
+            }}
+          >
+            <option value="">Course</option>
+            {courses.map((c) => (
+              <option key={c.courseCode} value={c.courseCode}>
+                {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
+              </option>
+            ))}
+            <option value="__new__">+ Add a new course</option>
+          </select>
         ) : (
           <div className="flex flex-col gap-1">
             <input
