@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StudentInfo } from '../types';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props {
   info: StudentInfo;
@@ -25,6 +26,16 @@ export const StudentForm = ({ info, onChange }: Props) => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>(() => {
     return localStorage.getItem('lastSelectedDepartment') || '';
   });
+
+  // Course code is edited as a local draft first — changing it re-routes future
+  // grades to a different worksheet in the semester workbook, so we confirm
+  // before committing rather than propagating on every keystroke.
+  const [courseCodeDraft, setCourseCodeDraft] = useState(info.courseCode || '');
+  const [pendingCourseCode, setPendingCourseCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCourseCodeDraft(info.courseCode || '');
+  }, [info.courseCode]);
 
   useEffect(() => {
     // Save department selection to localStorage when it changes
@@ -53,7 +64,38 @@ export const StudentForm = ({ info, onChange }: Props) => {
   const inputClass = "w-full bg-sidebar border border-gray-800 rounded-lg py-2 px-3 text-sm focus:border-accent-blue focus:outline-none transition-all placeholder:text-gray-600";
   const selectClass = `${inputClass} appearance-none cursor-pointer`;
 
+  const handleCourseCodeDraftChange = (value: string) => {
+    setCourseCodeDraft(value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+  };
+
+  const handleCourseCodeBlur = () => {
+    const trimmed = courseCodeDraft.trim();
+    const current = (info.courseCode || '').trim();
+
+    if (trimmed === current) return; // no change, nothing to confirm
+
+    if (trimmed === '') {
+      handleChange('courseCode', ''); // clearing doesn't re-route anything
+      return;
+    }
+
+    setPendingCourseCode(trimmed);
+  };
+
+  const confirmCourseChange = () => {
+    if (pendingCourseCode !== null) {
+      handleChange('courseCode', pendingCourseCode);
+    }
+    setPendingCourseCode(null);
+  };
+
+  const cancelCourseChange = () => {
+    setCourseCodeDraft(info.courseCode || '');
+    setPendingCourseCode(null);
+  };
+
   return (
+    <>
     <div className="bg-card p-6 rounded-3xl border border-gray-800 shadow-xl space-y-1">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-2 h-4 bg-accent-blue rounded-full" />
@@ -129,8 +171,9 @@ export const StudentForm = ({ info, onChange }: Props) => {
           type="text"
           placeholder="Course Code"
           className={inputClass}
-          value={info.courseCode}
-          onChange={(e) => handleChange('courseCode', e.target.value)}
+          value={courseCodeDraft}
+          onChange={(e) => handleCourseCodeDraftChange(e.target.value)}
+          onBlur={handleCourseCodeBlur}
         />
         <input
           type="date"
@@ -141,5 +184,40 @@ export const StudentForm = ({ info, onChange }: Props) => {
         />
       </div>
     </div>
+
+    {pendingCourseCode !== null && (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <div className="bg-card border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle size={16} className="text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Change Course?</p>
+              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                Switching the course code to <span className="text-gray-300 font-mono">{pendingCourseCode}</span> will route
+                future grades into that course's worksheet within this semester's workbook — creating a new sheet if it
+                doesn't already exist.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={cancelCourseChange}
+              className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmCourseChange}
+              className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all"
+            >
+              Confirm Change
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
