@@ -1,22 +1,4 @@
-import nodemailer from 'nodemailer';
-
-function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    throw new Error('SMTP email service is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS.');
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-}
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 const escapeHtml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
@@ -28,16 +10,32 @@ const escapeHtml = (value) => String(value ?? '')
 export async function sendEmail({ to, subject, html, text }) {
   if (!to || !subject || !html) throw new Error('Email recipient, subject, and HTML are required.');
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  if (!from) throw new Error('SMTP_FROM or SMTP_USER must be configured.');
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY is not configured.');
 
-  return getTransporter().sendMail({
-    from,
-    to,
-    subject,
-    html,
-    text: text || undefined,
+  const from = process.env.RESEND_FROM || 'RedPen <onboarding@resend.dev>';
+
+  const response = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject,
+      html,
+      text: text || undefined,
+    }),
   });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`Resend API error (${response.status}): ${errorBody || 'Failed to send email'}`);
+  }
+
+  return response.json();
 }
 
 export function verificationEmailHtml(name, code) {
