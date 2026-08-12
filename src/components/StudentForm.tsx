@@ -36,6 +36,10 @@ export const StudentForm = ({ info, onChange, courses }: Props) => {
   const [courseFieldMode, setCourseFieldMode] = useState<'select' | 'custom'>(courses.length > 0 ? 'select' : 'custom');
   const [customCourseDraft, setCustomCourseDraft] = useState('');
 
+  // Academic Year / Semester determine which workbook a result is saved into,
+  // so a change is held here pending confirmation before being applied.
+  const [pendingWorkbookChange, setPendingWorkbookChange] = useState<{ field: 'academicYear' | 'semester'; value: string } | null>(null);
+
   useEffect(() => {
     // Save department selection to localStorage when it changes
     if (selectedDepartment) {
