@@ -10,6 +10,7 @@ import { HistoryRecord } from '../types';
 interface PostsPageProps {
   history: HistoryRecord[];
   onGrade: () => void;
+  activeCourseCode?: string; // When set, stats + activity scope to this course only
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -38,7 +39,7 @@ function getGradeBg(grade: string) {
 
 function getStats(history: HistoryRecord[]) {
   if (!history.length) return { total: 0, avgScore: 0, passRate: 0, topGrade: '—' };
-  const scores = history.map(r => parseFloat(r.result.total_score) || 0);
+  const scores = history.map(r => parseFloat(r.result.totalScore || '') || 0);
   const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
   const passed = scores.filter(s => s >= 50).length;
   const grades = history.map(r => r.result.grade || '');
@@ -108,7 +109,7 @@ const StatCard = ({ icon: Icon, label, value, sub, color }: {
 
 const PostCard = ({ record, index }: { record: HistoryRecord; index: number }) => {
   const [liked, setLiked] = useState(false);
-  const score = parseFloat(record.result.total_score) || 0;
+  const score = parseFloat(record.result.totalScore || '') || 0;
   const grade = record.result.grade || '?';
   const dateStr = new Date(record.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -157,7 +158,7 @@ const PostCard = ({ record, index }: { record: HistoryRecord; index: number }) =
               <div className="flex items-center gap-1">
                 <BarChart2 size={11} className="text-gray-600" />
                 <span className={`text-[11px] font-black ${score >= 70 ? 'text-emerald-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                  {record.result.total_score}%
+                  {record.result.totalScore || '—'}%
                 </span>
               </div>
               <button
@@ -212,8 +213,15 @@ const AnnouncementCard = ({ post, index }: { post: typeof ANNOUNCEMENTS[0]; inde
   );
 };
 
-export const PostsPage = ({ history, onGrade }: PostsPageProps) => {
-  const stats = getStats(history);
+export const PostsPage = ({ history, onGrade, activeCourseCode }: PostsPageProps) => {
+  const normalizedCode = activeCourseCode?.trim().toUpperCase();
+
+  // Scope to the active course when one is set; otherwise fall back to all-time history
+  const scopedHistory = normalizedCode
+    ? history.filter(r => (r.studentInfo?.courseCode || '').trim().toUpperCase() === normalizedCode)
+    : history;
+
+  const stats = getStats(scopedHistory);
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -229,7 +237,11 @@ export const PostsPage = ({ history, onGrade }: PostsPageProps) => {
         >
           <div>
             <h1 className="text-xl font-black text-white">{greeting} 👋</h1>
-            <p className="text-[11px] text-gray-500 mt-0.5">Here's what's happening with your grading activity.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {normalizedCode
+                ? `Showing activity for ${normalizedCode}.`
+                : "Here's what's happening with your grading activity."}
+            </p>
           </div>
           <button
             onClick={onGrade}
@@ -242,7 +254,7 @@ export const PostsPage = ({ history, onGrade }: PostsPageProps) => {
         </motion.div>
 
         <div className="flex gap-3">
-          <StatCard icon={FileText} label="Papers Graded" value={stats.total} sub="all time" color="bg-accent-blue/10 text-accent-blue" />
+          <StatCard icon={FileText} label="Papers Graded" value={stats.total} sub={normalizedCode ? normalizedCode : 'all time'} color="bg-accent-blue/10 text-accent-blue" />
           <StatCard icon={BarChart2} label="Avg Score" value={stats.total ? `${stats.avgScore}%` : '—'} sub="across all papers" color="bg-purple-400/10 text-purple-400" />
           <StatCard icon={CheckCircle} label="Pass Rate" value={stats.total ? `${stats.passRate}%` : '—'} sub="≥ 50% threshold" color="bg-emerald-400/10 text-emerald-400" />
           <StatCard icon={Award} label="Best Grade" value={stats.topGrade} sub="highest achieved" color="bg-yellow-400/10 text-yellow-400" />
@@ -263,21 +275,25 @@ export const PostsPage = ({ history, onGrade }: PostsPageProps) => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Clock size={13} className="text-gray-500" />
-                <h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Recent Activity</h2>
+                <h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">
+                  Recent Activity{normalizedCode ? ` · ${normalizedCode}` : ''}
+                </h2>
               </div>
-              {history.length > 0 && (
-                <span className="text-[10px] text-gray-700">{history.length} record{history.length !== 1 ? 's' : ''}</span>
+              {scopedHistory.length > 0 && (
+                <span className="text-[10px] text-gray-700">{scopedHistory.length} record{scopedHistory.length !== 1 ? 's' : ''}</span>
               )}
             </div>
 
-            {history.length === 0 ? (
+            {scopedHistory.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="flex-1 flex flex-col items-center justify-center gap-3 bg-card border border-gray-800 rounded-2xl py-12"
               >
                 <FileText size={32} className="text-gray-700" />
-                <p className="text-[12px] text-gray-600 font-medium">No grading activity yet</p>
+                <p className="text-[12px] text-gray-600 font-medium">
+                  {normalizedCode ? `No graded papers for ${normalizedCode} yet` : 'No grading activity yet'}
+                </p>
                 <button
                   onClick={onGrade}
                   className="px-4 py-1.5 bg-accent-blue/10 text-accent-blue text-[11px] font-bold rounded-lg border border-accent-blue/20 hover:bg-accent-blue/20 transition-colors"
@@ -287,7 +303,7 @@ export const PostsPage = ({ history, onGrade }: PostsPageProps) => {
               </motion.div>
             ) : (
               <div className="flex flex-col gap-3 overflow-y-auto">
-                {[...history].reverse().map((rec, i) => (
+                {[...scopedHistory].reverse().map((rec, i) => (
                   <PostCard key={rec.id} record={rec} index={i} />
                 ))}
               </div>
