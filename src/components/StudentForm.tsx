@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 interface Props {
   info: StudentInfo;
   onChange: (info: StudentInfo) => void;
+  courses: { courseCode: string; courseName: string }[];
 }
 
 const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
@@ -22,24 +23,18 @@ function getAcademicYearOptions(): string[] {
 
 const ACADEMIC_YEARS = getAcademicYearOptions();
 
-export const StudentForm = ({ info, onChange }: Props) => {
+export const StudentForm = ({ info, onChange, courses }: Props) => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>(() => {
     return localStorage.getItem('lastSelectedDepartment') || '';
   });
 
-  // Course code is edited as a local draft first — changing it re-routes future
-  // grades to a different worksheet in the semester workbook, so we confirm
-  // before committing rather than propagating on every keystroke.
-  const [courseCodeDraft, setCourseCodeDraft] = useState(info.courseCode || '');
+  // Course is a dropdown of known courses, plus a custom-entry mode.
+  // Selecting a different course is a deliberate action (unlike a text field's
+  // blur, which can fire from clicking anything else — including Grade),
+  // so onChange is the only trigger for the confirmation popup.
   const [pendingCourseCode, setPendingCourseCode] = useState<string | null>(null);
-
-  // Same idea for Academic Year / Semester — these determine which workbook
-  // a result is saved into, so a change is confirmed before it's applied.
-  const [pendingWorkbookChange, setPendingWorkbookChange] = useState<{ field: 'academicYear' | 'semester'; value: string } | null>(null);
-
-  useEffect(() => {
-    setCourseCodeDraft(info.courseCode || '');
-  }, [info.courseCode]);
+  const [courseFieldMode, setCourseFieldMode] = useState<'select' | 'custom'>(courses.length > 0 ? 'select' : 'custom');
+  const [customCourseDraft, setCustomCourseDraft] = useState('');
 
   useEffect(() => {
     // Save department selection to localStorage when it changes
@@ -68,21 +63,10 @@ export const StudentForm = ({ info, onChange }: Props) => {
   const inputClass = "w-full bg-sidebar border border-gray-800 rounded-lg py-2 px-3 text-sm focus:border-accent-blue focus:outline-none transition-all placeholder:text-gray-600";
   const selectClass = `${inputClass} appearance-none cursor-pointer`;
 
-  const handleCourseCodeDraftChange = (value: string) => {
-    setCourseCodeDraft(value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
-  };
-
-  const handleCourseCodeBlur = () => {
-    const trimmed = courseCodeDraft.trim();
+  const requestCourseChange = (value: string) => {
+    const trimmed = value.trim();
     const current = (info.courseCode || '').trim();
-
-    if (trimmed === current) return; // no change, nothing to confirm
-
-    if (trimmed === '') {
-      handleChange('courseCode', ''); // clearing doesn't re-route anything
-      return;
-    }
-
+    if (trimmed === current || trimmed === '') return; // no real change
     setPendingCourseCode(trimmed);
   };
 
@@ -94,7 +78,6 @@ export const StudentForm = ({ info, onChange }: Props) => {
   };
 
   const cancelCourseChange = () => {
-    setCourseCodeDraft(info.courseCode || '');
     setPendingCourseCode(null);
   };
 
@@ -190,16 +173,59 @@ export const StudentForm = ({ info, onChange }: Props) => {
         </select>
       </div>
 
-      {/* Row 4: Course Code / Exam Date */}
+     {/* Row 4: Course / Exam Date */}
       <div className="grid grid-cols-2 gap-4">
-        <input
-          type="text"
-          placeholder="Course Code"
-          className={inputClass}
-          value={courseCodeDraft}
-          onChange={(e) => handleCourseCodeDraftChange(e.target.value)}
-          onBlur={handleCourseCodeBlur}
-        />
+        {courseFieldMode === 'select' && courses.length > 0 ? (
+          <div className="flex flex-col gap-1">
+            <select
+              className={selectClass}
+              value={info.courseCode || ''}
+              onChange={(e) => requestCourseChange(e.target.value)}
+            >
+              <option value="">Course</option>
+              {courses.map((c) => (
+                <option key={c.courseCode} value={c.courseCode}>
+                  {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setCourseFieldMode('custom')}
+              className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold text-left"
+            >
+              + Add a new course
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <input
+              type="text"
+              placeholder="Course"
+              className={inputClass}
+              value={customCourseDraft}
+              onChange={(e) => setCustomCourseDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { requestCourseChange(customCourseDraft); setCustomCourseDraft(''); }}
+                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold"
+              >
+                Set Course
+              </button>
+              {courses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setCourseFieldMode('select'); setCustomCourseDraft(''); }}
+                  className="text-[10px] text-gray-500 hover:text-gray-300 font-bold"
+                >
+                  ← Choose existing
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <input
           type="date"
           placeholder="Date of Exams"
