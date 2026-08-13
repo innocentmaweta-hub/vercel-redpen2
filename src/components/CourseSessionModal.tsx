@@ -267,7 +267,7 @@ export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSe
             </Field>
           </div>
 
-                    <Field label="Academic Year *">
+                    <Field label="Academic Year">
             <select className={inputCls} value={form.academicYear} onChange={set('academicYear')}>
               <option value="">Select academic year…</option>
               {ACADEMIC_YEARS.map(ay => (
@@ -296,7 +296,7 @@ export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSe
               onChange={set('sessionLabel')}
             />
           </Field>
-                        <Field label="Academic Year *">
+                        <Field label="Academic Year">
             <select
               className={inputCls}
               value={form.academicYear}
@@ -378,7 +378,7 @@ export const ContinueSemesterModal = ({
             <BookOpen size={16} className="text-accent-blue" />
           </div>
           <div>
-            <p className="text-[13px] font-black text-white">Continue Semester</p>
+            <p className="text-[13px] font-black text-white">Continue Session</p>
             <p className="text-[10px] text-gray-500">{uploadLabel}</p>
           </div>
         </div>
@@ -389,7 +389,7 @@ export const ContinueSemesterModal = ({
 
       <div className="p-5">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Active Semester</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Active Session</p>
           <div className="flex items-center gap-2">
             <span className="px-2 py-1 bg-accent-blue/10 text-accent-blue text-[11px] font-black rounded-lg border border-accent-blue/20">
               {semesterCourse.courseCode}
@@ -414,7 +414,7 @@ export const ContinueSemesterModal = ({
         </div>
 
         <p className="text-[12px] text-gray-400 mb-4">
-          Proceed uploading in this semester?
+          Proceed uploading in this session?
         </p>
 
         <div className="flex flex-col gap-2">
@@ -422,14 +422,14 @@ export const ContinueSemesterModal = ({
             onClick={onContinue}
             className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors"
           >
-            Continue in this semester
+            Continue in this session
             <ChevronRight size={14} />
           </button>
           <button
             onClick={onNewSemester}
             className="w-full py-2 text-[11px] font-bold text-gray-500 hover:text-gray-300 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors"
           >
-            Start new semester
+            Start new session
           </button>
         </div>
       </div>
@@ -548,18 +548,11 @@ export const NewSessionModal = ({
       return;
     }
 
-    if (!academicYear.trim()) {
-      setError('Academic year is required.');
-      return;
-    }
+    const hasAcademicSession = academicYear.trim() && semester.trim();
+    const hasCustomSession = customName.trim();
 
-    if (!year.trim()) {
-      setError('Year of study is required.');
-      return;
-    }
-
-    if (!semester.trim() && !customName.trim()) {
-      setError('Select a semester or enter a custom session name.');
+    if (!hasAcademicSession && !hasCustomSession) {
+      setError('Enter Academic Year + Semester, or a Custom Session Name.');
       return;
     }
 
@@ -678,7 +671,7 @@ export const NewSessionModal = ({
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Academic Year *">
+            <Field label="Academic Year">
               <select
                 className={inputCls}
                 value={academicYear}
@@ -693,7 +686,7 @@ export const NewSessionModal = ({
               </select>
             </Field>
 
-            <Field label="Year of Study *">
+            <Field label="Year of Study">
               <select
                 className={inputCls}
                 value={year}
