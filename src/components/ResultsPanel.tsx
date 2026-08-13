@@ -18,14 +18,69 @@ const GRADE_SCALE = [
 
 function parseQuestionScore(value: string | undefined): { score: number; maximum: number } | null {
   if (typeof value !== 'string') return null;
-  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+
+  const trimmed = value.trim();
+
+  // Blank or incomplete input is allowed while the examiner is typing.
+  if (!trimmed || trimmed.endsWith('/')) return null;
+
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
   if (!match) return null;
+
   const score = Number(match[1]);
   const maximum = Number(match[2]);
-  if (!Number.isFinite(score) || !Number.isFinite(maximum) || maximum <= 0) return null;
+
+  if (
+    !Number.isFinite(score) ||
+    !Number.isFinite(maximum) ||
+    maximum <= 0 ||
+    score < 0 ||
+    score > maximum
+  ) {
+    return null;
+  }
+
   return { score, maximum };
 }
 
+function validateQuestionScore(value: string): string | null {
+  const trimmed = value.trim();
+
+  // Empty input is valid while editing.
+  if (!trimmed) return null;
+
+  // Allow an incomplete expression while the examiner is typing.
+  if (/^\d+(?:\.\d+)?\s*\/$/.test(trimmed)) {
+    return null;
+  }
+
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+
+  if (!match) {
+    return 'Enter the score in the format X/Y.';
+  }
+
+  const score = Number(match[1]);
+  const maximum = Number(match[2]);
+
+  if (!Number.isFinite(score) || !Number.isFinite(maximum)) {
+    return 'Score must contain valid numbers.';
+  }
+
+  if (maximum <= 0) {
+    return 'Maximum score must be greater than 0.';
+  }
+
+  if (score < 0) {
+    return 'Score cannot be negative.';
+  }
+
+  if (score > maximum) {
+    return `Score cannot exceed ${maximum}.`;
+  }
+
+  return null;
+}
 // Recomputes totalScore/percentage/grade from the current set of question scores.
 // Only questions with a valid "X/Y" score are counted — a question left blank
 // (e.g. still being typed) doesn't distort the running total.
@@ -85,6 +140,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
   };
 
   const [isTyping, setIsTyping] = useState<Record<string, boolean>>({});
+  const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
 
   const handleTypingStart = (field: string) => {
     setIsTyping(prev => ({ ...prev, [field]: true }));
@@ -225,27 +281,68 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 <span className="text-[10px] uppercase font-black tracking-tighter text-gray-500 group-hover:text-accent-blue transition-colors">Question {q.q}</span>
               </div>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={isSelfMarked && !q.score ? '' : q.score || ''}
-                  onChange={(e) => {
-                    const updatedQuestions = [...(currentResult?.questions || [])];
-                    updatedQuestions[idx] = { ...updatedQuestions[idx], score: e.target.value };
+                <div className="flex flex-col items-end gap-1">
+                  <input
+                    type="text"
+                    value={isSelfMarked && !q.score ? '' : q.score || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const error = validateQuestionScore(value);
+                      const errorKey = String(q.q ?? idx);
 
-                    // Manual corrections to any question must always win — recompute
-                    // total/percentage/grade from the corrected set, don't leave the
-                    // AI's original total silently stale.
-                    const recalculated = recalculateFromQuestions(updatedQuestions);
+                      setScoreErrors(prev => {
+                        const next = { ...prev };
 
-                    updateResult({
-                      ...currentResult!,
-                      questions: updatedQuestions,
-                      ...(recalculated ? recalculated : {}),
-                    });
-                  }}
-                  placeholder={isSelfMarked && !q.score ? '_/_' : undefined}
-                  className="text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border border-gray-700 focus:border-accent-blue focus:outline-none w-16 text-center placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
-                />
+                        if (error) {
+                          next[errorKey] = error;
+                        } else {
+                          delete next[errorKey];
+                        }
+
+                        return next;
+                      });
+
+                      // Keep blank/in-progress input editable without treating it as a
+                      // valid score. Invalid completed values are not committed.
+                      if (error && !/^\d+(?:\.\d+)?\s*\/?$/.test(value.trim())) {
+                        return;
+                      }
+
+                      const parsed = value.trim().endsWith('/')
+                        ? null
+                        : parseQuestionScore(value);
+
+                      // Reject impossible completed scores such as 12/10.
+                      if (value.trim() && !value.trim().endsWith('/') && !parsed) {
+                        return;
+                      }
+
+                      const updatedQuestions = [...(currentResult?.questions || [])];
+
+                      updatedQuestions[idx] = {
+                        ...updatedQuestions[idx],
+                        score: value
+                      };
+
+                      updateResult({
+                        ...currentResult!,
+                        questions: updatedQuestions,
+                      });
+                    }}
+                    placeholder={isSelfMarked && !q.score ? '_/_' : undefined}
+                    className={`text-xs font-mono font-bold text-ink bg-gray-900 px-2 py-0.5 rounded border ${
+                      scoreErrors[String(q.q ?? idx)]
+                        ? 'border-red-500 focus:border-red-500'
+                        : 'border-gray-700 focus:border-accent-blue'
+                    } focus:outline-none w-16 text-center placeholder:text-gray-600 placeholder:italic placeholder:opacity-60`}
+                  />
+
+                  {scoreErrors[String(q.q ?? idx)] && (
+                    <span className="text-[9px] text-red-400 whitespace-nowrap">
+                      {scoreErrors[String(q.q ?? idx)]}
+                    </span>
+                  )}
+                </div>
               ) : (
                 <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${isSelfMarked && !q.score
                   ? `${ghostClass} bg-gray-900/50 border-gray-800`
