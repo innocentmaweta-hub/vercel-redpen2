@@ -85,16 +85,40 @@ function validateQuestionScore(value: string): string | null {
 // Only questions with a valid "X/Y" score are counted — a question left blank
 // (e.g. still being typed) doesn't distort the running total.
 function recalculateFromQuestions(questions: any[]): { totalScore: string; percentage: string; grade: string } | null {
-  const parsed = questions.map(q => parseQuestionScore(q.score)).filter((p): p is { score: number; maximum: number } => p !== null);
-  if (parsed.length === 0) return null;
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return null;
+  }
+
+  const parsedQuestions = questions.map(q => parseQuestionScore(q?.score));
+
+  // Do not recalculate while any question is blank or incomplete.
+  // This prevents an unfinished entry such as "7/" from being treated
+  // as a valid score or causing the total to change prematurely.
+  if (parsedQuestions.some(parsed => parsed === null)) {
+    return null;
+  }
+
+  const parsed = parsedQuestions.filter(
+    (p): p is { score: number; maximum: number } => p !== null
+  );
+
+  if (parsed.length === 0) {
+    return null;
+  }
 
   const totalScore = parsed.reduce((sum, p) => sum + p.score, 0);
   const totalMaximum = parsed.reduce((sum, p) => sum + p.maximum, 0);
-  if (totalMaximum <= 0) return null;
+
+  if (totalMaximum <= 0 || totalScore < 0 || totalScore > totalMaximum) {
+    return null;
+  }
 
   const percentage = Number(((totalScore / totalMaximum) * 100).toFixed(2));
+
   const scale = [...GRADE_SCALE].sort((a, b) => b.min - a.min);
-  const gradeEntry = scale.find(entry => percentage >= entry.min) || scale[scale.length - 1];
+  const gradeEntry =
+    scale.find(entry => percentage >= entry.min) ||
+    scale[scale.length - 1];
 
   return {
     totalScore: `${Number(totalScore.toFixed(2))}/${Number(totalMaximum.toFixed(2))}`,
@@ -103,11 +127,63 @@ function recalculateFromQuestions(questions: any[]): { totalScore: string; perce
   };
 }
 
+function validateAndNormalizeResult(result: GradingResult): GradingResult | null {
+        if (!result || typeof result !== 'object') {
+                return null;
+        }
+
+        const questions = Array.isArray(result.questions)
+                ? result.questions
+                : [];
+
+        const normalizedQuestions = questions
+                .filter(q => q && typeof q === 'object')
+                .map((q, index) => ({
+                        ...q,
+                        q: q.q ?? index + 1,
+                        score: typeof q.score === 'string' ? q.score.trim() : '',
+                        feedback: typeof q.feedback === 'string' ? q.feedback : '',
+                }));
+
+        let totalScore = typeof result.totalScore === 'string'
+                ? result.totalScore.trim()
+                : '';
+
+        let percentage = typeof result.percentage === 'string'
+                ? result.percentage.trim()
+                : '';
+
+        let grade = typeof result.grade === 'string'
+                ? result.grade.trim()
+                : '';
+
+        // If all question scores are valid, calculate the result from the
+        // questions instead of blindly trusting the AI totals.
+        const recalculated = recalculateFromQuestions(normalizedQuestions);
+
+        if (recalculated) {
+                totalScore = recalculated.totalScore;
+                percentage = recalculated.percentage;
+                grade = recalculated.grade;
+        }
+
+        return {
+                ...result,
+                questions: normalizedQuestions,
+                totalScore,
+                percentage,
+                grade,
+                feedback: typeof result.feedback === 'string'
+                        ? result.feedback
+                        : '',
+        };
+}
+
 interface Props {
   result: GradingResult | null;
   loading: boolean;
   onPrint: () => void;
-  onSave: () => void;
+    onSave: (result: GradingResult) => void;
   isSaving?: boolean;
   onResultChange?: (result: GradingResult) => void; // Added callback for result changes
 }
@@ -118,10 +194,13 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
 
   // Sync from parent when a fresh result arrives (e.g. new grading, loaded history record)
   useEffect(() => {
-    if (result) {
-      setEditableResult(result);
-    }
-  }, [result]);
+        if (result) {
+                const validatedResult = validateAndNormalizeResult(result);
+                setEditableResult(validatedResult);
+        } else {
+                setEditableResult(null);
+        }
+}, [result]);
 
   // Every edit updates local state AND immediately propagates to the parent,
   // so whatever is on screen is exactly what Save will persist.
@@ -403,8 +482,12 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
 
       <div className="p-6 border-t border-gray-800 bg-sidebar/50 flex gap-2.5">
         <button
-          onClick={onSave}
-          disabled={isSaving}
+          onClick={() => {
+            if (currentResult) {
+              onSave(currentResult);
+            }
+          }}
+          disabled={isSaving || !currentResult}
           className="flex-1 bg-accent-green text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-green-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
         >
           {isSaving ? (
