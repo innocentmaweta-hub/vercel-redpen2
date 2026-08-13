@@ -35,12 +35,26 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
       e.target.value = '';
     };
 
-    const handleZoneClick = () => {
+   const handleZoneClick = () => {
       if (onZoneClick) {
         onZoneClick();
       } else {
         fileInputRef.current?.click();
       }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => onUpload(reader.result as string, file.name);
+      reader.readAsDataURL(file);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
     };
 
     const isLarge = variant === 'large';
@@ -79,6 +93,8 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
           whileHover={{ scale: 1.01, borderColor: hasFile ? '#22c55e' : '#2563eb' }}
           whileTap={{ scale: 0.99 }}
           onClick={handleZoneClick}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
           className={`relative flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${hasFile
               ? 'border-accent-green/50 bg-accent-green/5 group-hover:bg-accent-green/10'
               : optional
