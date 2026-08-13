@@ -834,29 +834,121 @@ export default function App() {
         }
     };
 
+    const handleGradeWithMode = async (mode: 'ai' | 'self') => {
+    if (!studentPaper) return;
+
+    if (mode === 'self') {
+        setActiveView('grade');
+        setResult({
+            score: '',
+            totalScore: '',
+            percentage: '',
+            grade: '',
+            feedback: '',
+            questions: [
+                { q: 1, score: '', feedback: '' },
+                { q: 2, score: '', feedback: '' },
+                { q: 3, score: '', feedback: '' },
+                { q: 4, score: '', feedback: '' }
+            ],
+            extracted_info: undefined
+        });
+        return;
+    }
+
+    setLoading(true);
+
+    try {
+        const response = await fetch('/api/grade', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                studentInfo,
+                markingScheme: markingScheme?.base64 ?? null,
+                studentPaper: studentPaper.base64
+            })
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+
+            if (response.status === 401) {
+                setShowAuth(true);
+            }
+
+            if (response.status === 403 && data.code === 'LIMIT_REACHED') {
+                setUpgradePromptMessage(
+                    data.message || 'You have reached your grading limit.'
+                );
+                return;
+            }
+
+            throw new Error(data.message || 'Grading request failed');
+        }
+
+        const gradingResult: ApiGradingResult = await response.json();
+
+        if (gradingResult.error) {
+            throw new Error(gradingResult.message || 'Grading failed');
+        }
+
+        const mappedResult: GradingResult = {
+            totalScore: gradingResult.total_score || gradingResult.totalScore,
+            score: gradingResult.score,
+            percentage: gradingResult.percentage,
+            grade: gradingResult.grade,
+            feedback: gradingResult.feedback || '',
+            questions: gradingResult.questions || [],
+            extracted_info: gradingResult.extracted_info || undefined,
+        };
+
+        setResult(mappedResult);
+        setActiveView('grade');
+
+        if (mappedResult.extracted_info) {
+            setStudentInfo(prev => ({
+                ...prev,
+                name: mappedResult.extracted_info?.name || prev.name,
+                program: mappedResult.extracted_info?.program || prev.program,
+                regNo: mappedResult.extracted_info?.regNo || prev.regNo,
+                year: mappedResult.extracted_info?.year || prev.year,
+                courseCode: mappedResult.extracted_info?.courseCode || prev.courseCode,
+                examDate: mappedResult.extracted_info?.examDate || prev.examDate,
+            }));
+        }
+    } catch (error) {
+        console.error('Grading failed:', error);
+        alert(error instanceof Error ? error.message : 'Grading failed.');
+    } finally {
+        setLoading(false);
+    }
+};
     // Function to handle selection from grading choice modal
     const handleGradingChoice = (choice: 'ai' | 'manual') => {
         setShowGradingChoice(false);
 
         if (choice === 'ai') {
-            setMarkingModeState('ai');
-            // Trigger grading again after setting the mode
-            setTimeout(() => {
-                if (isMaximized) {
-                    setIsMaximized(false);
-                }
-                handleGrade();
-            }, 100);
-        } else if (choice === 'manual') {
-            setMarkingModeState('self');
-            // Trigger grading again after setting the mode
-            setTimeout(() => {
-                if (isMaximized) {
-                    setIsMaximized(false);
-                }
-                handleGrade();
-            }, 100);
-        }
+    setMarkingModeState('ai');
+    setShowGradingChoice(false);
+
+    if (isMaximized) {
+        setIsMaximized(false);
+    }
+
+    handleGradeWithMode('ai');
+} else {
+    setMarkingModeState('self');
+    setShowGradingChoice(false);
+
+    if (isMaximized) {
+        setIsMaximized(false);
+    }
+
+    handleGradeWithMode('self');
+}
     };
 
     // Auto mode: trigger grading when paper is uploaded
@@ -1224,8 +1316,10 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
     const handlePaperUpload = useCallback((base64: string, name: string) => {
         setStudentPaper({ base64, name });
         // Automatically switch to self-marked mode when a paper is loaded
-        setMarkingModeState('self');
-    }, []);
+        if (!isAutoMode) {
+            setMarkingModeState('self');
+        }
+    }, [isAutoMode]);
 
     // Filter sessions based on search term
     const filteredSessions = loadSessions().filter(session =>
@@ -1839,7 +1933,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                             <button
                                 onClick={() => {
                                     setUpgradePromptMessage(null);
-                                    handleUpgrade('personal');
+                                    handleUpgrade();
                                 }}
                                 className="w-full bg-yellow-600 hover:bg-yellow-500 text-white py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest transition-all"
                             >
