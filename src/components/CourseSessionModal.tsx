@@ -296,41 +296,6 @@ export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSe
               onChange={set('sessionLabel')}
             />
           </Field>
-                        <Field label="Academic Year">
-            <select
-              className={inputCls}
-              value={form.academicYear}
-              onChange={set('academicYear')}
-            >
-              <option value="">Select academic year…</option>
-              {ACADEMIC_YEARS.map(ay => (
-                <option key={ay} value={ay}>
-                  {ay}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Custom Session Name">
-            <input
-              className={inputCls}
-              placeholder="e.g. Midterm Examination"
-              value={form.customName || ''}
-              onChange={set('customName')}
-            />
-            <span className="text-[9px] text-gray-600">
-              Use this for a custom session instead of a semester.
-            </span>
-          </Field>
-
-          <Field label="Session Label">
-            <input
-              className={inputCls}
-              placeholder="e.g. Assignment, End of Semester"
-              value={form.sessionLabel}
-              onChange={set('sessionLabel')}
-            />
-          </Field>
 
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
