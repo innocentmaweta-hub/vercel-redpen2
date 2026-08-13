@@ -884,6 +884,7 @@ export default function App() {
 
             if (response.status === 401) {
                 setShowAuth(true);
+                throw new Error('Authentication required. Please sign in.');
             }
 
             if (response.status === 403 && data.code === 'LIMIT_REACHED') {
@@ -891,9 +892,9 @@ export default function App() {
                     data.message || 'You have reached your grading limit.'
                 );
                 return;
-            }
+           }
 
-            throw new Error(data.message || 'Grading request failed');
+            throw new Error(data.message || `Grading request failed (${response.status})`);
         }
 
         const gradingResult: ApiGradingResult = await response.json();
