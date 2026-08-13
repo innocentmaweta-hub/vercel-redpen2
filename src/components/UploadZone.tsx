@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Upload, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -17,21 +17,34 @@ export interface UploadZoneHandle {
   triggerInput: () => void;
 }
 
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+
 export const UploadZone = forwardRef<UploadZoneHandle, Props>(
   ({ label, hasFile, fileName, onUpload, description, variant = 'compact', onZoneClick, optional }, ref) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadError, setUploadError] = useState('');
 
     useImperativeHandle(ref, () => ({
       triggerInput: () => fileInputRef.current?.click(),
     }));
 
+    const processFile = (file: File) => {
+      setUploadError('');
+
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setUploadError(`File is too large (max ${Math.round(MAX_FILE_SIZE_BYTES / (1024 * 1024))}MB).`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => onUpload(reader.result as string, file.name);
+      reader.onerror = () => setUploadError('Failed to read the file. Please try again.');
+      reader.readAsDataURL(file);
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => onUpload(reader.result as string, file.name);
-        reader.readAsDataURL(file);
-      }
+      if (file) processFile(file);
       e.target.value = '';
     };
 
@@ -41,6 +54,16 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
       } else {
         fileInputRef.current?.click();
       }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files?.[0];
+      if (file) processFile(file);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
     };
 
     const handleDrop = (e: React.DragEvent) => {
@@ -95,6 +118,8 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
           onClick={handleZoneClick}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
           className={`relative flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${hasFile
               ? 'border-accent-green/50 bg-accent-green/5 group-hover:bg-accent-green/10'
               : optional
@@ -127,12 +152,15 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
                   size={isLarge ? 48 : 32}
                   className={`mb-3 transition-colors ${optional ? 'text-yellow-500/40 group-hover:text-yellow-500/70' : 'text-gray-600 group-hover:text-accent-blue'}`}
                 />
-                <span className="font-bold text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
+               <span className="font-bold text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
                   {description || 'Click or drop file to upload'}
                 </span>
                 <span className="text-[10px] text-gray-600 mt-2 uppercase font-medium">Images, PDF, or Text</span>
-                {optional && (
+                {optional && !uploadError && (
                   <span className="text-[9px] text-yellow-500/50 mt-1">Can grade without this</span>
+                )}
+                {uploadError && (
+                  <span className="text-[9px] text-red-400 mt-2 font-bold max-w-[220px]">{uploadError}</span>
                 )}
               </motion.div>
             )}
