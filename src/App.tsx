@@ -981,7 +981,35 @@ export default function App() {
         const handleSave = async (resultToSave?: GradingResult) => {
         const currentResult = resultToSave || result;
 
-        if (!currentResult) { alert('No grading result to save. Grade a paper first.'); return; }
+        if (!currentResult) {
+            alert('No grading result to save. Grade a paper first.');
+            return;
+        }
+
+        const hasQuestions = Array.isArray(currentResult.questions) && currentResult.questions.length > 0;
+
+        if (hasQuestions) {
+            const incompleteQuestions = currentResult.questions.filter(q => {
+                const score = typeof q.score === 'string' ? q.score.trim() : '';
+                return !score || !parseQuestionScore(score);
+            });
+
+            if (incompleteQuestions.length > 0) {
+                alert('Cannot save this result. All question scores must be completed with valid scores such as 5/10.');
+                return;
+            }
+        }
+
+        const missingResultFields = [
+            !currentResult.totalScore && 'Total Score',
+            !currentResult.percentage && 'Percentage',
+            !currentResult.grade && 'Grade',
+        ].filter(Boolean);
+
+        if (missingResultFields.length > 0) {
+            alert(`Cannot save an incomplete result. Missing: ${missingResultFields.join(', ')}.`);
+            return;
+        }
 
         // Check if required student info is missing and prompt user to enter it
         const requiredFields = ['name', 'regNo', 'courseCode', 'program'];
