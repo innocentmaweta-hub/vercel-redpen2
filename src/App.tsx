@@ -388,9 +388,20 @@ export default function App() {
     const paperRef = useRef<UploadZoneHandle>(null);
     const paperCanvasRef = useRef<PaperCanvasHandle>(null);
 
-    const openUploadModal = (type: 'scheme' | 'paper') => {
+        const openUploadModal = (type: 'scheme' | 'paper') => {
+        // If a session is already active, uploads require no session/course gate.
+        if (semesterCourse) {
+            if (type === 'scheme') {
+                schemeRef.current?.triggerInput();
+            } else {
+                paperRef.current?.triggerInput();
+            }
+            return;
+        }
+
+        // No active session: collect session + course details first.
         setPendingUpload(type);
-        setModalType(semesterCourse ? 'continue' : 'new');
+        setModalType('new');
     };
 
     const triggerPendingUpload = () => {
@@ -438,71 +449,166 @@ export default function App() {
         setModalType('new');
     };
 
-    // "New Course" — standalone from program of study; keeps the current Year/Semester,
-    // only changes the course itself, and permanently remembers the course for the dropdown.
+    // "New Course" — keeps the active session but starts a completely fresh course context.
     const handleNewCourse = (updates: { courseCode: string; courseName: string }) => {
-        setSemesterCourse(prev => prev ? { ...prev, courseCode: updates.courseCode, courseName: updates.courseName } : {
-            courseCode: updates.courseCode,
-            courseName: updates.courseName,
+        const courseCode = updates.courseCode.trim().toUpperCase();
+        const courseName = updates.courseName.trim();
+
+        if (!courseCode) return;
+
+        setSemesterCourse(prev => prev ? {
+            ...prev,
+            courseCode,
+            courseName,
+        } : {
+            courseCode,
+            courseName,
             program: '',
             year: '',
             semester: '',
+            academicYear: '',
+            sessionLabel: '',
         });
-        clearYazaSessionHistory(updates.courseCode || 'general');
+
+        clearYazaSessionHistory(courseCode || 'general');
+
+        // Remember the course for future course dropdowns.
+        setCourses(prev => {
+            const withoutDupe = prev.filter(c => c.courseCode !== courseCode);
+            const updated = [
+                { courseCode, courseName },
+                ...withoutDupe,
+            ];
+            saveCourses(updated);
+            return updated;
+        });
+
+        // Start the new course completely blank.
         setStudentInfo(prev => ({
             ...prev,
-            courseCode: updates.courseCode || prev.courseCode,
+            name: '',
+            regNo: '',
+            program: '',
+            courseCode,
+            examDate: '',
         }));
 
-        // Persist the course so it shows up in the Course dropdown immediately,
-        // even before any paper has been graded under it.
-        const code = updates.courseCode.trim().toUpperCase();
-        if (code) {
-            setCourses(prev => {
-                const withoutDupe = prev.filter(c => c.courseCode !== code);
-                const updated = [{ courseCode: code, courseName: updates.courseName.trim() }, ...withoutDupe];
-                saveCourses(updated);
-                return updated;
-            });
-        }
+        setMarkingScheme(null);
+        setStudentPaper(null);
+        setResult(null);
+        setExaminerRemarks('');
+        setMarkingModeState('unmarked');
+        setActiveTool(null);
+        setZoom(1);
+        setClearCount(c => c + 1);
+        setIsMaximized(false);
+        setIsAutoMode(false);
+        setActiveView('grade');
 
         setShowNewCourseModal(false);
     };
 
-    // "New Session" — changes only academic year/semester/session label/custom name, keeps the current course untouched
-    const handleNewSession = (updates: { academicYear: string; semester: string; sessionLabel: string; customName: string }) => {
-        setSemesterCourse(prev => prev ? { ...prev, ...updates } : {
-            courseCode: '',
-            courseName: '',
+        // "New Session" — creates a completely fresh session + course context.
+    // All previous marking/student work is cleared.
+    const handleNewSession = (updates: {
+        academicYear: string;
+        year: string;
+        semester: string;
+        sessionLabel: string;
+        customName: string;
+        courseCode: string;
+        courseName: string;
+    }) => {
+        const newSession: SemesterCourse = {
+            courseCode: updates.courseCode.trim().toUpperCase(),
+            courseName: updates.courseName.trim(),
             program: '',
-            year: '',
-            ...updates,
-        });
+            year: updates.year,
+            semester: updates.semester,
+            academicYear: updates.academicYear,
+            sessionLabel: updates.sessionLabel,
+            customName: updates.customName.trim() || undefined,
+        };
+
+        setSemesterCourse(newSession);
+
+        clearYazaSessionHistory(newSession.courseCode || 'general');
+
+        // Store the new session for Load Session / future reuse.
+        const storedSessions = loadSessions();
+        const updatedSessions = [
+            newSession,
+            ...storedSessions.filter(
+                s =>
+                    !(
+                        s.courseCode === newSession.courseCode &&
+                        s.academicYear === newSession.academicYear &&
+                        s.semester === newSession.semester &&
+                        s.sessionLabel === newSession.sessionLabel &&
+                        s.customName === newSession.customName
+                    )
+            ),
+        ];
+        saveSessions(updatedSessions);
+
+        // Keep only the new session context.
         setStudentInfo(prev => ({
             ...prev,
-            semester: updates.semester || prev.semester,
+            name: '',
+            regNo: '',
+            program: '',
+            year: newSession.year,
+            semester: newSession.semester,
+            courseCode: newSession.courseCode,
+            examDate: '',
         }));
+
+        // New session starts completely blank.
+        setMarkingScheme(null);
+        setStudentPaper(null);
+        setResult(null);
+        setExaminerRemarks('');
+        setMarkingModeState('unmarked');
+        setActiveTool(null);
+        setZoom(1);
+        setClearCount(c => c + 1);
+        setIsMaximized(false);
+        setIsAutoMode(false);
+        setActiveView('grade');
+
         setShowNewSessionModal(false);
     };
 
-    // "New Paper" — keeps session + course context (academic year, semester, course code, exam date)
-    // but clears everything specific to the previous student: name, reg no, program,
-    // plus the paper/result itself.
+       // "New Paper" — keeps the entire active session/course context and marking scheme.
+    // Only the previous student's paper and student-specific grading data are cleared.
     const handleNewPaper = () => {
-        if (result || markingScheme || studentPaper) {
-            if (!window.confirm('Start a new paper? Current work will be cleared.')) return;
+        if (result || studentPaper) {
+            if (!window.confirm('Start a new paper? Current student work will be cleared.')) return;
         }
+
         setStudentInfo(prev => ({
             ...prev,
             name: '',
             regNo: '',
             program: '',
         }));
-        setMarkingScheme(null);
+
+        // Keep:
+        // - academic year
+        // - year
+        // - semester/session
+        // - course
+        // - exam date
+        // - marking scheme
+
         setStudentPaper(null);
         setResult(null);
         setExaminerRemarks('');
         setMarkingModeState('unmarked');
+        setActiveTool(null);
+        setZoom(1);
+        setClearCount(c => c + 1);
+        setIsMaximized(false);
         setActiveView('grade');
     };
 
