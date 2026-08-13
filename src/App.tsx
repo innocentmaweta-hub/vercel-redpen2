@@ -1254,7 +1254,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                                 description="Upload Reference"
                                                 variant="compact"
                                                 optional
-                                                onZoneClick={() => schemeRef.current?.triggerInput()}
+                                                onZoneClick={() => openUploadModal('scheme')}
                                             />
                                         </div>
                                         <div className="flex-1">
@@ -1561,7 +1561,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                                                 fileName={undefined}
                                                 description="Large Surface for Student Paper Upload"
                                                 variant="large"
-                                                onZoneClick={() => paperRef.current?.triggerInput()}
+                                                onZoneClick={() => openUploadModal('paper')}
                                             />
                                         )}
                                     </div>
