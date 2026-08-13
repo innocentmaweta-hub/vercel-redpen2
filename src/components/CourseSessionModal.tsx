@@ -36,7 +36,16 @@ interface NewCourseModalProps {
 
 interface NewSessionModalProps {
   currentSemesterCourse: SemesterCourse | null;
-  onConfirm: (updates: { academicYear: string; semester: string; sessionLabel: string; customName: string }) => void;
+  courses: { courseCode: string; courseName: string }[];
+  onConfirm: (updates: {
+    academicYear: string;
+    year: string;
+    semester: string;
+    sessionLabel: string;
+    customName: string;
+    courseCode: string;
+    courseName: string;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -443,19 +452,59 @@ export const NewCourseModal = ({ currentSemesterCourse, onConfirm, onCancel }: N
   );
 };
 
-export const NewSessionModal = ({ currentSemesterCourse, onConfirm, onCancel }: NewSessionModalProps) => {
-  const [academicYear, setAcademicYear] = useState(currentSemesterCourse?.academicYear || '');
-  const [semester, setSemester] = useState(currentSemesterCourse?.semester || '');
+export const NewSessionModal = ({
+  currentSemesterCourse,
+  courses,
+  onConfirm,
+  onCancel,
+}: NewSessionModalProps) => {
+  const [courseMode, setCourseMode] = useState<'select' | 'custom'>(
+    courses.length > 0 ? 'select' : 'custom'
+  );
+
+  const [courseCode, setCourseCode] = useState(
+    currentSemesterCourse?.courseCode || ''
+  );
+  const [courseName, setCourseName] = useState(
+    currentSemesterCourse?.courseName || ''
+  );
+  const [academicYear, setAcademicYear] = useState('');
+  const [year, setYear] = useState('');
+  const [semester, setSemester] = useState('');
   const [sessionLabel, setSessionLabel] = useState('');
   const [customName, setCustomName] = useState('');
   const [error, setError] = useState('');
 
   const handleConfirm = () => {
-    if (!customName.trim() && !academicYear.trim()) {
-      setError('Enter a custom name, or select an academic year.');
+    if (!courseCode.trim()) {
+      setError('Course code is required.');
       return;
     }
-    onConfirm({ academicYear, semester, sessionLabel, customName });
+
+    if (!academicYear.trim()) {
+      setError('Academic year is required.');
+      return;
+    }
+
+    if (!year.trim()) {
+      setError('Year of study is required.');
+      return;
+    }
+
+    if (!semester.trim() && !customName.trim()) {
+      setError('Select a semester or enter a custom session name.');
+      return;
+    }
+
+    onConfirm({
+      academicYear,
+      year,
+      semester,
+      sessionLabel,
+      customName,
+      courseCode,
+      courseName,
+    });
   };
 
   return (
@@ -476,32 +525,149 @@ export const NewSessionModal = ({ currentSemesterCourse, onConfirm, onCancel }: 
             <div>
               <p className="text-[13px] font-black text-white">New Session</p>
               <p className="text-[10px] text-gray-500">
-                {currentSemesterCourse?.courseCode
-                  ? `Keeps course: ${currentSemesterCourse.courseCode}`
-                  : 'Set academic year, semester, and session label'}
+                Start a new session and course
               </p>
             </div>
           </div>
-          <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
+
+          <button
+            onClick={onCancel}
+            className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors"
+          >
             <X size={15} />
           </button>
         </div>
 
         <div className="p-5 flex flex-col gap-4">
+
+          {courseMode === 'select' && courses.length > 0 ? (
+            <Field label="Course *">
+              <select
+                className={inputCls}
+                value={courseCode}
+                onChange={(e) => {
+                  const chosen = courses.find(
+                    c => c.courseCode === e.target.value
+                  );
+
+                  setCourseCode(chosen?.courseCode || '');
+                  setCourseName(chosen?.courseName || '');
+                }}
+                autoFocus
+              >
+                <option value="">Select a course…</option>
+
+                {courses.map(c => (
+                  <option key={c.courseCode} value={c.courseCode}>
+                    {c.courseCode}
+                    {c.courseName ? ` — ${c.courseName}` : ''}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCourseMode('custom');
+                  setCourseCode('');
+                  setCourseName('');
+                }}
+                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold mt-1 text-left"
+              >
+                + Add a new course instead
+              </button>
+            </Field>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Course Code *">
+                <input
+                  className={inputCls}
+                  placeholder="e.g. CS301"
+                  value={courseCode}
+                  onChange={(e) => setCourseCode(e.target.value)}
+                  autoFocus
+                />
+              </Field>
+
+              <Field label="Course Name">
+                <input
+                  className={inputCls}
+                  placeholder="e.g. Data Structures"
+                  value={courseName}
+                  onChange={(e) => setCourseName(e.target.value)}
+                />
+              </Field>
+
+              {courses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCourseMode('select')}
+                  className="col-span-2 text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold text-left"
+                >
+                  ← Choose an existing course instead
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Academic Year *">
-              <select className={inputCls} value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
+              <select
+                className={inputCls}
+                value={academicYear}
+                onChange={(e) => setAcademicYear(e.target.value)}
+              >
                 <option value="">Select academic year…</option>
-                {ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}
+                {ACADEMIC_YEARS.map(ay => (
+                  <option key={ay} value={ay}>
+                    {ay}
+                  </option>
+                ))}
               </select>
             </Field>
-            <Field label="Semester">
-              <select className={inputCls} value={semester} onChange={(e) => setSemester(e.target.value)}>
-                <option value="">Select semester…</option>
-                {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
+
+            <Field label="Year of Study *">
+              <select
+                className={inputCls}
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              >
+                <option value="">Select year…</option>
+                {YEARS_OF_STUDY.map(y => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
               </select>
             </Field>
           </div>
+
+          <Field label="Semester">
+            <select
+              className={inputCls}
+              value={semester}
+              onChange={(e) => setSemester(e.target.value)}
+            >
+              <option value="">Select semester…</option>
+              {SEMESTERS.map(s => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Custom Session Name">
+            <input
+              className={inputCls}
+              placeholder="e.g. Midterm Examination"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+            />
+            <span className="text-[9px] text-gray-600">
+              Use this instead of a semester for a custom session.
+            </span>
+          </Field>
 
           <Field label="Session Label">
             <input
@@ -509,16 +675,6 @@ export const NewSessionModal = ({ currentSemesterCourse, onConfirm, onCancel }: 
               placeholder="e.g. Assignment, End of Semester"
               value={sessionLabel}
               onChange={(e) => setSessionLabel(e.target.value)}
-              autoFocus
-            />
-          </Field>
-
-          <Field label="Custom Name (overrides the above)">
-            <input
-              className={inputCls}
-              placeholder="e.g. Midterm Batch 2 — leave blank to use Academic Year/Semester/Label"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
             />
           </Field>
 
