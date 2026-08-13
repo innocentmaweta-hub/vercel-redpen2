@@ -978,8 +978,10 @@ export default function App() {
 
     const [isSaving, setIsSaving] = useState(false);
 
-    const handleSave = async () => {
-        if (!result) { alert('No grading result to save. Grade a paper first.'); return; }
+        const handleSave = async (resultToSave?: GradingResult) => {
+        const currentResult = resultToSave || result;
+
+        if (!currentResult) { alert('No grading result to save. Grade a paper first.'); return; }
 
         // Check if required student info is missing and prompt user to enter it
         const requiredFields = ['name', 'regNo', 'courseCode', 'program'];
@@ -1006,7 +1008,7 @@ export default function App() {
                 id: Date.now().toString(),
                 date: new Date().toISOString(),
                 studentInfo,
-                result: { ...result, feedback: result.feedback + (examinerRemarks ? `\n\nExaminer Remarks: ${examinerRemarks}` : '') }
+                result: { ...currentResult, feedback: currentResult.feedback + (examinerRemarks ? `\n\nExaminer Remarks: ${examinerRemarks}` : '') }
             };
             const updated = [record, ...history].slice(0, 50);
             setHistory(updated);
@@ -1038,7 +1040,7 @@ export default function App() {
                     customName: semesterCourse?.customName || '',
                 };
                 const courseSheetKey = semesterCourse?.courseCode || studentInfo.courseCode || 'general';
-                await appendResultToSessionExcel(folder, workbookKey, courseSheetKey, studentInfo, result);
+                await appendResultToSessionExcel(folder, workbookKey, courseSheetKey, studentInfo, currentResult);
             } catch (exportError) {
                 console.error('Failed to export PDF/Excel:', exportError);
                 alert('Saved to history, but exporting the PDF/Excel file failed. Check the console for details.');
