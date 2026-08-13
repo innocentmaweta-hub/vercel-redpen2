@@ -835,7 +835,13 @@ export default function App() {
     };
 
     const handleGradeWithMode = async (mode: 'ai' | 'self') => {
+    if (isGradingInProgress) {
+        return;
+    }
+
     if (!studentPaper) return;
+
+    setIsGradingInProgress(true);
 
     if (mode === 'self') {
         setActiveView('grade');
@@ -853,6 +859,7 @@ export default function App() {
             ],
             extracted_info: undefined
         });
+        setIsGradingInProgress(false);
         return;
     }
 
@@ -924,6 +931,7 @@ export default function App() {
         alert(error instanceof Error ? error.message : 'Grading failed.');
     } finally {
         setLoading(false);
+        setIsGradingInProgress(false);
     }
 };
     // Function to handle selection from grading choice modal
