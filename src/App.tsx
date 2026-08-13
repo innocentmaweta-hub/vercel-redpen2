@@ -1329,23 +1329,26 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                     ) : (
                         <>
                             <div className={`${isMaximized ? 'flex-1 p-0' : 'flex-[3] p-4'} flex flex-col gap-4 overflow-hidden`}>
-
-                                {semesterCourse && !isMaximized && (
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
-                                        <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
-                                        <span className="text-[10px] font-black text-accent-blue uppercase tracking-wider">
-                                            Semester: {semesterCourse.courseCode}
-                                        </span>
-                                        {semesterCourse.courseName && (
-                                            <span className="text-[10px] text-gray-500">— {semesterCourse.courseName}</span>
-                                        )}
-                                        <button
-                                            onClick={() => setSemesterCourse(null)}
-                                            className="ml-auto text-[9px] text-gray-600 hover:text-gray-400 uppercase font-bold tracking-wider transition-colors"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
+                                
+                                    {semesterCourse && !isMaximized && (
+                                        <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
+                                            <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
+                                
+                                            <span className="text-[10px] font-black text-accent-blue uppercase tracking-wider">
+                                                Session: {semesterCourse.customName || semesterCourse.sessionLabel || semesterCourse.semester || 'Session'}
+                                            </span>
+                                
+                                            <span className="text-[10px] text-gray-500">
+                                                • Course: {semesterCourse.courseCode}
+                                            </span>
+                                
+                                            <button
+                                                onClick={() => setSemesterCourse(null)}
+                                                className="ml-auto text-[9px] text-gray-600 hover:text-gray-400 uppercase font-bold tracking-wider transition-colors"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
                                 )}
 
                                 {!isMaximized && (
