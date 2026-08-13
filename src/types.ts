@@ -13,10 +13,10 @@ export interface ExtractedInfo {
 }
 // Raw response from the AI grading API (snake_case fields)
 export interface ApiGradingResult {
-    total_score?: string;
-    totalScore?: string;
-    score?: string;
-    percentage?: string;
+    total_score?: string | number;
+    totalScore?: string | number;
+    score?: string | number;
+    percentage?: string | number;
     grade?: string;
     questions?: QuestionResult[];
     feedback?: string;
@@ -25,9 +25,9 @@ export interface ApiGradingResult {
     message?: string;
 }
 export interface GradingResult {
-    totalScore?: string;
-    score?: string;
-    percentage?: string;
+    totalScore?: string | number;
+    score?: string | number;
+    percentage?: string | number;
     grade?: string;
     questions?: QuestionResult[];
     feedback?: string;
@@ -84,4 +84,16 @@ export interface SemesterCourse {
     customName?: string; // Fully custom workbook name — overrides academicYear-semester-sessionLabel entirely when set
     examDate?: string;
     duration?: number;
+}
+
+
+export function parseScore(value: string | number | undefined): number {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+    if (typeof value === 'string') {
+        const match = value.match(/-?\d+(?:\.\d+)?/);
+        return match ? Number(match[0]) : 0;
+    }
+
+    return 0;
 }
