@@ -1988,6 +1988,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 {showNewSessionModal && (
                     <NewSessionModal
                         currentSemesterCourse={semesterCourse}
+                        courses={courses}
                         onConfirm={handleNewSession}
                         onCancel={() => setShowNewSessionModal(false)}
                     />
