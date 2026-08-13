@@ -101,8 +101,27 @@ export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSe
   const set = (k: keyof SemesterCourse) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
 
-  const handleConfirm = () => {
-    if (!form.courseCode.trim()) { setError('Course code is required.'); return; }
+    const handleConfirm = () => {
+    if (!form.courseCode.trim()) {
+      setError('Course code is required.');
+      return;
+    }
+
+    if (!form.academicYear.trim()) {
+      setError('Academic year is required.');
+      return;
+    }
+
+    if (!form.year.trim()) {
+      setError('Year of study is required.');
+      return;
+    }
+
+    if (!form.semester.trim() && !form.customName?.trim() && !form.sessionLabel.trim()) {
+      setError('Select a semester or enter a custom session name.');
+      return;
+    }
+
     onConfirm(form);
   };
 
@@ -248,8 +267,35 @@ export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSe
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Academic Year">
+                    <Field label="Academic Year *">
+            <select className={inputCls} value={form.academicYear} onChange={set('academicYear')}>
+              <option value="">Select academic year…</option>
+              {ACADEMIC_YEARS.map(ay => (
+                <option key={ay} value={ay}>{ay}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Custom Session Name">
+            <input
+              className={inputCls}
+              placeholder="e.g. Midterm Examination"
+              value={form.customName || ''}
+              onChange={set('customName')}
+            />
+            <span className="text-[9px] text-gray-600">
+              Use this for a custom session instead of a semester.
+            </span>
+          </Field>
+
+          <Field label="Session Label">
+            <input
+              className={inputCls}
+              placeholder="e.g. Assignment, End of Semester"
+              value={form.sessionLabel}
+              onChange={set('sessionLabel')}
+            />
+          </Field>
               <select className={inputCls} value={form.academicYear} onChange={set('academicYear')}>
                 <option value="">Select academic year…</option>
                 {ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}
