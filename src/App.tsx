@@ -21,7 +21,7 @@ import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
 import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, NewSessionModal, SemesterCourse } from './components/CourseSessionModal';
 import { ToolOptionsBar } from './components/ToolOptionsBar';
-import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse } from './types';
+import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse, parseScore } from './types';
 import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { YazaPanel } from './components/YazaPanel';
