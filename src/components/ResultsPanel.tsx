@@ -128,55 +128,55 @@ function recalculateFromQuestions(questions: any[]): { totalScore: string; perce
 }
 
 function validateAndNormalizeResult(result: GradingResult): GradingResult | null {
-        if (!result || typeof result !== 'object') {
-                return null;
-        }
+    if (!result || typeof result !== 'object') {
+        return null;
+    }
 
-        const questions = Array.isArray(result.questions)
-                ? result.questions
-                : [];
+    const questions = Array.isArray(result.questions)
+        ? result.questions
+        : [];
 
-        const normalizedQuestions = questions
-                .filter(q => q && typeof q === 'object')
-                .map((q, index) => ({
-                        ...q,
-                        q: q.q ?? index + 1,
-                        score: typeof q.score === 'string' ? q.score.trim() : '',
-                        feedback: typeof q.feedback === 'string' ? q.feedback : '',
-                }));
+    const normalizedQuestions = questions
+        .filter(q => q && typeof q === 'object')
+        .map((q, index) => ({
+            ...q,
+            q: q.q ?? index + 1,
+            score: typeof q.score === 'string' ? q.score.trim() : '',
+            feedback: typeof q.feedback === 'string' ? q.feedback : '',
+        }));
 
-        let totalScore = typeof result.totalScore === 'string'
-                ? result.totalScore.trim()
-                : '';
+    let totalScore = typeof result.totalScore === 'string'
+        ? result.totalScore.trim()
+        : '';
 
-        let percentage = typeof result.percentage === 'string'
-                ? result.percentage.trim()
-                : '';
+    let percentage = typeof result.percentage === 'string'
+        ? result.percentage.trim()
+        : '';
 
-        let grade = typeof result.grade === 'string'
-                ? result.grade.trim()
-                : '';
+    let grade = typeof result.grade === 'string'
+        ? result.grade.trim()
+        : '';
 
-        // If all question scores are valid, calculate the result from the
-        // questions instead of blindly trusting the AI totals.
-        const recalculated = recalculateFromQuestions(normalizedQuestions);
+    // If all question scores are valid, calculate the result from the
+    // questions instead of blindly trusting the AI totals.
+    const recalculated = recalculateFromQuestions(normalizedQuestions);
 
-        if (recalculated) {
-                totalScore = recalculated.totalScore;
-                percentage = recalculated.percentage;
-                grade = recalculated.grade;
-        }
+    if (recalculated) {
+        totalScore = recalculated.totalScore;
+        percentage = recalculated.percentage;
+        grade = recalculated.grade;
+    }
 
-        return {
-                ...result,
-                questions: normalizedQuestions,
-                totalScore,
-                percentage,
-                grade,
-                feedback: typeof result.feedback === 'string'
-                        ? result.feedback
-                        : '',
-        };
+    return {
+        ...result,
+        questions: normalizedQuestions,
+        totalScore,
+        percentage,
+        grade,
+        feedback: typeof result.feedback === 'string'
+            ? result.feedback
+            : '',
+    };
 }
 
 interface Props {
