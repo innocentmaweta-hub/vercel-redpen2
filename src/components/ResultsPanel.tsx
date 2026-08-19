@@ -46,10 +46,8 @@ function parseQuestionScore(value: string | undefined): { score: number; maximum
 function validateQuestionScore(value: string): string | null {
   const trimmed = value.trim();
 
-  // Empty input is valid while editing.
   if (!trimmed) return null;
 
-  // Allow an incomplete expression while the examiner is typing.
   if (/^\d+(?:\.\d+)?\s*\/$/.test(trimmed)) {
     return null;
   }
@@ -81,9 +79,32 @@ function validateQuestionScore(value: string): string | null {
 
   return null;
 }
+
+function parseTotalScore(value: string): { score: number; maximum: number } | null {
+  return parseQuestionScore(value);
+}
+
+function parsePercentage(value: string): number | null {
+  if (typeof value !== 'string') return null;
+
+  const normalized = value.trim().replace(/%$/, '');
+  if (!normalized) return null;
+
+  const percentage = Number(normalized);
+  if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+    return null;
+  }
+
+  return percentage;
+}
+
+function calculateGrade(percentage: number): string {
+  const scale = [...GRADE_SCALE].sort((a, b) => b.min - a.min);
+  return (scale.find(entry => percentage >= entry.min) || scale[scale.length - 1]).grade;
+}
+
 // Recomputes totalScore/percentage/grade from the current set of question scores.
-// Only questions with a valid "X/Y" score are counted — a question left blank
-// (e.g. still being typed) doesn't distort the running total.
+// A result is only recalculated when every question has a valid score.
 function recalculateFromQuestions(questions: any[]): { totalScore: string; percentage: string; grade: string } | null {
   if (!Array.isArray(questions) || questions.length === 0) {
     return null;
@@ -92,8 +113,6 @@ function recalculateFromQuestions(questions: any[]): { totalScore: string; perce
   const parsedQuestions = questions.map(q => parseQuestionScore(q?.score));
 
   // Do not recalculate while any question is blank or incomplete.
-  // This prevents an unfinished entry such as "7/" from being treated
-  // as a valid score or causing the total to change prematurely.
   if (parsedQuestions.some(parsed => parsed === null)) {
     return null;
   }
@@ -115,114 +134,148 @@ function recalculateFromQuestions(questions: any[]): { totalScore: string; perce
 
   const percentage = Number(((totalScore / totalMaximum) * 100).toFixed(2));
 
-  const scale = [...GRADE_SCALE].sort((a, b) => b.min - a.min);
-  const gradeEntry =
-    scale.find(entry => percentage >= entry.min) ||
-    scale[scale.length - 1];
-
   return {
     totalScore: `${Number(totalScore.toFixed(2))}/${Number(totalMaximum.toFixed(2))}`,
     percentage: String(percentage),
-    grade: gradeEntry.grade,
+    grade: calculateGrade(percentage),
   };
 }
 
-function validateAndNormalizeResult(result: GradingResult): GradingResult | null {
-    if (!result || typeof result !== 'object') {
-        return null;
+function validateAndNormalizeResult(
+  result: GradingResult
+): { result: GradingResult; warning: string | null } | null {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+
+  const questions = Array.isArray(result.questions) ? result.questions : [];
+
+  const normalizedQuestions = questions
+    .filter(q => q && typeof q === 'object')
+    .map((q, index) => ({
+      ...q,
+      q: q.q ?? index + 1,
+      score: typeof q.score === 'string' ? q.score.trim() : '',
+      feedback: typeof q.feedback === 'string' ? q.feedback : '',
+    }));
+
+  let totalScore = typeof result.totalScore === 'string'
+    ? result.totalScore.trim()
+    : '';
+
+  let percentage = typeof result.percentage === 'string'
+    ? result.percentage.trim()
+    : '';
+
+  let grade = typeof result.grade === 'string'
+    ? result.grade.trim()
+    : '';
+
+  const suppliedTotal = parseTotalScore(totalScore);
+  const suppliedPercentage = parsePercentage(percentage);
+  let warning: string | null = null;
+
+  // If every question score is valid, the question-level scores are the source
+  // of truth. Detect conflicts with the AI values before replacing them.
+  const recalculated = recalculateFromQuestions(normalizedQuestions);
+
+  if (recalculated) {
+    const calculatedTotal = parseTotalScore(recalculated.totalScore);
+    const calculatedPercentage = parsePercentage(recalculated.percentage);
+    const calculatedGrade = recalculated.grade;
+
+    const totalConflict = suppliedTotal && calculatedTotal && (
+      Math.abs(suppliedTotal.score - calculatedTotal.score) > 0.001 ||
+      Math.abs(suppliedTotal.maximum - calculatedTotal.maximum) > 0.001
+    );
+
+    const percentageConflict = suppliedPercentage !== null && calculatedPercentage !== null &&
+      Math.abs(suppliedPercentage - calculatedPercentage) > 0.01;
+
+    const gradeConflict = !!grade && grade.toUpperCase() !== calculatedGrade.toUpperCase();
+
+    if (totalConflict || percentageConflict || gradeConflict) {
+      warning = 'The grading response contained inconsistent totals. The result was recalculated from the question scores.';
     }
 
-    const questions = Array.isArray(result.questions)
-        ? result.questions
-        : [];
+    totalScore = recalculated.totalScore;
+    percentage = recalculated.percentage;
+    grade = recalculated.grade;
+  } else if (suppliedPercentage !== null) {
+    // When question scores are incomplete, still reject impossible percentage
+    // values and keep the displayed grade consistent with the percentage when possible.
+    const calculatedGrade = calculateGrade(suppliedPercentage);
 
-    const normalizedQuestions = questions
-        .filter(q => q && typeof q === 'object')
-        .map((q, index) => ({
-            ...q,
-            q: q.q ?? index + 1,
-            score: typeof q.score === 'string' ? q.score.trim() : '',
-            feedback: typeof q.feedback === 'string' ? q.feedback : '',
-        }));
-
-    let totalScore = typeof result.totalScore === 'string'
-        ? result.totalScore.trim()
-        : '';
-
-    let percentage = typeof result.percentage === 'string'
-        ? result.percentage.trim()
-        : '';
-
-    let grade = typeof result.grade === 'string'
-        ? result.grade.trim()
-        : '';
-
-    // If all question scores are valid, calculate the result from the
-    // questions instead of blindly trusting the AI totals.
-    const recalculated = recalculateFromQuestions(normalizedQuestions);
-
-    if (recalculated) {
-        totalScore = recalculated.totalScore;
-        percentage = recalculated.percentage;
-        grade = recalculated.grade;
+    if (grade && grade.toUpperCase() !== calculatedGrade.toUpperCase()) {
+      warning = 'The grading response contains an inconsistent percentage and grade.';
     }
+  }
 
-    return {
-        ...result,
-        questions: normalizedQuestions,
-        totalScore,
-        percentage,
-        grade,
-        feedback: typeof result.feedback === 'string'
-            ? result.feedback
-            : '',
-    };
+  return {
+    result: {
+      ...result,
+      questions: normalizedQuestions,
+      totalScore,
+      percentage,
+      grade,
+      feedback: typeof result.feedback === 'string' ? result.feedback : '',
+    },
+    warning,
+  };
 }
 
 interface Props {
   result: GradingResult | null;
   loading: boolean;
   onPrint: () => void;
-    onSave: (result: GradingResult) => void;
+  onSave: (result: GradingResult) => void;
   isSaving?: boolean;
-  onResultChange?: (result: GradingResult) => void; // Added callback for result changes
+  onResultChange?: (result: GradingResult) => void;
 }
 
 export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onResultChange }: Props) => {
   const [editableResult, setEditableResult] = useState<GradingResult | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [validationWarning, setValidationWarning] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
 
-  // Sync from parent when a fresh result arrives (e.g. new grading, loaded history record)
+  // Sync from parent when a fresh result arrives.
   useEffect(() => {
-        if (result) {
-                const validatedResult = validateAndNormalizeResult(result);
-                setEditableResult(validatedResult);
-        } else {
-                setEditableResult(null);
-        }
-}, [result]);
+    if (result) {
+      const validation = validateAndNormalizeResult(result);
 
-  // Every edit updates local state AND immediately propagates to the parent,
-  // so whatever is on screen is exactly what Save will persist.
+      if (validation) {
+        setEditableResult(validation.result);
+        setValidationWarning(validation.warning);
+        setValidationError(null);
+      } else {
+        setEditableResult(null);
+        setValidationWarning(null);
+        setValidationError('The grading result is invalid or incomplete. Please grade the paper again.');
+      }
+    } else {
+      setEditableResult(null);
+      setValidationWarning(null);
+      setValidationError(null);
+    }
+
+    setScoreErrors({});
+    setIsEditing(false);
+  }, [result]);
+
   const updateResult = (updated: GradingResult) => {
     setEditableResult(updated);
     onResultChange?.(updated);
   };
 
   const handleInputChange = (field: keyof GradingResult, value: string) => {
-    if (editableResult) {
-      updateResult({
-        ...editableResult,
-        [field]: value
-      });
-    }
-  };
+    if (!editableResult) return;
 
-  const [isTyping, setIsTyping] = useState<Record<string, boolean>>({});
-  const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
-
-  const handleTypingStart = (field: string) => {
-    setIsTyping(prev => ({ ...prev, [field]: true }));
+    updateResult({
+      ...editableResult,
+      [field]: value,
+    });
   };
 
   if (loading) {
@@ -239,6 +292,16 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
     );
   }
 
+  if (validationError) {
+    return (
+      <div className="bg-card h-full rounded-3xl border border-red-900/40 shadow-xl flex flex-col items-center justify-center p-8 text-center border-dashed">
+        <AlertCircle size={48} className="text-red-500/70 mb-4" />
+        <h3 className="text-sm font-bold uppercase tracking-widest text-red-400">Grading Result Unavailable</h3>
+        <p className="text-[10px] text-gray-500 mt-2 uppercase font-medium max-w-xs">{validationError}</p>
+      </div>
+    );
+  }
+
   if (!result && !editableResult) {
     return (
       <div className="bg-card h-full rounded-3xl border border-gray-800 shadow-xl flex flex-col items-center justify-center p-8 text-center border-dashed">
@@ -251,10 +314,6 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
 
   const currentResult = editableResult || result;
 
-  // Determine if this is a self-marked result based on placeholder values
-  const isSelfMarked = currentResult?.feedback === 'Manually type the recommendations of this paper here' ||
-    currentResult?.totalScore === '_/100';
-
   if (!currentResult) {
     return (
       <div className="bg-card h-full rounded-3xl border border-gray-800 shadow-xl flex flex-col items-center justify-center p-8 text-center border-dashed">
@@ -265,9 +324,22 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
     );
   }
 
-  // Ghosted styling for unfilled placeholder text — dimmer + italic, so it reads
-  // as "not filled in yet" rather than real content.
+  const isSelfMarked = currentResult?.feedback === 'Manually type the recommendations of this paper here' ||
+    currentResult?.totalScore === '_/100';
+
   const ghostClass = "text-gray-600 italic opacity-60";
+
+  const allQuestionsScored = Array.isArray(currentResult.questions) &&
+    currentResult.questions.length > 0 &&
+    currentResult.questions.every((q: any) => parseQuestionScore(q?.score) !== null);
+
+  const hasIncompleteQuestions = Array.isArray(currentResult.questions) &&
+    currentResult.questions.length > 0 &&
+    !allQuestionsScored;
+
+  const hasCompleteOverallResult = !!currentResult.totalScore &&
+    !!currentResult.percentage &&
+    !!currentResult.grade;
 
   return (
     <div className="bg-card h-full rounded-3xl border border-gray-800 shadow-xl flex flex-col overflow-hidden">
@@ -301,6 +373,13 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
           </div>
         </div>
 
+        {validationWarning && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
+            <AlertCircle size={14} className="text-yellow-500 mt-0.5 shrink-0" />
+            <span className="text-[10px] leading-relaxed text-yellow-500/80">{validationWarning}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800">
             <span className="text-[10px] uppercase font-bold text-gray-600 block mb-1">Total Score</span>
@@ -308,25 +387,24 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
               <input
                 type="text"
                 value={currentResult?.totalScore || ''}
-                onChange={(e) => handleInputChange('totalScore', e.target.value)}
-                placeholder={isSelfMarked ? '_/100' : undefined}
-                className="text-3xl font-mono font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
+                readOnly
+                className="text-3xl font-mono font-bold text-ink bg-transparent border-b border-gray-700 focus:outline-none w-full cursor-default"
               />
             ) : (
               <span className={`text-3xl font-mono font-bold ${isSelfMarked && !currentResult?.totalScore ? ghostClass : 'text-ink'}`}>
-                {isSelfMarked && !isEditing && !currentResult?.totalScore ? '_/100' : currentResult?.totalScore}
+                {isSelfMarked && !isEditing && !currentResult?.totalScore ? '_/100' : currentResult?.totalScore || '—'}
               </span>
             )}
           </div>
+
           <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800">
             <span className="text-[10px] uppercase font-bold text-gray-600 block mb-1">Final Grade</span>
             {isEditing ? (
               <input
                 type="text"
                 value={isSelfMarked && !currentResult?.grade ? '' : currentResult?.grade || ''}
-                onChange={(e) => handleInputChange('grade', e.target.value)}
-                placeholder={isSelfMarked && !currentResult?.grade ? '_' : undefined}
-                className="text-3xl font-bold text-ink bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none w-full placeholder:text-gray-600 placeholder:italic placeholder:opacity-60"
+                readOnly
+                className="text-3xl font-bold text-ink bg-transparent border-b border-gray-700 focus:outline-none w-full cursor-default"
               />
             ) : (
               <span className={`text-3xl font-bold ${isSelfMarked && !currentResult?.grade
@@ -337,15 +415,27 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                     ? 'text-gray-400'
                     : 'text-accent-blue'
                 }`}>
-                {isSelfMarked && !isEditing && !currentResult?.grade ? '_' : currentResult?.grade}
+                {isSelfMarked && !isEditing && !currentResult?.grade ? '_' : currentResult?.grade || '—'}
               </span>
             )}
           </div>
         </div>
+
+        {isEditing && hasIncompleteQuestions && (
+          <p className="mt-3 text-[10px] text-yellow-500/70">
+            Complete every question score before the total, percentage, and grade can be recalculated.
+          </p>
+        )}
+
+        {!isSelfMarked && !hasCompleteOverallResult && !hasIncompleteQuestions && (
+          <p className="mt-3 text-[10px] text-red-400/80">
+            The grading result is missing required overall marks and cannot be saved until it is completed.
+          </p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto desktop-scroll p-6 space-y-4">
-        {currentResult && currentResult.questions && currentResult.questions.length > 0 && currentResult.questions.map((q: any, idx: number) => (
+        {currentResult.questions && currentResult.questions.length > 0 ? currentResult.questions.map((q: any, idx: number) => (
           <motion.div
             key={idx}
             initial={{ x: 20, opacity: 0 }}
@@ -371,41 +461,30 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
 
                       setScoreErrors(prev => {
                         const next = { ...prev };
-
                         if (error) {
                           next[errorKey] = error;
                         } else {
                           delete next[errorKey];
                         }
-
                         return next;
                       });
 
-                      // Keep blank/in-progress input editable without treating it as a
-                      // valid score. Invalid completed values are not committed.
+                      // Keep blank/in-progress input editable without treating it as valid.
                       if (error && !/^\d+(?:\.\d+)?\s*\/?$/.test(value.trim())) {
                         return;
                       }
 
-                      const parsed = value.trim().endsWith('/')
-                        ? null
-                        : parseQuestionScore(value);
-
-                      // Reject impossible completed scores such as 12/10.
-                      if (value.trim() && !value.trim().endsWith('/') && !parsed) {
-                        return;
-                      }
-
                       const updatedQuestions = [...(currentResult?.questions || [])];
+                      updatedQuestions[idx] = { ...updatedQuestions[idx], score: value };
 
-                      updatedQuestions[idx] = {
-                        ...updatedQuestions[idx],
-                        score: value
-                      };
+                      const recalculated = recalculateFromQuestions(updatedQuestions);
 
                       updateResult({
                         ...currentResult!,
                         questions: updatedQuestions,
+                        ...(recalculated
+                          ? recalculated
+                          : { totalScore: '', percentage: '', grade: '' }),
                       });
                     }}
                     placeholder={isSelfMarked && !q.score ? '_/_' : undefined}
@@ -427,10 +506,11 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                   ? `${ghostClass} bg-gray-900/50 border-gray-800`
                   : 'text-ink bg-gray-900 border-gray-800'
                   }`}>
-                  {isSelfMarked && !isEditing && !q.score ? '_/_' : q.score} pts
+                  {isSelfMarked && !isEditing && !q.score ? '_/_' : q.score || '—'} pts
                 </span>
               )}
             </div>
+
             {isEditing ? (
               <textarea
                 value={isSelfMarked && !q.feedback ? '' : q.feedback || ''}
@@ -448,11 +528,16 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
                 ? ghostClass
                 : 'text-gray-400 group-hover:text-gray-200'
                 }`}>
-                "{isSelfMarked && !isEditing && !q.feedback ? 'Enter feedback for question' : q.feedback}"
+                "{isSelfMarked && !isEditing && !q.feedback ? 'Enter feedback for question' : q.feedback || 'No feedback provided.'}"
               </p>
             )}
           </motion.div>
-        ))}
+        )) : (
+          <div className="py-8 text-center text-gray-600">
+            <AlertCircle size={28} className="mx-auto mb-2 opacity-50" />
+            <p className="text-[10px] uppercase tracking-widest">No question-level results</p>
+          </div>
+        )}
 
         <div className="mt-8 p-5 bg-accent-blue/[0.03] rounded-2xl border border-accent-blue/10 hover:border-accent-blue/20 transition-all group">
           <div className="flex items-center gap-2 mb-3">
@@ -462,8 +547,8 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
               }`}>Summary Report</span>
           </div>
           {isEditing ? (
-              <textarea
-                value={isSelfMarked && !currentResult?.feedback ? '' : currentResult?.feedback || ''}
+            <textarea
+              value={isSelfMarked && !currentResult?.feedback ? '' : currentResult?.feedback || ''}
               onChange={(e) => handleInputChange('feedback', e.target.value)}
               placeholder={isSelfMarked && !currentResult?.feedback ? 'Manually type the recommendations of this paper here' : undefined}
               className="w-full text-[11px] text-gray-500 group-hover:text-gray-300 leading-relaxed font-medium transition-colors bg-transparent border-b border-gray-700 focus:border-accent-blue focus:outline-none placeholder:text-gray-600 placeholder:opacity-60"
@@ -474,7 +559,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
               ? ghostClass
               : 'text-gray-500 group-hover:text-gray-300'
               }`}>
-              {isSelfMarked && !isEditing && !currentResult?.feedback ? 'Manually type the recommendations of this paper here' : currentResult?.feedback}
+              {isSelfMarked && !isEditing && !currentResult?.feedback ? 'Manually type the recommendations of this paper here' : currentResult?.feedback || 'No summary feedback provided.'}
             </p>
           )}
         </div>
@@ -482,12 +567,8 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
 
       <div className="p-6 border-t border-gray-800 bg-sidebar/50 flex gap-2.5">
         <button
-          onClick={() => {
-            if (currentResult) {
-              onSave(currentResult);
-            }
-          }}
-          disabled={isSaving || !currentResult}
+          onClick={() => onSave(currentResult)}
+          disabled={isSaving}
           className="flex-1 bg-accent-green text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-green-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
         >
           {isSaving ? (
