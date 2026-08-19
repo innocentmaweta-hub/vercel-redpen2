@@ -1,0 +1,322 @@
+name: Apply RedPen requested updates
+
+on:
+  push:
+    paths:
+      - '.github/workflows/redpen-requested-updates.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor == 'innocentmaweta-hub'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply requested changes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # ------------------------------------------------------------
+          # Deterministic email-based default avatar. A saved avatarUrl
+          # always wins, so changing a profile picture remains permanent.
+          # ------------------------------------------------------------
+          avatar = root / 'src/lib/avatar.ts'
+          avatar.parent.mkdir(parents=True, exist_ok=True)
+          avatar.write_text(r'''export function getDefaultAvatarUrl(email: string): string {
+            const normalized = (email || 'user').trim().toLowerCase();
+            let hash = 0;
+            for (let i = 0; i < normalized.length; i++) {
+              hash = ((hash << 5) - hash + normalized.charCodeAt(i)) | 0;
+            }
+            const hue = Math.abs(hash) % 360;
+            const local = normalized.split('@')[0] || 'user';
+            const parts = local.replace(/[^a-z0-9]+/gi, ' ').trim().split(/\s+/).filter(Boolean);
+            const initials = (parts.length >= 2 ? parts[0][0] + parts[1][0] : local.slice(0, 2)).toUpperCase();
+            const bg1 = `hsl(${hue} 70% 42%)`;
+            const bg2 = `hsl(${(hue + 38) % 360} 70% 32%)`;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${bg1}"/><stop offset="1" stop-color="${bg2}"/></linearGradient></defs><rect width="400" height="400" rx="80" fill="url(#g)"/><text x="200" y="222" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-size="150" font-weight="700" fill="white">${initials}</text></svg>`;
+            return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+          }
+          ''', encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # App.tsx: remove Unmarked, add Excel session import, add
+          # Clear Canvas, and use deterministic default avatars.
+          # ------------------------------------------------------------
+          app_path = root / 'src/App.tsx'
+          s = app_path.read_text(encoding='utf-8')
+
+          if "import * as XLSX from 'xlsx';" not in s:
+              s = s.replace("import { writeFileToFolder } from './lib/fileStorage';", "import { writeFileToFolder } from './lib/fileStorage';\nimport * as XLSX from 'xlsx';\nimport { getDefaultAvatarUrl } from './lib/avatar';")
+
+          s = s.replace("import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2", "import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, Maximize2")
+          s = s.replace("const [markingMode, setMarkingModeState] = useState<'self' | 'ai' | 'unmarked'>('unmarked');", "const [markingMode, setMarkingModeState] = useState<'self' | 'ai'>('self');")
+
+          # Replace the old three-state mode handler with a two-state self/AI toggle.
+          s = re.sub(
+              r"    // Updated viewMarked state to support three modes: self, ai, unmarked\n    const \[markingMode, setMarkingModeState\].*?\n    };\n",
+              "    // Marking mode is intentionally limited to Self and AI.\n    const handleMarkingModeChange = () => {\n        setMarkingModeState(prev => prev === 'self' ? 'ai' : 'self');\n        setResult(null);\n    };\n",
+              s,
+              count=1,
+              flags=re.S,
+          )
+
+          # Any reset of the removed Unmarked state now returns to Self mode.
+          s = s.replace("setMarkingModeState('unmarked')", "setMarkingModeState('self')")
+          s = s.replace("setMarkingModeState('unmarked');", "setMarkingModeState('self');")
+          s = s.replace("setMarkingModeState('unmarked'); // Reset to unmarked", "setMarkingModeState('self'); // Reset to self mode")
+          s = s.replace("showOverlay={markingMode !== 'unmarked'} // Show overlay when not unmarked", "showOverlay={true}")
+          s = s.replace("markingMode === 'unmarked'", "false")
+
+          # Remove the obsolete Unmarked branch from handleGrade. Self mode is now
+          # the default state and AI mode is explicitly selected.
+          s = re.sub(
+              r"        // If in 'unmarked' mode, show choice between AI and Manual\n        if \(false\) \{.*?        \}\n\n        // If in 'self' mode",
+              "        // Self mode is the default; AI mode is explicitly selected.\n        // If in 'self' mode",
+              s,
+              count=1,
+              flags=re.S,
+          )
+
+          # Replace the toolbar's three-state button with a two-state toggle.
+          toolbar_pattern = r"\s*<button\n\s*onClick=\{\(\) => \{\n\s*if \(false\) \{.*?\n\s*\{markingMode === 'self' \? 'Self Marked' :\n\s*markingMode === 'ai' \? 'AI Marked' :\n\s*'Unmarked'\}\n\s*</span>\n\s*</button>"
+          toolbar_replacement = r'''\n                                            <button
+                                                onClick={() => {
+                                                    setMarkingModeState(prev => prev === 'self' ? 'ai' : 'self');
+                                                    setResult(null);
+                                                }}
+                                                className={`relative w-8 h-7 flex items-center justify-center rounded transition-all group ${markingMode === 'self' ? 'bg-accent-green/20 text-accent-green' : 'bg-accent-blue/20 text-accent-blue'}`}
+                                                title={markingMode === 'self' ? 'Self Marked' : 'AI Marked'}
+                                            >
+                                                <FileCheck size={14} />
+                                                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
+                                                    {markingMode === 'self' ? 'Self Marked' : 'AI Marked'}
+                                                </span>
+                                            </button>'''
+          s, n = re.subn(toolbar_pattern, toolbar_replacement, s, count=1, flags=re.S)
+          if n == 0:
+              raise SystemExit('Could not locate the marking-mode toolbar button')
+
+          # Replace JSON session loading with XLSX loading. The importer reads all
+          # course sheets, restores history rows, and opens the newest imported result.
+          excel_loader = r'''    // Load a previously saved Excel session workbook.
+    const handleLoadFromFile = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.xlsx,.xls';
+        input.onchange = async (e) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) return;
+
+            try {
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer, { type: 'array' });
+                const imported: HistoryRecord[] = [];
+
+                for (const sheetName of workbook.SheetNames) {
+                    const sheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+                    if (rows.length < 2) continue;
+
+                    const headers = rows[0].map((h: any) => String(h || '').trim());
+                    const indexOf = (name: string) => headers.indexOf(name);
+                    const value = (row: any[], name: string) => {
+                        const i = indexOf(name);
+                        return i >= 0 ? String(row[i] ?? '') : '';
+                    };
+
+                    for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
+                        const row = rows[rowIndex];
+                        if (!row || row.every((v: any) => String(v ?? '').trim() === '')) continue;
+
+                        const questions: { q: number; score: string; feedback: string }[] = [];
+                        for (let q = 1; q <= 200; q++) {
+                            const scoreHeader = `Q${q} Score`;
+                            const feedbackHeader = `Q${q} Feedback`;
+                            const scoreIndex = indexOf(scoreHeader);
+                            const feedbackIndex = indexOf(feedbackHeader);
+                            if (scoreIndex < 0 && feedbackIndex < 0) break;
+                            const score = String(row[scoreIndex] ?? '');
+                            const feedback = String(row[feedbackIndex] ?? '');
+                            if (score || feedback) questions.push({ q, score, feedback });
+                        }
+
+                        const studentInfo: StudentInfo = {
+                            name: value(row, 'Student Name'),
+                            regNo: value(row, 'Reg No'),
+                            courseCode: value(row, 'Course Code') || sheetName,
+                            program: value(row, 'Program'),
+                            year: value(row, 'Year'),
+                            semester: value(row, 'Semester'),
+                            examDate: value(row, 'Exam Date'),
+                        };
+                        const result: GradingResult = {
+                            totalScore: value(row, 'Total Score'),
+                            score: value(row, 'Total Score'),
+                            grade: value(row, 'Grade'),
+                            percentage: value(row, 'Percentage'),
+                            feedback: value(row, 'Summary Feedback'),
+                            questions,
+                        };
+
+                        imported.push({
+                            id: `excel_${Date.now()}_${imported.length}`,
+                            date: value(row, 'Date Graded') || new Date().toISOString(),
+                            studentInfo,
+                            result,
+                        });
+                    }
+                }
+
+                if (!imported.length) {
+                    alert('No grading results were found in that Excel file. Please choose a RedPen session workbook.');
+                    return;
+                }
+
+                const updated = [...imported, ...history].slice(0, 50);
+                setHistory(updated);
+                saveHistory(updated);
+
+                const latest = imported[imported.length - 1];
+                setStudentInfo(latest.studentInfo);
+                setResult(latest.result);
+                setStudentPaper(null);
+                setMarkingScheme(null);
+                setExaminerRemarks('');
+                setMarkingModeState('self');
+                setActiveTool(null);
+                setClearCount(c => c + 1);
+                setZoom(1);
+                setIsMaximized(false);
+                setActiveView('grade');
+                setShowOldSessionModal(false);
+
+                const baseName = file.name.replace(/\.(xlsx|xls)$/i, '');
+                const session: SemesterCourse = {
+                    courseCode: latest.studentInfo.courseCode || imported[0].studentInfo.courseCode || 'Imported',
+                    courseName: baseName,
+                    program: latest.studentInfo.program,
+                    year: latest.studentInfo.year,
+                    semester: latest.studentInfo.semester,
+                    sessionLabel: baseName,
+                    customName: baseName,
+                };
+                setSemesterCourse(session);
+                saveSessions([session, ...loadSessions().filter(s => s.customName !== baseName)].slice(0, 50));
+
+                alert(`Loaded ${imported.length} grading result${imported.length === 1 ? '' : 's'} from Excel.`);
+            } catch (error) {
+                console.error('Error reading Excel session:', error);
+                alert('Error: Invalid Excel session file. Please select a .xlsx file previously saved by RedPen.');
+            }
+        };
+        input.click();
+    };
+'''
+          s, n = re.subn(r"    // Function to handle loading from JSON file.*?\n    // Function to add a new school", excel_loader + "\n    // Function to add a new school", s, count=1, flags=re.S)
+          if n == 0:
+              raise SystemExit('Could not locate JSON session loader')
+
+          s = s.replace('Load from JSON File', 'Load from Excel File')
+          s = s.replace('Select a saved grading session file (.json)', 'Select a RedPen session workbook (.xlsx)')
+
+          # Add Clear Canvas while keeping the session and marking scheme. The existing
+          # handleNewPaper already performs exactly that student-paper reset.
+          marker = "                                    <div className=\"flex-1 p-4 flex flex-col transition-all overflow-hidden\">\n                                        {studentPaper ? ("
+          replacement = """                                    <div className=\"flex-1 p-4 flex flex-col transition-all overflow-hidden relative\">\n                                        {studentPaper && (\n                                            <button\n                                                onClick={handleNewPaper}\n                                                className=\"absolute top-6 right-6 z-20 bg-gray-900/90 border border-gray-700 hover:border-red-500/60 hover:bg-red-500/10 text-gray-300 hover:text-red-400 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-lg transition-all\"\n                                                title=\"Clear the current paper and upload another\"\n                                            >\n                                                Clear Canvas\n                                            </button>\n                                        )}\n                                        {studentPaper ? ("""
+          if marker not in s:
+              raise SystemExit('Could not locate paper canvas container')
+          s = s.replace(marker, replacement, 1)
+
+          # Default avatar immediately after login/session restoration. Never overwrite
+          # a server-stored custom avatar.
+          s = s.replace("avatarUrl: data.user.avatarUrl || '',", "avatarUrl: data.user.avatarUrl || getDefaultAvatarUrl(data.user.email),")
+          s = s.replace("setUser(data.user);", "setUser({ ...data.user, avatarUrl: data.user.avatarUrl || getDefaultAvatarUrl(data.user.email) });")
+
+          # Remove the user-owned API key action from the upgrade modal.
+          s = re.sub(r"\s*<button\n\s*onClick=\{\(\) => \{\n\s*setUpgradePromptMessage\(null\);\n\s*setShowSettings\(true\);\n\s*\}\}\n\s*className=\"w-full bg-gray-800.*?\n\s*</button>", "", s, count=1, flags=re.S)
+
+          app_path.write_text(s, encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # Profile and Sidebar: show the email-associated default avatar
+          # when no custom avatar has been saved.
+          # ------------------------------------------------------------
+          for rel in ['src/components/ProfileModal.tsx', 'src/components/Sidebar.tsx']:
+              p = root / rel
+              t = p.read_text(encoding='utf-8')
+              if "getDefaultAvatarUrl" not in t:
+                  if rel.endswith('ProfileModal.tsx'):
+                      t = t.replace("import { User } from '../types';", "import { User } from '../types';\nimport { getDefaultAvatarUrl } from '../lib/avatar';")
+                      old = "{user.avatarUrl ? (\n                                <img src={user.avatarUrl} alt={user.name} className=\"w-full h-full object-cover\" />\n                            ) : (\n                                <div className=\"w-full h-full bg-accent-blue/10 flex items-center justify-center\">\n                                    <UserIcon size={28} className=\"text-accent-blue\" />\n                                </div>\n                            )}"
+                      new = "<img src={user.avatarUrl || getDefaultAvatarUrl(user.email)} alt={user.name} className=\"w-full h-full object-cover\" />"
+                      if old in t:
+                          t = t.replace(old, new, 1)
+                  else:
+                      t = t.replace("import { ActiveView, User as UserType } from '../types';", "import { ActiveView, User as UserType } from '../types';\nimport { getDefaultAvatarUrl } from '../lib/avatar';")
+                      old = "{user?.avatarUrl ? (\n              <img\n                src={user.avatarUrl}\n                alt={user.name}\n                className=\"w-full h-full object-cover\"\n              />\n            ) : (\n              <>\n                <User size={18} className=\"transition-colors\" />\n                <span className=\"text-[8px] mt-0.5 uppercase font-bold tracking-tighter transition-colors\">\n                  {user ? user.name.split(' ')[0] : 'Login'}\n                </span>\n              </>\n            )}"
+                      new = "{user ? (\n              <img src={user.avatarUrl || getDefaultAvatarUrl(user.email)} alt={user.name} className=\"w-full h-full object-cover\" />\n            ) : (\n              <>\n                <User size={18} className=\"transition-colors\" />\n                <span className=\"text-[8px] mt-0.5 uppercase font-bold tracking-tighter transition-colors\">Login</span>\n              </>\n            )}"
+                      if old in t:
+                          t = t.replace(old, new, 1)
+              p.write_text(t, encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # Settings: remove the user-owned API key tab and form while
+          # retaining the existing prop for compatibility with App.tsx.
+          # ------------------------------------------------------------
+          p = root / 'src/components/SettingsModal.tsx'
+          t = p.read_text(encoding='utf-8')
+          t = t.replace("import { X, Key, CreditCard, Check, Coins, Loader2, Eye, EyeOff, FolderOpen, FolderCheck } from 'lucide-react';", "import { X, CreditCard, Coins, Loader2, FolderOpen, FolderCheck } from 'lucide-react';")
+          t = t.replace("type Tab = 'api-keys' | 'tokens' | 'save-location';", "type Tab = 'tokens' | 'save-location';")
+          t = t.replace("const [tab, setTab] = useState<Tab>('api-keys');", "const [tab, setTab] = useState<Tab>('tokens');")
+          t = re.sub(r"\n    const \[openaiKey, setOpenaiKey\].*?\n    const \[saving, setSaving\] = useState\(false\);\n", "\n", t, count=1, flags=re.S)
+          t = re.sub(r"\n    const handleSaveKeys = async \(\) => \{.*?\n    \};\n", "\n", t, count=1, flags=re.S)
+          t = re.sub(r"\n                    \{\/\* Tab Switcher \*\/\}.*?\n                    \{tab === 'api-keys' \? \(.*?\n                    \) : tab === 'tokens' \? \(", "\n                    {/* Tab Switcher */}\n                    <div className=\"flex bg-gray-900 rounded-xl p-1\">\n                        <button onClick={() => setTab('tokens')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'tokens' ? 'bg-accent-blue text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}><Coins size={12} />Tokens</button>\n                        <button onClick={() => setTab('save-location')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'save-location' ? 'bg-accent-blue text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}><FolderOpen size={12} />Save To</button>\n                    </div>\n\n                    {tab === 'tokens' ? (", t, count=1, flags=re.S)
+          if 'api-keys' in t or 'API Keys' in t or 'Save API Keys' in t:
+              raise SystemExit('API key UI was not fully removed from SettingsModal')
+          p.write_text(t, encoding='utf-8')
+
+          # ------------------------------------------------------------
+          # Backend: stop exposing/storing user-owned API keys and report
+          # the server provider only. The grading path already uses the
+          # server environment key, so this does not change grading itself.
+          # ------------------------------------------------------------
+          p = root / 'api/server-wordpress.js'
+          t = p.read_text(encoding='utf-8')
+          t = t.replace("      getUserMeta(wpUser.id, 'redpen_api_keys'),\n", "")
+          t = t.replace("    const safeApiKeys = apiKeys || {};\n", "")
+          t = t.replace("        activeProvider: safeApiKeys.geminiApiKey ? 'gemini' : safeApiKeys.openaiApiKey ? 'openai' : 'server',", "        activeProvider: 'server',")
+          t = re.sub(r"\napp.get\('/api/settings/api-keys'.*?\napp.post\('/api/settings/profile'", "\napp.post('/api/settings/profile'", t, count=1, flags=re.S)
+          p.write_text(t, encoding='utf-8')
+
+          # Remove the one remaining visible API-key phrase from source comments/UI.
+          p = root / 'src/components/ProfileModal.tsx'
+          t = p.read_text(encoding='utf-8')
+          t = re.sub(r"\nconst PROVIDER_LABEL: Record<string, string> = \{.*?\n\};\n", "\n", t, count=1, flags=re.S)
+          p.write_text(t, encoding='utf-8')
+
+          print('Requested RedPen changes applied.')
+
+      - name: Build check
+        run: |
+          npm ci
+          npm run build
+
+      - name: Commit changes and remove updater
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src api
+          git commit -m "feat: update avatars, Excel loading, canvas reset and API-key flow" || true
+          git push
