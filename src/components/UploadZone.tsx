@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { Upload, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Upload, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Props {
@@ -17,7 +17,7 @@ export interface UploadZoneHandle {
   triggerInput: () => void;
 }
 
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 export const UploadZone = forwardRef<UploadZoneHandle, Props>(
   ({ label, hasFile, fileName, onUpload, description, variant = 'compact', onZoneClick, optional }, ref) => {
@@ -25,8 +25,10 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
     const [uploadError, setUploadError] = useState('');
 
     useImperativeHandle(ref, () => ({
-      triggerInput: () => fileInputRef.current?.click(),
-    }));
+      triggerInput: () => {
+        if (!hasFile) fileInputRef.current?.click();
+      },
+    }), [hasFile]);
 
     const processFile = (file: File) => {
       setUploadError('');
@@ -48,24 +50,20 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
       e.target.value = '';
     };
 
-   const handleZoneClick = () => {
-      if (onZoneClick) {
-        onZoneClick();
-      } else {
-        fileInputRef.current?.click();
-      }
+    const handleZoneClick = () => {
+      if (hasFile) return;
+      if (onZoneClick) onZoneClick();
+      else fileInputRef.current?.click();
     };
 
     const handleDrop = (e: React.DragEvent) => {
       e.preventDefault();
+      if (hasFile) return;
       const file = e.dataTransfer.files?.[0];
       if (file) processFile(file);
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-    };
-
+    const handleDragOver = (e: React.DragEvent) => e.preventDefault();
     const isLarge = variant === 'large';
 
     return (
@@ -74,10 +72,10 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
           <motion.div
             animate={{ scale: hasFile ? [1, 1.2, 1] : 1 }}
             className={`w-2.5 h-5 rounded-full transition-all duration-300 ${hasFile
-                ? 'bg-accent-green shadow-[0_0_10px_rgba(0,255,0,0.5)]'
-                : optional
-                  ? 'bg-yellow-500/60 shadow-[0_0_8px_rgba(234,179,8,0.3)]'
-                  : 'bg-accent-blue shadow-[0_0_10px_rgba(37,99,235,0.5)]'
+              ? 'bg-accent-green shadow-[0_0_10px_rgba(0,255,0,0.5)]'
+              : optional
+                ? 'bg-yellow-500/60 shadow-[0_0_8px_rgba(234,179,8,0.3)]'
+                : 'bg-accent-blue shadow-[0_0_10px_rgba(37,99,235,0.5)]'
               }`}
           />
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 group-hover:text-gray-200 transition-colors flex-1">
@@ -99,16 +97,14 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
         />
 
         <motion.div
-          whileHover={{ scale: 1.01, borderColor: hasFile ? '#22c55e' : '#2563eb' }}
-          whileTap={{ scale: 0.99 }}
-                    onClick={handleZoneClick}
+          whileHover={!hasFile ? { scale: 1.01, borderColor: optional ? '#eab308' : '#2563eb' } : undefined}
+          whileTap={!hasFile ? { scale: 0.99 } : undefined}
+          onClick={handleZoneClick}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
-          className={`relative flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${hasFile
-              ? 'border-accent-green/50 bg-accent-green/5 group-hover:bg-accent-green/10'
-              : optional
-                ? 'border-yellow-500/20 hover:bg-yellow-500/5 group-hover:border-yellow-500/30'
-                : 'border-gray-800 hover:bg-accent-blue/5 group-hover:border-accent-blue/40'
+          className={`relative flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all duration-300 ${hasFile
+            ? 'border-accent-green/50 bg-accent-green/5 cursor-default'
+            : 'cursor-pointer border-gray-800 hover:bg-accent-blue/5 group-hover:border-accent-blue/40'
             } ${isLarge ? 'min-h-[220px]' : 'min-h-[140px]'}`}
         >
           <AnimatePresence mode="wait">
@@ -118,11 +114,13 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 1.1, opacity: 0 }}
-                className="flex flex-col items-center"
+                className="flex flex-col items-center px-4 text-center"
               >
                 <CheckCircle2 size={isLarge ? 48 : 32} className="text-accent-green mb-3" />
-                <span className="text-[11px] font-mono font-bold text-accent-green uppercase max-w-[200px] truncate text-center">{fileName}</span>
-                <span className="text-[9px] text-gray-500 mt-2 uppercase font-bold tracking-tighter">Click to replace</span>
+                <span className="text-[11px] font-mono font-bold text-accent-green uppercase max-w-[200px] truncate">{fileName}</span>
+                <span className="text-[9px] text-gray-500 mt-2 uppercase font-bold tracking-tighter">
+                  Clear the current file before uploading another
+                </span>
               </motion.div>
             ) : (
               <motion.div
@@ -136,7 +134,7 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
                   size={isLarge ? 48 : 32}
                   className={`mb-3 transition-colors ${optional ? 'text-yellow-500/40 group-hover:text-yellow-500/70' : 'text-gray-600 group-hover:text-accent-blue'}`}
                 />
-               <span className="font-bold text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
+                <span className="font-bold text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
                   {description || 'Click or drop file to upload'}
                 </span>
                 <span className="text-[10px] text-gray-600 mt-2 uppercase font-medium">Images, PDF, or Text</span>
