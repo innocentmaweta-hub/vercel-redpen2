@@ -11,7 +11,6 @@ export interface ExtractedInfo {
     courseCode: string;
     examDate: string;
 }
-// Raw response from the AI grading API (snake_case fields)
 export interface ApiGradingResult {
     total_score?: string | number;
     totalScore?: string | number;
@@ -39,8 +38,8 @@ export interface StudentInfo {
     name: string;
     regNo: string;
     program: string;
-    year: string; // Year of Study (e.g. "Year 1"–"Year 4")
-    semester?: string; // Semester 1 / Semester 2
+    year: string;
+    semester?: string;
     courseCode: string;
     examDate: string;
 }
@@ -59,8 +58,6 @@ export interface User {
     tier: SubscriptionTier;
     gradingCount: number;
     gradingLimit: number;
-    apiKey?: string;
-    apiProvider?: 'openai' | 'gemini';
     googleId?: string;
     createdAt: string;
     institution?: string;
@@ -81,11 +78,10 @@ export interface SemesterCourse {
     semester?: string;
     academicYear?: string;
     sessionLabel?: string;
-    customName?: string; // Fully custom workbook name — overrides academicYear-semester-sessionLabel entirely when set
+    customName?: string;
     examDate?: string;
     duration?: number;
 }
-
 
 export function parseScore(value: string | number | undefined): number {
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
