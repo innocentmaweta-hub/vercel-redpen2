@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GradingResult } from '../types';
-import { ChevronRight, Award, AlertCircle, Printer, Edit3, Save } from 'lucide-react';
+import { Award, AlertCircle, Printer, Edit3, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 
 // Mirrors the server's DEFAULT_GRADE_SCALE (grading-validation.js) so a manual
@@ -224,6 +224,65 @@ function validateAndNormalizeResult(
   };
 }
 
+function validateResultForSave(result: GradingResult): string | null {
+  if (!result || typeof result !== 'object') {
+    return 'There is no valid grading result to save.';
+  }
+
+  if (!Array.isArray(result.questions) || result.questions.length === 0) {
+    return 'No question-level marks are available. Complete grading before saving.';
+  }
+
+  const incompleteQuestion = result.questions.find((q: any) => !parseQuestionScore(q?.score));
+  if (incompleteQuestion) {
+    return 'Every question must have a valid score before the result can be saved.';
+  }
+
+  const total = parseTotalScore(typeof result.totalScore === 'string' ? result.totalScore : '');
+  if (!total) {
+    return 'The total score is incomplete or invalid.';
+  }
+
+  const percentage = parsePercentage(typeof result.percentage === 'string' ? result.percentage : '');
+  if (percentage === null) {
+    return 'The percentage is incomplete or invalid.';
+  }
+
+  if (!result.grade || typeof result.grade !== 'string' || !result.grade.trim()) {
+    return 'The final grade is missing.';
+  }
+
+  const recalculated = recalculateFromQuestions(result.questions);
+  if (!recalculated) {
+    return 'The question scores could not be used to calculate a valid result.';
+  }
+
+  const calculatedTotal = parseTotalScore(recalculated.totalScore);
+  const calculatedPercentage = parsePercentage(recalculated.percentage);
+
+  if (
+    !calculatedTotal ||
+    Math.abs(total.score - calculatedTotal.score) > 0.001 ||
+    Math.abs(total.maximum - calculatedTotal.maximum) > 0.001
+  ) {
+    return 'The total score does not match the question scores. Recheck the marks before saving.';
+  }
+
+  if (
+    calculatedPercentage === null ||
+    Math.abs(percentage - calculatedPercentage) > 0.01
+  ) {
+    return 'The percentage does not match the question scores. Recheck the marks before saving.';
+  }
+
+  const calculatedGrade = calculateGrade(calculatedPercentage);
+  if (result.grade.trim().toUpperCase() !== calculatedGrade.toUpperCase()) {
+    return 'The final grade does not match the percentage. Recheck the result before saving.';
+  }
+
+  return null;
+}
+
 interface Props {
   result: GradingResult | null;
   loading: boolean;
@@ -239,6 +298,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Sync from parent when a fresh result arrives.
   useEffect(() => {
@@ -261,11 +321,13 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
     }
 
     setScoreErrors({});
+    setSaveError(null);
     setIsEditing(false);
   }, [result]);
 
   const updateResult = (updated: GradingResult) => {
     setEditableResult(updated);
+    setSaveError(null);
     onResultChange?.(updated);
   };
 
@@ -276,6 +338,31 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
       ...editableResult,
       [field]: value,
     });
+  };
+
+  const handleEditToggle = () => {
+    if (isEditing) {
+      const error = validateResultForSave(currentResult);
+      if (error) {
+        setSaveError(error);
+        return;
+      }
+    }
+
+    setSaveError(null);
+    setIsEditing(prev => !prev);
+  };
+
+  const handleSaveClick = () => {
+    const error = validateResultForSave(currentResult);
+
+    if (error) {
+      setSaveError(error);
+      return;
+    }
+
+    setSaveError(null);
+    onSave(currentResult);
   };
 
   if (loading) {
@@ -351,7 +438,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setIsEditing(!isEditing)}
+              onClick={handleEditToggle}
               className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors"
             >
               <Edit3 size={12} />
@@ -377,6 +464,13 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
           <div className="mb-4 flex items-start gap-2 rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
             <AlertCircle size={14} className="text-yellow-500 mt-0.5 shrink-0" />
             <span className="text-[10px] leading-relaxed text-yellow-500/80">{validationWarning}</span>
+          </div>
+        )}
+
+        {saveError && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+            <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+            <span className="text-[10px] leading-relaxed text-red-400">{saveError}</span>
           </div>
         )}
 
@@ -567,7 +661,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving, onRes
 
       <div className="p-6 border-t border-gray-800 bg-sidebar/50 flex gap-2.5">
         <button
-          onClick={() => onSave(currentResult)}
+          onClick={handleSaveClick}
           disabled={isSaving}
           className="flex-1 bg-accent-green text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-green-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
         >
