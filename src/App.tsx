@@ -218,6 +218,12 @@ export default function App() {
      *   the appropriate manual marking tool.
      */
     const handleMarkingModeChange = (mode: 'ai' | 'self') => {
+        // Auto Mode always forces AI.
+        if (isAutoMode) {
+            setMarkingModeState('ai');
+            return;
+        }
+    
         setMarkingModeState(mode);
 
         if (mode === 'ai') {
@@ -1206,13 +1212,20 @@ export default function App() {
          *
          * No AI/API grading request is made.
          */
+        if (markingModeconst handleGrade = async () => {
+        if (!studentPaper) {
+            alert('Please upload a student paper before grading.');
+            return;
+        }
+    
+        // Manual grading works independently of authentication.
         if (markingMode === 'self') {
             if (isMaximized) {
                 setIsMaximized(false);
             }
-
+    
             setActiveView('grade');
-
+    
             if (!result) {
                 setResult({
                     score: '',
@@ -1222,30 +1235,26 @@ export default function App() {
                     feedback: '',
                     questions: [],
                     extracted_info: {
-                        name:
-                            studentInfo.name ||
-                            '',
-                        regNo:
-                            studentInfo.regNo ||
-                            '',
-                        program:
-                            studentInfo.program ||
-                            '',
-                        year:
-                            studentInfo.year ||
-                            '',
-                        courseCode:
-                            studentInfo.courseCode ||
-                            '',
-                        examDate:
-                            studentInfo.examDate ||
-                            ''
+                        name: studentInfo.name || '',
+                        regNo: studentInfo.regNo || '',
+                        program: studentInfo.program || '',
+                        year: studentInfo.year || '',
+                        courseCode: studentInfo.courseCode || '',
+                        examDate: studentInfo.examDate || ''
                     }
                 });
             }
-
+    
             return;
         }
+    
+        // AI grading requires authentication.
+        if (!user) {
+            setShowAuth(true);
+            return;
+        }
+    
+        // AI grading continues here...
 
         /*
          * AI grading.
@@ -3028,10 +3037,10 @@ export default function App() {
                                             {/* Grading method selector */}
                                             <button
                                                 onClick={() => {
-                                                    if (!studentPaper) {
+                                                    if (!studentPaper || isAutoMode) {
                                                         return;
                                                     }
-                                                
+                                            
                                                     handleMarkingModeChange(
                                                         markingMode === 'ai' ? 'self' : 'ai'
                                                     );
