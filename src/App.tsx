@@ -134,17 +134,23 @@ export default function App() {
 
     const [activeTool, setActiveTool] = useState<string | null>(null);
 
-    // Marking mode: AI or Manual
-    const [markingMode, setMarkingModeState] = useState<'self' | 'ai'>('ai');
-
-    // Explicitly switch between AI and Manual grading
+    // Marking mode:
+    // unmarked = paper uploaded but not yet graded
+    // self     = manually marked
+    // ai       = AI graded
+    const [markingMode, setMarkingModeState] = useState<'unmarked' | 'self' | 'ai'>('unmarked');
+    
+    // Controls the "Choose Grading Method" modal
+    const [showGradingChoice, setShowGradingChoice] = useState(false);
+    
+    // Explicitly switch between grading modes
     const handleMarkingModeChange = (mode: 'ai' | 'self') => {
         setMarkingModeState(mode);
-
+    
         if (mode === 'ai') {
             setResult(null);
         }
-
+    
         if (mode === 'self' && studentPaper) {
             setResult({
                 score: '',
@@ -163,7 +169,7 @@ export default function App() {
                 }
             });
         }
-
+    
         setActiveTool(null);
         setShowToolOptions(false);
     };
@@ -809,6 +815,12 @@ export default function App() {
                 alert('Please upload a student paper before grading.');
                 return;
             }
+            // If the paper has not been graded yet, let the examiner choose
+            // between AI and manual grading.
+            if (markingMode === 'unmarked') {
+                setShowGradingChoice(true);
+                return;
+            }
         
             // Manual grading does not call the AI grading API.
             // It simply opens the results panel with empty editable fields.
@@ -1140,7 +1152,29 @@ export default function App() {
                 setIsGradingInProgress(false);
             }
         };
+        // Handle selection from the grading choice modal
+        const handleGradingChoice = (choice: 'ai' | 'manual') => {
+            setShowGradingChoice(false);
         
+            if (choice === 'ai') {
+                setMarkingModeState('ai');
+        
+                if (isMaximized) {
+                    setIsMaximized(false);
+                }
+        
+                handleGradeWithMode('ai');
+                return;
+            }
+        
+            setMarkingModeState('self');
+        
+            if (isMaximized) {
+                setIsMaximized(false);
+            }
+        
+            handleGradeWithMode('self');
+        };
         // Auto mode: automatically grade an uploaded paper using AI.
         useEffect(() => {
             if (isAutoMode && studentPaper && user) {
