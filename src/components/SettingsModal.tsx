@@ -1,32 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, CreditCard, Check, Coins, Loader2, Eye, EyeOff, FolderOpen, FolderCheck } from 'lucide-react';
+import { X, CreditCard, Loader2, Coins, FolderOpen, FolderCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User } from '../types';
 import { isFileSystemAccessSupported, pickSaveFolder, getSavedFolder, clearSaveFolder } from '../lib/fileStorage';
 
 interface Props {
     user: User | null;
+    // Kept optional for compatibility with existing App.tsx until its unused
+    // API-key handler is removed from the parent.
+    onSaveApiKeys?: (openai: string, gemini: string) => void;
     onClose: () => void;
-    onSaveApiKeys: (openai: string, gemini: string) => void;
     authHeaders: () => Record<string, string>;
 }
 
-type Tab = 'api-keys' | 'tokens' | 'save-location';
+type Tab = 'tokens' | 'save-location';
 
 const MWK_PER_TOKEN = 100;
 const MIN_PURCHASE_MWK = 100;
-const QUICK_AMOUNTS = [100, 500, 1000, 5000];
+
 export const PENDING_TX_KEY = 'redpen_pending_tx_ref';
 
-export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Props) => {
-    const [tab, setTab] = useState<Tab>('api-keys');
-    const [openaiKey, setOpenaiKey] = useState('');
-    const [geminiKey, setGeminiKey] = useState('');
-    const [showOpenai, setShowOpenai] = useState(false);
-    const [showGemini, setShowGemini] = useState(false);
-    const [saving, setSaving] = useState(false);
+export const SettingsModal = ({ user, onClose, authHeaders }: Props) => {
+    const [tab, setTab] = useState<Tab>('tokens');
 
-    // Save location state
     const [folderName, setFolderName] = useState<string | null>(null);
     const [checkingFolder, setCheckingFolder] = useState(true);
     const fsSupported = isFileSystemAccessSupported();
@@ -41,7 +37,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
             setFolderName(folder ? (folder as any).name : null);
             setCheckingFolder(false);
         })();
-    }, []);
+    }, [fsSupported]);
 
     const handlePickFolder = async () => {
         const folder = await pickSaveFolder();
@@ -53,7 +49,6 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
         setFolderName(null);
     };
 
-    // Token purchase state
     const [tokenBalance, setTokenBalance] = useState<number | null>(null);
     const [loadingBalance, setLoadingBalance] = useState(true);
     const [amountMWK, setAmountMWK] = useState('');
@@ -74,16 +69,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
                 setLoadingBalance(false);
             }
         })();
-    }, [tab, user]);
-
-    const handleSaveKeys = async () => {
-        setSaving(true);
-        try {
-            await onSaveApiKeys(openaiKey, geminiKey);
-        } finally {
-            setSaving(false);
-        }
-    };
+    }, [tab, user, authHeaders]);
 
     const estimatedTokens = amountMWK ? Math.floor(Number(amountMWK) / MWK_PER_TOKEN) : 0;
 
@@ -108,17 +94,14 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
 
             if (!res.ok || !data.checkoutUrl) {
                 setBuyError(data.message || 'Failed to start payment. Please try again.');
-                setBuying(false);
                 return;
             }
 
-            // Store the tx_ref so we can verify it once PayChangu redirects back
             localStorage.setItem(PENDING_TX_KEY, data.txRef);
-
-            // Send the user to PayChangu's checkout page
             window.location.href = data.checkoutUrl;
-        } catch (err) {
+        } catch {
             setBuyError('Failed to start payment. Please try again.');
+        } finally {
             setBuying(false);
         }
     };
@@ -152,18 +135,7 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
                 </div>
 
                 <div className="p-6 space-y-5">
-                    {/* Tab Switcher */}
                     <div className="flex bg-gray-900 rounded-xl p-1">
-                        <button
-                            onClick={() => setTab('api-keys')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'api-keys'
-                                ? 'bg-accent-blue text-white shadow-lg'
-                                : 'text-gray-500 hover:text-gray-300'
-                                }`}
-                        >
-                            <Key size={12} />
-                            API Keys
-                        </button>
                         <button
                             onClick={() => setTab('tokens')}
                             className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-bold rounded-lg transition-all ${tab === 'tokens'
@@ -186,191 +158,92 @@ export const SettingsModal = ({ user, onClose, onSaveApiKeys, authHeaders }: Pro
                         </button>
                     </div>
 
-                    {tab === 'api-keys' ? (
+                    {tab === 'tokens' ? (
                         <div className="space-y-4">
-                            <p className="text-[10px] text-gray-500 leading-relaxed">
-                                Provide your own API keys for grading. Your keys are stored securely and used only for your grading requests.
-                            </p>
-
-                            {/* OpenAI Key */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">OpenAI API Key</label>
-                                <div className="relative">
-                                    <input
-                                        type={showOpenai ? 'text' : 'password'}
-                                        placeholder="sk-..."
-                                        value={openaiKey}
-                                        onChange={(e) => setOpenaiKey(e.target.value)}
-                                        className="w-full bg-gray-900 border border-gray-700 rounded-xl py-2.5 pl-4 pr-10 text-[11px] text-gray-200 placeholder:text-gray-600 focus:border-accent-blue focus:outline-none transition-all"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowOpenai(!showOpenai)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400"
-                                    >
-                                        {showOpenai ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Gemini Key */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Gemini API Key</label>
-                                <div className="relative">
-                                    <input
-                                        type={showGemini ? 'text' : 'password'}
-                                        placeholder="AIza..."
-                                        value={geminiKey}
-                                        onChange={(e) => setGeminiKey(e.target.value)}
-                                        className="w-full bg-gray-900 border border-gray-700 rounded-xl py-2.5 pl-4 pr-10 text-[11px] text-gray-200 placeholder:text-gray-600 focus:border-accent-blue focus:outline-none transition-all"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowGemini(!showGemini)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400"
-                                    >
-                                        {showGemini ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Current Provider Status */}
-                            {user?.activeProvider && user.activeProvider !== 'server' && (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-accent-green/5 border border-accent-green/20 rounded-xl">
-                                    <Check size={12} className="text-accent-green" />
-                                    <span className="text-[10px] text-accent-green font-medium">
-                                        Using {user.activeProvider === 'openai' ? 'OpenAI' : 'Gemini'} API
-                                    </span>
-                                </div>
-                            )}
-
-                            <button
-                                onClick={handleSaveKeys}
-                                disabled={saving || (!openaiKey && !geminiKey)}
-                                className="w-full py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-                            >
-                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Key size={12} />}
-                                Save API Keys
-                            </button>
-                        </div>
-                    ) : tab === 'tokens' ? (
-                        <div className="space-y-4">
-                            {/* Current Balance */}
                             <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Coins size={16} className="text-yellow-400" />
-                                    <span className="text-[11px] font-bold text-gray-400">Token Balance</span>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Token Balance</span>
                                 </div>
-                                <span className="text-xl font-bold text-white">
-                                    {loadingBalance ? <Loader2 size={16} className="animate-spin text-gray-500" /> : tokenBalance ?? 0}
-                                </span>
-                            </div>
-
-                            <p className="text-[10px] text-gray-500 leading-relaxed">
-                                1 token = 1 grading. {MWK_PER_TOKEN} MWK per token. Buy tokens using Airtel Money, TNM Mpamba, or card via PayChangu.
-                            </p>
-
-                            {/* Quick amounts */}
-                            <div className="grid grid-cols-4 gap-2">
-                                {QUICK_AMOUNTS.map((amt) => (
-                                    <button
-                                        key={amt}
-                                        onClick={() => setAmountMWK(String(amt))}
-                                        className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${amountMWK === String(amt)
-                                            ? 'bg-accent-blue/10 border-accent-blue text-accent-blue'
-                                            : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700'
-                                            }`}
-                                    >
-                                        {amt}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Custom amount */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Amount (MWK)</label>
-                                <input
-                                    type="number"
-                                    min={MIN_PURCHASE_MWK}
-                                    step={MWK_PER_TOKEN}
-                                    placeholder={`Minimum ${MIN_PURCHASE_MWK}`}
-                                    value={amountMWK}
-                                    onChange={(e) => setAmountMWK(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-700 rounded-xl py-2.5 px-4 text-[13px] text-gray-200 placeholder:text-gray-600 focus:border-accent-blue focus:outline-none transition-all"
-                                />
-                                {amountMWK && Number(amountMWK) >= MIN_PURCHASE_MWK && (
-                                    <p className="text-[10px] text-gray-500">≈ {estimatedTokens} token{estimatedTokens !== 1 ? 's' : ''}</p>
+                                {loadingBalance ? (
+                                    <Loader2 size={14} className="text-gray-500 animate-spin" />
+                                ) : (
+                                    <span className="text-lg font-black text-white">{tokenBalance ?? '—'}</span>
                                 )}
                             </div>
 
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Purchase Tokens</label>
+                                <input
+                                    type="number"
+                                    min={MIN_PURCHASE_MWK}
+                                    step={100}
+                                    value={amountMWK}
+                                    onChange={(e) => setAmountMWK(e.target.value)}
+                                    placeholder="Amount in MWK"
+                                    className="w-full bg-gray-900 border border-gray-700 rounded-xl py-2.5 px-4 text-[11px] text-gray-200 placeholder:text-gray-600 focus:border-accent-blue focus:outline-none transition-all"
+                                />
+                                <p className="text-[9px] text-gray-600">
+                                    {estimatedTokens > 0 ? `You will receive approximately ${estimatedTokens} token${estimatedTokens === 1 ? '' : 's'}.` : '1 token = 100 MWK.'}
+                                </p>
+                            </div>
+
                             {buyError && (
-                                <p className="text-[10px] text-red-400">{buyError}</p>
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-[10px] text-red-400">
+                                    {buyError}
+                                </div>
                             )}
 
                             <button
                                 onClick={handleBuyTokens}
-                                disabled={buying || !amountMWK || Number(amountMWK) < MIN_PURCHASE_MWK}
-                                className="w-full py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                                disabled={buying}
+                                className="w-full py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
                             >
                                 {buying ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={12} />}
-                                {buying ? 'Redirecting to PayChangu...' : 'Buy Tokens'}
+                                {buying ? 'Opening Checkout...' : 'Buy Tokens'}
                             </button>
                         </div>
-                    ) : tab === 'save-location' ? (
+                    ) : (
                         <div className="space-y-4">
+                            <div>
+                                <p className="text-[10px] text-gray-500 leading-relaxed">
+                                    Choose where RedPen stores generated PDFs and Excel workbooks.
+                                </p>
+                            </div>
+
                             {!fsSupported ? (
-                                <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 space-y-2">
-                                    <p className="text-[11px] text-yellow-500/90 font-bold">Not supported in this browser</p>
-                                    <p className="text-[10px] text-gray-500 leading-relaxed">
-                                        Automatic folder saving works in Chrome and Edge only. In this browser, saved PDFs and the session spreadsheet will download normally instead — you can find them in your browser's Downloads folder.
-                                    </p>
+                                <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-[10px] text-gray-500">
+                                    Folder selection is not supported in this browser. Files will use the browser download location.
                                 </div>
                             ) : (
                                 <>
-                                    <p className="text-[10px] text-gray-500 leading-relaxed">
-                                        Choose a folder where graded papers (PDF) and the session spreadsheet (Excel) will be saved automatically every time you click Save.
-                                    </p>
-
-                                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-4 flex items-center gap-3">
-                                        {checkingFolder ? (
-                                            <Loader2 size={16} className="animate-spin text-gray-500" />
-                                        ) : folderName ? (
-                                            <>
-                                                <FolderCheck size={18} className="text-accent-green shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="text-[11px] font-bold text-white truncate">{folderName}</p>
-                                                    <p className="text-[9px] text-gray-500">Selected save folder</p>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <FolderOpen size={18} className="text-gray-600 shrink-0" />
-                                                <p className="text-[11px] text-gray-500">No folder selected yet</p>
-                                            </>
-                                        )}
+                                    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {folderName ? <FolderCheck size={14} className="text-accent-green" /> : <FolderOpen size={14} className="text-gray-500" />}
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Folder</span>
+                                        </div>
+                                        <p className="text-[11px] text-gray-300 truncate">
+                                            {checkingFolder ? 'Checking...' : folderName || 'Browser downloads'}
+                                        </p>
                                     </div>
-
-                                    <div className="flex gap-2">
+                                    <button
+                                        onClick={handlePickFolder}
+                                        className="w-full py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all"
+                                    >
+                                        Choose Save Folder
+                                    </button>
+                                    {folderName && (
                                         <button
-                                            onClick={handlePickFolder}
-                                            className="flex-1 py-2.5 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg"
+                                            onClick={handleClearFolder}
+                                            className="w-full py-2.5 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-xl hover:bg-gray-700 transition-all"
                                         >
-                                            <FolderOpen size={12} />
-                                            {folderName ? 'Change Folder' : 'Choose Folder'}
+                                            Use Browser Downloads Instead
                                         </button>
-                                        {folderName && (
-                                            <button
-                                                onClick={handleClearFolder}
-                                                className="py-2.5 px-4 bg-gray-800 text-gray-400 text-[11px] font-bold rounded-xl hover:bg-gray-700 transition-all"
-                                            >
-                                                Clear
-                                            </button>
-                                        )}
-                                    </div>
+                                    )}
                                 </>
                             )}
                         </div>
-                    ) : null}
+                    )}
                 </div>
             </motion.div>
         </motion.div>
