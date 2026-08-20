@@ -1195,24 +1195,6 @@ export default function App() {
      * There is no longer an "unmarked" branch.
      */
     const handleGrade = async () => {
-        if (!user) {
-            setShowAuth(true);
-            return;
-        }
-
-        if (!studentPaper) {
-            alert(
-                'Please upload a student paper before grading.'
-            );
-            return;
-        }
-
-        /*
-         * Manual grading.
-         *
-         * No AI/API grading request is made.
-         */
-        if (markingModeconst handleGrade = async () => {
         if (!studentPaper) {
             alert('Please upload a student paper before grading.');
             return;
@@ -1254,7 +1236,7 @@ export default function App() {
             return;
         }
     
-        // AI grading continues here...
+        // AI grading continues below...
 
         /*
          * AI grading.
