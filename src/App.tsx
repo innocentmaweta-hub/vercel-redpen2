@@ -2487,7 +2487,7 @@ export default function App() {
     
             // A newly uploaded paper has no grading method selected yet.
             // The user will choose AI or Manual when they click Grade.
-            setMarkingModeState('unmarked');
+            setMarkingModeState('ai')
     
             // Clear any previous result belonging to another paper.
             setResult(null);
@@ -3031,8 +3031,10 @@ export default function App() {
                                                     if (!studentPaper) {
                                                         return;
                                                     }
-
-                                                    setShowGradingChoice(true);
+                                                
+                                                    handleMarkingModeChange(
+                                                        markingMode === 'ai' ? 'self' : 'ai'
+                                                    );
                                                 }}
                                                 className={`relative w-8 h-7 flex items-center justify-center rounded transition-all group ${
                                                     markingMode === 'self'
@@ -3323,11 +3325,11 @@ export default function App() {
                                     className="w-full bg-accent-green/20 text-accent-green py-3 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-accent-green/30 transition-all flex items-center justify-center gap-2"
                                 >
                                     <Upload size={16} />
-                                    Load from JSON File
+                                    Load from Excel File
                                 </button>
 
                                 <p className="text-xs text-gray-500 mt-2 text-center">
-                                    Select a saved grading session file (.json)
+                                    Select a saved grading session file (.xlsx)
                                 </p>
 
                             </div>
