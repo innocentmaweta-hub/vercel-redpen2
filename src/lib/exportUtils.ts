@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import { writeFileToFolder } from './fileStorage';
-import type { StudentInfo, GradingResult } from '../types';
+import type { StudentInfo, GradingResult, HistoryRecord } from '../types';
 
 // Sanitize a string for safe use in filenames
 function sanitizeFilename(name: string): string {
@@ -113,7 +113,7 @@ export function buildSessionExcelFilename(academicYear: string, semester: string
     return `${yr}-${sem}-${label}.xlsx`;
 }
 
-// Excel sheet names have their own restrictions (max 31 chars, no : \ / ? * [ ])
+// Excel sheet names have their own restrictions (max 31 chars, no : \\ / ? * [ ])
 // — separate from filename sanitization above.
 function sanitizeSheetName(name: string): string {
     const cleaned = (name || 'Course').replace(/[:\\/?*[\]]/g, '').trim();
@@ -122,12 +122,7 @@ function sanitizeSheetName(name: string): string {
 
 /**
  * Append a graded paper's details as a new row to the correct course sheet,
- * inside the semester's Excel workbook ("{academicYear}-{semester}-{label}.xlsx").
- *
- * One workbook per academicYear+semester+sessionLabel combination. Within that
- * workbook, each course gets its own sheet — matched by sanitized course name,
- * so re-grading a paper for the same course appends to its existing sheet
- * instead of creating a duplicate.
+ * inside the semester's Excel workbook.
  */
 export async function appendResultToSessionExcel(
     folder: FileSystemDirectoryHandle | null,
@@ -150,7 +145,7 @@ export async function appendResultToSessionExcel(
             const file = await fileHandle.getFile();
             existingBuffer = await file.arrayBuffer();
         } catch {
-            existingBuffer = null; // workbook doesn't exist yet — will create fresh
+            existingBuffer = null;
         }
     }
 
@@ -164,8 +159,6 @@ export async function appendResultToSessionExcel(
     let existingQuestionCount = 0;
 
     if (workbook.SheetNames.includes(sheetName)) {
-        // Course sheet already exists — figure out how many question-columns it currently has,
-        // so we can grow the header (and pad older rows) if this paper has more questions.
         const sheet = workbook.Sheets[sheetName];
         existingData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
         if (existingData.length === 0) {
@@ -175,15 +168,12 @@ export async function appendResultToSessionExcel(
             existingQuestionCount = Math.max(0, Math.floor((existingData[0].length - BASE_COLUMNS.length) / 2));
         }
     } else {
-        // First result for this course in this workbook — create its sheet with headers
         existingData = [fullColumns(incomingQuestionCount)];
         existingQuestionCount = incomingQuestionCount;
     }
 
     const finalQuestionCount = Math.max(existingQuestionCount, incomingQuestionCount);
 
-    // If this paper has more questions than the sheet currently supports, widen the
-    // header and pad every existing row with blank cells for the new question columns.
     if (finalQuestionCount > existingQuestionCount) {
         existingData[0] = fullColumns(finalQuestionCount);
         const extraCells = (finalQuestionCount - existingQuestionCount) * 2;
@@ -207,4 +197,78 @@ export async function appendResultToSessionExcel(
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
     return writeFileToFolder(folder, filename, blob);
+}
+
+/**
+ * Read a previously exported RedPen workbook back into history records.
+ * Every course sheet is read; each data row becomes one HistoryRecord.
+ */
+export async function loadHistoryFromExcelFile(file: File): Promise<HistoryRecord[]> {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const records: HistoryRecord[] = [];
+
+    for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+        if (rows.length < 2) continue;
+
+        const headers = rows[0].map((header: any) => String(header || '').trim());
+        const indexOf = (name: string) => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+        const valueAt = (row: any[], name: string): string => {
+            const index = indexOf(name);
+            return index >= 0 ? String(row[index] ?? '').trim() : '';
+        };
+
+        const questionHeaders = headers
+            .map((header, index) => ({ header, index }))
+            .filter(({ header }) => /^Q\d+ Score$/i.test(header));
+
+        for (const row of rows.slice(1)) {
+            const name = valueAt(row, 'Student Name');
+            const regNo = valueAt(row, 'Reg No');
+            const courseCode = valueAt(row, 'Course Code') || sheetName;
+
+            if (!name && !regNo && !courseCode) continue;
+
+            const questions = questionHeaders.map(({ header, index }) => {
+                const match = header.match(/^Q(\d+) Score$/i);
+                const qNumber = match ? Number(match[1]) : 0;
+                const feedbackIndex = headers.findIndex(h => h.toLowerCase() === `q${qNumber} feedback`);
+                return {
+                    q: qNumber,
+                    score: String(row[index] ?? '').trim(),
+                    feedback: feedbackIndex >= 0 ? String(row[feedbackIndex] ?? '').trim() : '',
+                };
+            });
+
+            const gradedDate = valueAt(row, 'Date Graded');
+            const studentInfo: StudentInfo = {
+                name,
+                regNo,
+                courseCode,
+                program: valueAt(row, 'Program'),
+                year: valueAt(row, 'Year'),
+                semester: valueAt(row, 'Semester'),
+                examDate: valueAt(row, 'Exam Date'),
+            };
+
+            const result: GradingResult = {
+                totalScore: valueAt(row, 'Total Score'),
+                grade: valueAt(row, 'Grade'),
+                percentage: valueAt(row, 'Percentage'),
+                feedback: valueAt(row, 'Summary Feedback'),
+                questions,
+            };
+
+            records.push({
+                id: `excel-${Date.now()}-${records.length}`,
+                date: gradedDate || new Date().toISOString(),
+                studentInfo,
+                result,
+            });
+        }
+    }
+
+    return records;
 }
