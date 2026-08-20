@@ -1667,28 +1667,7 @@ export default function App() {
             }
         };
         // Handle selection from the grading choice modal
-        const handleGradingChoice = (choice: 'ai' | 'manual') => {
-            setShowGradingChoice(false);
         
-            if (choice === 'ai') {
-                setMarkingModeState('ai');
-        
-                if (isMaximized) {
-                    setIsMaximized(false);
-                }
-        
-                handleGradeWithMode('ai');
-                return;
-            }
-        
-            setMarkingModeState('self');
-        
-            if (isMaximized) {
-                setIsMaximized(false);
-            }
-        
-            handleGradeWithMode('self');
-        };
         // Auto mode: automatically grade an uploaded paper using AI.
         useEffect(() => {
             if (isAutoMode && studentPaper && user) {
@@ -3366,59 +3345,6 @@ export default function App() {
                             >
                                 <Plus size={16} />
                                 New Session
-                            </button>
-
-                        </div>
-
-                    </div>
-                </div>
-            )}
-
-            {/* Grading Choice Modal */}
-            {showGradingChoice && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-
-                    <div className="bg-card rounded-3xl border border-gray-800 shadow-xl w-full max-w-md">
-
-                        <div className="p-6 border-b border-gray-800 bg-sidebar/50">
-
-                            <h2 className="text-lg font-bold uppercase tracking-widest text-gray-400">
-                                Choose Grading Method
-                            </h2>
-
-                            <p className="text-sm text-gray-500 mt-1">
-                                Select how you'd like to grade this paper
-                            </p>
-
-                        </div>
-
-                        <div className="p-6 space-y-4">
-
-                            <button
-                                onClick={() => handleGradingChoice('ai')}
-                                className="w-full bg-accent-blue text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
-                            >
-                                <Play size={16} fill="currentColor" />
-                                Use AI Grading
-                            </button>
-
-                            <button
-                                onClick={() => handleGradingChoice('manual')}
-                                className="w-full bg-accent-green text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-                            >
-                                <PenIcon size={16} />
-                                Manual Grading
-                            </button>
-
-                        </div>
-
-                        <div className="p-4 border-t border-gray-800 bg-sidebar/50">
-
-                            <button
-                                onClick={() => setShowGradingChoice(false)}
-                                className="w-full bg-gray-700 text-white py-2 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-gray-600 transition-all"
-                            >
-                                Cancel
                             </button>
 
                         </div>
