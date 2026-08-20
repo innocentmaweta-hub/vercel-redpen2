@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { Upload, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Upload, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Props {

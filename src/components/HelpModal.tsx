@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Upload, Play, Printer, LayoutGrid, PenLine, Save, History } from 'lucide-react';
+import { X, LayoutGrid, PenLine, Save, History } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface Props {

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Loader2, Bot, User as UserIcon, Trash2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { StudentInfo, GradingResult, ActiveView } from '../types';
 
 interface ChatMessage {

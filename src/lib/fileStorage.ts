@@ -48,7 +48,7 @@ export async function pickSaveFolder(): Promise<FileSystemDirectoryHandle | null
         const handle: FileSystemDirectoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
         await idbSet(FOLDER_KEY, handle);
         return handle;
-    } catch (err) {
+    } catch {
         // User cancelled the picker — not an error worth surfacing
         return null;
     }
@@ -68,7 +68,7 @@ export async function getSavedFolder(): Promise<FileSystemDirectoryHandle | null
         // @ts-ignore
         const requested = await handle.requestPermission({ mode: 'readwrite' });
         return requested === 'granted' ? handle : null;
-    } catch (err) {
+    } catch {
         return null;
     }
 }

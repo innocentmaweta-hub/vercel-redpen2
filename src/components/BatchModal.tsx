@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { X, Upload, FileText, CheckCircle, XCircle, Loader2, ChevronRight, Download, Trash2, AlertCircle } from 'lucide-react';
+import { X, Upload, FileText, CheckCircle, XCircle, Loader2, ChevronRight, Download, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GradingResult } from '../types';
 
@@ -178,7 +178,7 @@ export const BatchModal = ({ onClose, markingScheme, onGradeSingle, onSaveAll }:
                             </div>
 
                             <AnimatePresence>
-                                {files.map((file, idx) => (
+                                {files.map(file => (
                                     <motion.div
                                         key={file.id}
                                         initial={{ opacity: 0, x: -8 }}

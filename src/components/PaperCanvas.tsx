@@ -85,9 +85,6 @@ const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='6' y='6' width='12' height='12' rx='2' fill='none' stroke='white' stroke-width='2'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1' fill='%23ff4444'/%3E%3C/svg%3E") 12 12, crosshair`;
 
 // Global state for text input handling
-let isTextInputActive = false;
-let pendingTextAction: DrawAction | null = null;
-
 export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
     (props, ref) => {
 
@@ -96,7 +93,6 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
             activeTool,
             clearCount,
             showOverlay,
-            markingMode,
             zoom,
             penColor,
             penSize,
@@ -540,16 +536,6 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
         }
         
         // Helper function to determine if two line segments intersect
-        function doLinesIntersect(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number): boolean {
-            // Calculate the direction of the line segments
-            const ccw1 = (x4 - x3) * (y1 - y3) - (x1 - x3) * (y4 - y3);
-            const ccw2 = (x4 - x3) * (y2 - y3) - (x2 - x3) * (y4 - y3);
-            const ccw3 = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1);
-            const ccw4 = (x2 - x1) * (y4 - y1) - (x4 - x1) * (y2 - y1);
-            
-            // If the signs of the cross products are different for both pairs, the lines intersect
-            return ((ccw1 > 0) !== (ccw2 > 0)) && ((ccw3 > 0) !== (ccw4 > 0));
-        }
 
         function resizeCanvas() {
             const img = imageRef.current;
@@ -1029,7 +1015,6 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                 };
 
                 actionsRef.current.push(newAction);
-
                 redoStackRef.current = [];
 
                 return;
@@ -1054,7 +1039,6 @@ export const PaperCanvas = forwardRef<PaperCanvasHandle, PaperCanvasProps>(
                 }
 
                 // Store the position where text should be placed
-                const normPos = toNormalized(canvasPos);
 
                 // Set up direct text input state
                 directTextInputRef.current = {

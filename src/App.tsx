@@ -21,8 +21,8 @@ import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
 import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, NewSessionModal, SemesterCourse } from './components/CourseSessionModal';
 import { ToolOptionsBar } from './components/ToolOptionsBar';
-import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse, parseScore } from './types';
-import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
+import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse } from './types';
+import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { YazaPanel } from './components/YazaPanel';
 import { getSavedFolder } from './lib/fileStorage';
@@ -110,7 +110,7 @@ export default function App() {
     const [markingMode, setMarkingModeState] = useState<'self' | 'ai' | 'unmarked'>('unmarked');
 
     // Function to handle changing marking mode
-    const handleMarkingModeChange = () => {
+    const _handleMarkingModeChange = () => {
         // Cycle through the three marking modes: unmarked -> self -> ai -> unmarked
         if (markingMode === 'unmarked') {
             setMarkingModeState('self');
@@ -177,8 +177,6 @@ export default function App() {
     const [schools, setSchools] = useState<string[]>(loadSchools());
     const [departments, setDepartments] = useState<string[]>(loadDepartments());
     const [courses, setCourses] = useState<StoredCourse[]>(loadCourses());
-    const [showAddSchoolModal, setShowAddSchoolModal] = useState(false);
-    const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
     const [newSchoolName, setNewSchoolName] = useState('');
     const [newDepartmentName, setNewDepartmentName] = useState('');
 
@@ -306,7 +304,7 @@ export default function App() {
                 } else {
                     setPaymentStatusMessage(data.message || 'We could not confirm your payment yet. If money was deducted, please contact support.');
                 }
-            } catch (err) {
+            } catch {
                 localStorage.removeItem(PENDING_TX_KEY);
                 setPaymentStatusMessage('We could not confirm your payment. If money was deducted, please contact support.');
             }
@@ -689,24 +687,6 @@ export default function App() {
         };
 
         input.click();
-    };
-
-    // Function to add a new school
-    const addNewSchool = () => {
-        if (newSchoolName.trim() && !schools.includes(newSchoolName.trim())) {
-            setSchools([...schools, newSchoolName.trim()]);
-            setNewSchoolName('');
-            setShowAddSchoolModal(false);
-        }
-    };
-
-    // Function to add a new department
-    const addNewDepartment = () => {
-        if (newDepartmentName.trim() && !departments.includes(newDepartmentName.trim())) {
-            setDepartments([...departments, newDepartmentName.trim()]);
-            setNewDepartmentName('');
-            setShowAddDepartmentModal(false);
-        }
     };
 
     const handleGrade = async () => {
@@ -1216,7 +1196,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                     }
                     setUser(prev => prev ? { ...prev, avatarUrl: data.avatarUrl } : prev);
                     resolve({ success: true });
-                } catch (err) {
+                } catch (_err) {
                     resolve({ success: false, message: 'Failed to upload image' });
                 }
             };
@@ -1238,7 +1218,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
                 return { success: false, message: data.message || 'Failed to change password' };
             }
             return { success: true };
-        } catch (err) {
+        } catch {
             return { success: false, message: 'Failed to change password' };
         }
     };
@@ -1258,7 +1238,7 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
             // Account deleted successfully — log the user out locally
             handleLogout();
             return { success: true };
-        } catch (err) {
+        } catch (_err) {
             return { success: false, message: 'Failed to delete account' };
         }
     };
@@ -1366,11 +1346,6 @@ const handleYazaEditQuestionScore = (questionNumber: number, score?: string, fee
         session.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
         session.courseName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         session.program?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Filter departments based on search term
-    const filteredDepartments = departments.filter(dept =>
-        searchTerm === '' || dept.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Handle search term changes from TopBar

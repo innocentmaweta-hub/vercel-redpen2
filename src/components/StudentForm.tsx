@@ -24,7 +24,7 @@ function getAcademicYearOptions(): string[] {
 const ACADEMIC_YEARS = getAcademicYearOptions();
 
 export const StudentForm = ({ info, onChange, courses }: Props) => {
-  const [selectedDepartment, setSelectedDepartment] = useState<string>(() => {
+  const [selectedDepartment, _setSelectedDepartment] = useState<string>(() => {
     return localStorage.getItem('lastSelectedDepartment') || '';
   });
 

@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { Check, X } from 'lucide-react';
+import React from 'react';
 
 interface ToolOptionsBarProps {
   activeTool: string | null;
@@ -38,7 +37,7 @@ export const ToolOptionsBar: React.FC<ToolOptionsBarProps> = ({
   textColor,
   textSize,
   textFont,
-  markingMode,
+  markingMode: _markingMode,
   markSize,
   markThickness, // New prop for mark thickness
   onPenColorChange,
@@ -49,7 +48,7 @@ export const ToolOptionsBar: React.FC<ToolOptionsBarProps> = ({
   onTextColorChange,
   onTextSizeChange,
   onTextFontChange,
-  onMarkingModeChange,
+  onMarkingModeChange: _onMarkingModeChange,
   onMarkSizeChange,
   onMarkThicknessChange, // New prop for mark thickness
   onInteraction,

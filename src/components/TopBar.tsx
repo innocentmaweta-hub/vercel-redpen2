@@ -2,7 +2,7 @@ import logo from '../assets/logo.png';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, History as HistoryIcon, User, Save, Printer, Plus, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
+import { StudentInfo, HistoryRecord } from '../types';
 
 interface StoredCourse {
   courseCode: string;
@@ -51,24 +51,6 @@ interface DropdownItem {
 
 const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
 const SEMESTERS = ['Semester 1', 'Semester 2'];
-const PROGRAMS = [
-  'BSc Computer Science', 'BSc Software Engineering', 'BSc Information Technology',
-  'BEng Electrical Engineering', 'BEng Civil Engineering',
-  'BSc Business Administration', 'BSc Accounting & Finance',
-  'BSc Nursing', 'Bachelor of Education', 'LLB Law',
-  'BSc Mathematics', 'BSc Biology', 'Other'
-];
-
-const DEPARTMENTS = [
-  'Computer Science & IT', 'Engineering', 'Business & Management',
-  'Health Sciences', 'Education', 'Law', 'Social Sciences',
-  'Natural Sciences', 'Agriculture', 'Arts & Humanities',
-  'Mathematics & Statistics', 'Physics', 'Chemistry', 'Biology',
-  'Psychology', 'Sociology', 'Economics', 'Political Science',
-  'Architecture', 'Medicine', 'Pharmacy', 'Nursing', 'Dentistry',
-  'Veterinary Science', 'Environmental Science', 'Geography', 'History',
-  'Languages & Literature', 'Philosophy', 'Religious Studies'
-];
 
 function getRecentCourses(history: HistoryRecord[]): string[] {
   if (!Array.isArray(history)) return [];
@@ -219,7 +201,7 @@ const SearchDropdown = ({ query, actions, historyResults, onSelectAction, onSele
   );
 };
 
-const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) => {
+const SettingsDropdown = ({ onClose }: { onClose: () => void }) => {
   const [status, setStatus] = useState<{ provider: string; model: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -272,11 +254,10 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 export const TopBar = ({
   onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history, courses,
-  onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
+  onShowOldSessions, onSearchTermChange,
   isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen,
   onViewChange, onProfile, onLoadRecord
 }: TopBarProps) => {
-  const [isMaximized, setIsMaximized] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{ name: string; x: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

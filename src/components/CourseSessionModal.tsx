@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { BookOpen, X, ChevronRight, ArrowRight, AlertCircle, Search } from 'lucide-react';
 
 export interface SemesterCourse {
@@ -25,6 +25,7 @@ interface ContinueSemesterModalProps {
   uploadLabel: string;
   onContinue: () => void;
   onNewSemester: () => void;
+}
   onCancel: () => void;
 }
 

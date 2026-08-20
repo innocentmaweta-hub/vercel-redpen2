@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  TrendingUp, Award, FileText, BookOpen, Bell,
-  CheckCircle, Clock, Star, MessageSquare, ThumbsUp,
-  BarChart2, Users, Zap, ChevronRight, Calendar
+  Award, FileText, BookOpen, Bell,
+  CheckCircle, Clock, Star, ThumbsUp,
+  BarChart2, Zap, ChevronRight, Calendar
 } from 'lucide-react';
 import { HistoryRecord } from '../types';
 
