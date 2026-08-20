@@ -19,14 +19,58 @@ import { ProfileModal } from './components/ProfileModal';
 import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
-import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, NewSessionModal, SemesterCourse } from './components/CourseSessionModal';
+import {
+    NewSemesterModal,
+    ContinueSemesterModal,
+    NewCourseModal,
+    NewSessionModal,
+    SemesterCourse
+} from './components/CourseSessionModal';
 import { ToolOptionsBar } from './components/ToolOptionsBar';
-import { StudentInfo, GradingResult, ApiGradingResult, HistoryRecord, ActiveView, User, AuthResponse, parseScore } from './types';
-import { Play, AlertTriangle, Hand, Pen as PenIcon, Type, Square, Eraser, Upload, FileCheck, FileX, Maximize2, Minimize2, ZoomIn, ZoomOut, Undo2, Redo2, RotateCcw, RotateCw, ChevronLeft, ChevronRight, Check, X, Plus, Search } from 'lucide-react';
+import {
+    StudentInfo,
+    GradingResult,
+    ApiGradingResult,
+    HistoryRecord,
+    ActiveView,
+    User,
+    AuthResponse,
+    parseScore
+} from './types';
+import {
+    Play,
+    AlertTriangle,
+    Hand,
+    Pen as PenIcon,
+    Type,
+    Square,
+    Eraser,
+    Upload,
+    FileCheck,
+    FileX,
+    Maximize2,
+    Minimize2,
+    ZoomIn,
+    ZoomOut,
+    Undo2,
+    Redo2,
+    RotateCcw,
+    RotateCw,
+    ChevronLeft,
+    ChevronRight,
+    Check,
+    X,
+    Plus,
+    Search
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { YazaPanel } from './components/YazaPanel';
 import { getSavedFolder } from './lib/fileStorage';
-import { buildPaperPdfBlob, buildPaperPdfFilename, appendResultToSessionExcel } from './lib/exportUtils';
+import {
+    buildPaperPdfBlob,
+    buildPaperPdfFilename,
+    appendResultToSessionExcel
+} from './lib/exportUtils';
 import { writeFileToFolder } from './lib/fileStorage';
 
 const HISTORY_KEY = 'grading_history';
@@ -91,7 +135,7 @@ function saveDepartments(departments: string[]) {
     localStorage.setItem(DEPARTMENTS_KEY, JSON.stringify(departments));
 }
 
-// Course list management functions (independent of program of study)
+// Course list management functions
 interface StoredCourse {
     courseCode: string;
     courseName: string;
@@ -121,37 +165,86 @@ export default function App() {
         examDate: ''
     });
 
-    const [markingScheme, setMarkingScheme] = useState<{ base64: string; name: string } | null>(null);
-    const [studentPaper, setStudentPaper] = useState<{ base64: string; name: string } | null>(null);
+    const [markingScheme, setMarkingScheme] = useState<{
+        base64: string;
+        name: string;
+    } | null>(null);
+
+    const [studentPaper, setStudentPaper] = useState<{
+        base64: string;
+        name: string;
+    } | null>(null);
+
     const [result, setResult] = useState<GradingResult | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const [activeView, setActiveView] = useState<ActiveView>('dashboard');
-    const [history, setHistory] = useState<HistoryRecord[]>(loadHistory());
+    const [activeView, setActiveView] =
+        useState<ActiveView>('dashboard');
+
+    const [history, setHistory] =
+        useState<HistoryRecord[]>(loadHistory());
+
     const [examinerRemarks, setExaminerRemarks] = useState('');
     const [showHelp, setShowHelp] = useState(false);
     const [showRefresh, setShowRefresh] = useState(false);
 
-    const [activeTool, setActiveTool] = useState<string | null>(null);
+    const [activeTool, setActiveTool] =
+        useState<string | null>(null);
 
-    // Marking mode:
-    // unmarked = paper uploaded but not yet graded
-    // self     = manually marked
-    // ai       = AI graded
-    const [markingMode, setMarkingModeState] = useState<'unmarked' | 'self' | 'ai'>('unmarked');
-    
-    // Controls the "Choose Grading Method" modal
-    const [showGradingChoice, setShowGradingChoice] = useState(false);
-    
-    // Explicitly switch between grading modes
+    /*
+     * Marking mode
+     *
+     * There is NO "unmarked" mode anymore.
+     *
+     * ai   = AI grading
+     * self = manual/examiner grading
+     *
+     * AI is the default mode whenever a new paper/session is started.
+     */
+    const [markingMode, setMarkingModeState] =
+        useState<'self' | 'ai'>('ai');
+
+    /*
+     * Change the marking method.
+     *
+     * AI mode:
+     * - clears any manually-created result
+     * - removes active marking tools
+     * - hides tool options
+     *
+     * Manual mode:
+     * - prepares an editable result when a student paper exists
+     * - removes active tools first so the examiner can then select
+     *   the appropriate manual marking tool.
+     */
     const handleMarkingModeChange = (mode: 'ai' | 'self') => {
         setMarkingModeState(mode);
-    
+
         if (mode === 'ai') {
             setResult(null);
+
+            // AI mode should not expose manual marking tools.
+            setActiveTool(null);
+            setShowToolOptions(false);
+
+            if (autoHideTimerRef.current) {
+                clearTimeout(autoHideTimerRef.current);
+                autoHideTimerRef.current = null;
+            }
+
+            return;
         }
-    
-        if (mode === 'self' && studentPaper) {
+
+        // Manual/self marking mode.
+        setActiveTool(null);
+        setShowToolOptions(false);
+
+        if (autoHideTimerRef.current) {
+            clearTimeout(autoHideTimerRef.current);
+            autoHideTimerRef.current = null;
+        }
+
+        if (studentPaper) {
             setResult({
                 score: '',
                 totalScore: '',
@@ -169,9 +262,6 @@ export default function App() {
                 }
             });
         }
-    
-        setActiveTool(null);
-        setShowToolOptions(false);
     };
 
     const [isMaximized, setIsMaximized] = useState(false);
@@ -183,35 +273,64 @@ export default function App() {
     const [penSize, setPenSize] = useState(3);
     const [shapeColor, setShapeColor] = useState('#FF0000');
     const [shapeSize, setShapeSize] = useState(2);
-    const [shapeType, setShapeType] = useState<'rectangle' | 'ellipse' | 'line' | 'triangle'>('rectangle');
+    const [shapeType, setShapeType] =
+        useState<'rectangle' | 'ellipse' | 'line' | 'triangle'>(
+            'rectangle'
+        );
     const [textColor, setTextColor] = useState('#FF0000');
     const [textSize, setTextSize] = useState(16);
     const [textFont, setTextFont] = useState('Arial');
-    const [markingModeSetting, setMarkingModeSetting] = useState<'none' | 'right' | 'wrong'>('none');
+    const [markingModeSetting, setMarkingModeSetting] =
+        useState<'none' | 'right' | 'wrong'>('none');
     const [markSize, setMarkSize] = useState(28);
     const [markThickness, setMarkThickness] = useState(2);
 
     // Tool options panel visibility
-    const [showToolOptions, setShowToolOptions] = useState(true);
+    const [showToolOptions, setShowToolOptions] = useState(false);
 
     // Auto-hide timer for tool options bar
-    const autoHideTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const autoHideTimerRef =
+        useRef<NodeJS.Timeout | null>(null);
 
-    const [semesterCourse, setSemesterCourse] = useState<SemesterCourse | null>(null);
-    const [pendingUpload, setPendingUpload] = useState<'scheme' | 'paper' | null>(null);
-    const [modalType, setModalType] = useState<'new' | 'continue' | null>(null);
-    const [showOldSessionModal, setShowOldSessionModal] = useState(false);
-    const [showNewCourseModal, setShowNewCourseModal] = useState(false);
-    const [showNewSessionModal, setShowNewSessionModal] = useState(false);
+    const [semesterCourse, setSemesterCourse] =
+        useState<SemesterCourse | null>(null);
+
+    const [pendingUpload, setPendingUpload] =
+        useState<'scheme' | 'paper' | null>(null);
+
+    const [modalType, setModalType] =
+        useState<'new' | 'continue' | null>(null);
+
+    const [showOldSessionModal, setShowOldSessionModal] =
+        useState(false);
+
+    const [showNewCourseModal, setShowNewCourseModal] =
+        useState(false);
+
+    const [showNewSessionModal, setShowNewSessionModal] =
+        useState(false);
 
     // School and department management
-    const [schools, setSchools] = useState<string[]>(loadSchools());
-    const [departments, setDepartments] = useState<string[]>(loadDepartments());
-    const [courses, setCourses] = useState<StoredCourse[]>(loadCourses());
-    const [showAddSchoolModal, setShowAddSchoolModal] = useState(false);
-    const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
-    const [newSchoolName, setNewSchoolName] = useState('');
-    const [newDepartmentName, setNewDepartmentName] = useState('');
+    const [schools, setSchools] =
+        useState<string[]>(loadSchools());
+
+    const [departments, setDepartments] =
+        useState<string[]>(loadDepartments());
+
+    const [courses, setCourses] =
+        useState<StoredCourse[]>(loadCourses());
+
+    const [showAddSchoolModal, setShowAddSchoolModal] =
+        useState(false);
+
+    const [showAddDepartmentModal, setShowAddDepartmentModal] =
+        useState(false);
+
+    const [newSchoolName, setNewSchoolName] =
+        useState('');
+
+    const [newDepartmentName, setNewDepartmentName] =
+        useState('');
 
     // Search functionality
     const [searchTerm, setSearchTerm] = useState('');
@@ -219,7 +338,10 @@ export default function App() {
     // Auth state
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
-    const [showAuth, setShowAuth] = useState(false); // Only shown when a gated action is attempted
+
+    // Only shown when a gated action is attempted.
+    const [showAuth, setShowAuth] = useState(false);
+
     const [showProfile, setShowProfile] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showYaza, setShowYaza] = useState(false);
@@ -227,30 +349,39 @@ export default function App() {
 
     // Auto mode
     const [isAutoMode, setIsAutoMode] = useState(false);
-    const [isGradingInProgress, setIsGradingInProgress] = useState(false);
-    const [upgradePromptMessage, setUpgradePromptMessage] = useState<string | null>(null);
-    const [paymentStatusMessage, setPaymentStatusMessage] = useState<string | null>(null);
+    const [isGradingInProgress, setIsGradingInProgress] =
+        useState(false);
+
+    const [upgradePromptMessage, setUpgradePromptMessage] =
+        useState<string | null>(null);
+
+    const [paymentStatusMessage, setPaymentStatusMessage] =
+        useState<string | null>(null);
 
     // Auth header helper
-    const authHeaders = useCallback((): Record<string, string> => {
-        const t = localStorage.getItem(AUTH_TOKEN_KEY);
+    const authHeaders = useCallback(
+        (): Record<string, string> => {
+            const t = localStorage.getItem(AUTH_TOKEN_KEY);
 
-        return t
-            ? {
-                'Authorization': `Bearer ${t}`,
-                'Content-Type': 'application/json'
-            }
-            : {
-                'Content-Type': 'application/json'
-            };
-    }, []);
+            return t
+                ? {
+                    'Authorization': `Bearer ${t}`,
+                    'Content-Type': 'application/json'
+                }
+                : {
+                    'Content-Type': 'application/json'
+                };
+        },
+        []
+    );
 
     // Restore session by validating the stored token against the backend
     useEffect(() => {
-        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        const storedToken =
+            localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!storedToken) {
-            return; // No forced login — user can browse freely until they hit a gated action
+            return;
         }
 
         setToken(storedToken);
@@ -271,34 +402,46 @@ export default function App() {
 
                 setUser({
                     id: data.user.id,
-                    name: data.user.name || data.user.username || data.user.email,
+                    name:
+                        data.user.name ||
+                        data.user.username ||
+                        data.user.email,
                     email: data.user.email,
                     tier: data.user.tier || 'free',
-                    gradingCount: data.user.gradingCount ?? 0,
-                    gradingLimit: data.user.gradingLimit ?? 5,
-                    createdAt: new Date().toISOString(),
-                    institution: data.user.institution || '',
-                    role: data.user.role || '',
-                    activeProvider: data.user.activeProvider || 'server',
-                    totalGraded: data.user.totalGraded ?? 0,
-                    avatarUrl: data.user.avatarUrl || '',
+                    gradingCount:
+                        data.user.gradingCount ?? 0,
+                    gradingLimit:
+                        data.user.gradingLimit ?? 5,
+                    createdAt:
+                        new Date().toISOString(),
+                    institution:
+                        data.user.institution || '',
+                    role:
+                        data.user.role || '',
+                    activeProvider:
+                        data.user.activeProvider || 'server',
+                    totalGraded:
+                        data.user.totalGraded ?? 0,
+                    avatarUrl:
+                        data.user.avatarUrl || '',
                 });
 
                 setShowAuth(false);
             }
             catch (err) {
-                console.error('Failed to restore session:', err);
+                console.error(
+                    'Failed to restore session:',
+                    err
+                );
 
                 localStorage.removeItem(AUTH_TOKEN_KEY);
                 setToken(null);
                 setUser(null);
-
-                // No forced login here either — just fall back to browsing as a guest
             }
         })();
     }, []);
 
-    // Load grading history from the backend once the user is authenticated
+    // Load grading history from the backend once authenticated
     useEffect(() => {
         if (!user || !token) return;
 
@@ -316,32 +459,42 @@ export default function App() {
 
                 if (Array.isArray(data.history)) {
                     setHistory(data.history);
-                    saveHistory(data.history); // local cache for offline fallback
+                    saveHistory(data.history);
                 }
             }
             catch (err) {
-                console.error('Failed to load history from server:', err);
+                console.error(
+                    'Failed to load history from server:',
+                    err
+                );
             }
         })();
     }, [user, token]);
 
-    // Detect return from PayChangu checkout and verify the pending transaction
+    // Detect return from PayChangu checkout
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
+        const params =
+            new URLSearchParams(window.location.search);
 
-        if (params.get('payment_callback') !== '1') return;
-
-        const pendingTxRef = localStorage.getItem(PENDING_TX_KEY);
-
-        // Clean the URL regardless of outcome, so a refresh doesn't re-trigger this
-        window.history.replaceState({}, '', window.location.pathname);
-
-        if (!pendingTxRef) {
-            return; // Nothing to verify (e.g. user navigated here manually)
+        if (params.get('payment_callback') !== '1') {
+            return;
         }
 
-        // Wait until we know the logged-in user before verifying (token needs to be restored first)
-        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        const pendingTxRef =
+            localStorage.getItem(PENDING_TX_KEY);
+
+        window.history.replaceState(
+            {},
+            '',
+            window.location.pathname
+        );
+
+        if (!pendingTxRef) {
+            return;
+        }
+
+        const storedToken =
+            localStorage.getItem(AUTH_TOKEN_KEY);
 
         if (!storedToken) {
             localStorage.removeItem(PENDING_TX_KEY);
@@ -350,18 +503,24 @@ export default function App() {
 
         (async () => {
             try {
-                const res = await fetch('/api/payments/verify', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${storedToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        txRef: pendingTxRef
-                    }),
-                });
+                const res = await fetch(
+                    '/api/payments/verify',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization':
+                                `Bearer ${storedToken}`,
+                            'Content-Type':
+                                'application/json'
+                        },
+                        body: JSON.stringify({
+                            txRef: pendingTxRef
+                        }),
+                    }
+                );
 
-                const data = await res.json().catch(() => ({}));
+                const data =
+                    await res.json().catch(() => ({}));
 
                 localStorage.removeItem(PENDING_TX_KEY);
 
@@ -387,49 +546,71 @@ export default function App() {
         })();
     }, []);
 
-    // Auto-hide tool options bar after 6 seconds of inactivity
+    /*
+     * Tool options auto-hide.
+     *
+     * IMPORTANT:
+     * AI mode never shows this bar.
+     */
     useEffect(() => {
         if (
-            showToolOptions &&
-            activeTool &&
-            (
+            markingMode !== 'self' ||
+            !showToolOptions ||
+            !activeTool ||
+            !(
                 activeTool === 'mark' ||
                 activeTool === 'mark-right' ||
                 activeTool === 'mark-wrong'
             )
         ) {
-            if (autoHideTimerRef.current) {
-                clearTimeout(autoHideTimerRef.current);
-            }
-
-            autoHideTimerRef.current = setTimeout(() => {
-                setShowToolOptions(false);
-            }, 6000);
-
-            return () => {
-                if (autoHideTimerRef.current) {
-                    clearTimeout(autoHideTimerRef.current);
-                }
-            };
+            return;
         }
-    }, [showToolOptions, activeTool]);
+
+        if (autoHideTimerRef.current) {
+            clearTimeout(autoHideTimerRef.current);
+        }
+
+        autoHideTimerRef.current = setTimeout(() => {
+            setShowToolOptions(false);
+        }, 6000);
+
+        return () => {
+            if (autoHideTimerRef.current) {
+                clearTimeout(
+                    autoHideTimerRef.current
+                );
+            }
+        };
+    }, [
+        showToolOptions,
+        activeTool,
+        markingMode
+    ]);
 
     // Cleanup timer on unmount
     useEffect(() => {
         return () => {
             if (autoHideTimerRef.current) {
-                clearTimeout(autoHideTimerRef.current);
+                clearTimeout(
+                    autoHideTimerRef.current
+                );
             }
         };
     }, []);
 
-    // Function to handle interaction with tool options to reset auto-hide timer
+    // Function to handle interaction with tool options
     const handleToolOptionInteraction = () => {
-        if (autoHideTimerRef.current) {
-            clearTimeout(autoHideTimerRef.current);
+        // Never allow tool options in AI mode.
+        if (markingMode !== 'self') {
+            return;
         }
 
-        // Only reset the timer if options bar is hidden but should be shown for these tools
+        if (autoHideTimerRef.current) {
+            clearTimeout(
+                autoHideTimerRef.current
+            );
+        }
+
         if (
             !showToolOptions &&
             (
@@ -441,7 +622,6 @@ export default function App() {
             setShowToolOptions(true);
         }
 
-        // Reset the timer
         autoHideTimerRef.current = setTimeout(() => {
             setShowToolOptions(false);
         }, 6000);
@@ -452,21 +632,27 @@ export default function App() {
         const storedSessions = loadSessions();
 
         if (storedSessions.length > 0) {
-            // Pre-fill any available session data
-            const latestSession = storedSessions[0];
+            const latestSession =
+                storedSessions[0];
 
             if (latestSession) {
                 setStudentInfo(prev => ({
                     ...prev,
-                    program: latestSession.program || prev.program,
-                    courseCode: latestSession.courseCode || prev.courseCode,
-                    year: latestSession.year || prev.year,
+                    program:
+                        latestSession.program ||
+                        prev.program,
+                    courseCode:
+                        latestSession.courseCode ||
+                        prev.courseCode,
+                    year:
+                        latestSession.year ||
+                        prev.year,
                 }));
             }
         }
     }, []);
 
-    // Save schools and departments when they change
+    // Save schools and departments
     useEffect(() => {
         saveSchools(schools);
     }, [schools]);
@@ -475,12 +661,18 @@ export default function App() {
         saveDepartments(departments);
     }, [departments]);
 
-    const schemeRef = useRef<UploadZoneHandle>(null);
-    const paperRef = useRef<UploadZoneHandle>(null);
-    const paperCanvasRef = useRef<PaperCanvasHandle>(null);
+    const schemeRef =
+        useRef<UploadZoneHandle>(null);
 
-    const openUploadModal = (type: 'scheme' | 'paper') => {
-        // If a session is already active, uploads require no session/course gate.
+    const paperRef =
+        useRef<UploadZoneHandle>(null);
+
+    const paperCanvasRef =
+        useRef<PaperCanvasHandle>(null);
+
+    const openUploadModal = (
+        type: 'scheme' | 'paper'
+    ) => {
         if (semesterCourse) {
             if (type === 'scheme') {
                 schemeRef.current?.triggerInput();
@@ -492,7 +684,6 @@ export default function App() {
             return;
         }
 
-        // No active session: collect session + course details first.
         setPendingUpload(type);
         setModalType('new');
     };
@@ -509,37 +700,66 @@ export default function App() {
         setModalType(null);
     };
 
-    const clearYazaSessionHistory = (key: string) => {
-        fetch(`/api/yaza/history?sessionKey=${encodeURIComponent(key)}`, {
-            method: 'DELETE',
-            headers: authHeaders(),
-        }).catch(err =>
-            console.error('Failed to reset Yaza history for new session:', err)
+    const clearYazaSessionHistory = (
+        key: string
+    ) => {
+        fetch(
+            `/api/yaza/history?sessionKey=${encodeURIComponent(key)}`,
+            {
+                method: 'DELETE',
+                headers: authHeaders(),
+            }
+        ).catch(err =>
+            console.error(
+                'Failed to reset Yaza history for new session:',
+                err
+            )
         );
     };
 
-    const handleNewSemesterConfirm = (semester: SemesterCourse) => {
+    const handleNewSemesterConfirm = (
+        semester: SemesterCourse
+    ) => {
         setSemesterCourse(semester);
 
-        clearYazaSessionHistory(semester.courseCode || 'general');
+        clearYazaSessionHistory(
+            semester.courseCode || 'general'
+        );
 
-        // Add to stored semesters
-        const storedSessions = loadSessions();
+        const storedSessions =
+            loadSessions();
 
         const updatedSessions = [
             semester,
-            ...storedSessions.filter(s => s.courseCode !== semester.courseCode)
+            ...storedSessions.filter(
+                s =>
+                    s.courseCode !==
+                    semester.courseCode
+            )
         ];
 
         saveSessions(updatedSessions);
 
         setStudentInfo(prev => ({
             ...prev,
-            courseCode: semester.courseCode || prev.courseCode,
-            program: semester.program || prev.program,
-            year: semester.year || prev.year,
-            semester: semester.semester || prev.semester,
+            courseCode:
+                semester.courseCode ||
+                prev.courseCode,
+            program:
+                semester.program ||
+                prev.program,
+            year:
+                semester.year ||
+                prev.year,
+            semester:
+                semester.semester ||
+                prev.semester,
         }));
+
+        // Every new session starts in AI mode.
+        setMarkingModeState('ai');
+        setActiveTool(null);
+        setShowToolOptions(false);
 
         triggerPendingUpload();
     };
@@ -547,6 +767,11 @@ export default function App() {
     const handleSkipSemester = () => {
         setPendingUpload(null);
         setModalType(null);
+
+        // New uploads start in AI mode.
+        setMarkingModeState('ai');
+        setActiveTool(null);
+        setShowToolOptions(false);
 
         if (pendingUpload === 'scheme') {
             schemeRef.current?.triggerInput();
@@ -556,41 +781,70 @@ export default function App() {
         }
     };
 
-    const handleContinueSemester = () => triggerPendingUpload();
+    const handleContinueSemester = () =>
+        triggerPendingUpload();
 
     const handleStartNewFromContinue = () => {
         setModalType('new');
     };
 
-    // "New Course" — keeps the active session but starts a completely fresh course context.
-    const handleNewCourse = (updates: { courseCode: string; courseName: string }) => {
-        const courseCode = updates.courseCode.trim().toUpperCase();
-        const courseName = updates.courseName.trim();
+    /*
+     * New Course
+     *
+     * Keeps the active session but starts
+     * a fresh course context.
+     */
+    const handleNewCourse = (
+        updates: {
+            courseCode: string;
+            courseName: string;
+        }
+    ) => {
+        const courseCode =
+            updates.courseCode
+                .trim()
+                .toUpperCase();
+
+        const courseName =
+            updates.courseName.trim();
 
         if (!courseCode) return;
 
-        setSemesterCourse(prev => prev ? {
-            ...prev,
-            courseCode,
-            courseName,
-        } : {
-            courseCode,
-            courseName,
-            program: '',
-            year: '',
-            semester: '',
-            academicYear: '',
-            sessionLabel: '',
-        });
+        setSemesterCourse(prev =>
+            prev
+                ? {
+                    ...prev,
+                    courseCode,
+                    courseName,
+                }
+                : {
+                    courseCode,
+                    courseName,
+                    program: '',
+                    year: '',
+                    semester: '',
+                    academicYear: '',
+                    sessionLabel: '',
+                }
+        );
 
-        clearYazaSessionHistory(courseCode || 'general');
+        clearYazaSessionHistory(
+            courseCode || 'general'
+        );
 
-        // Remember the course for future course dropdowns.
         setCourses(prev => {
-            const withoutDupe = prev.filter(c => c.courseCode !== courseCode);
+            const withoutDupe =
+                prev.filter(
+                    c =>
+                        c.courseCode !==
+                        courseCode
+                );
 
             const updated = [
-                { courseCode, courseName },
+                {
+                    courseCode,
+                    courseName
+                },
                 ...withoutDupe,
             ];
 
@@ -598,7 +852,6 @@ export default function App() {
             return updated;
         });
 
-        // Start the new course completely blank.
         setStudentInfo(prev => ({
             ...prev,
             name: '',
@@ -612,8 +865,13 @@ export default function App() {
         setStudentPaper(null);
         setResult(null);
         setExaminerRemarks('');
+
+        // AI is the default for every new paper/course.
         setMarkingModeState('ai');
+
         setActiveTool(null);
+        setShowToolOptions(false);
+
         setZoom(1);
         setClearCount(c => c + 1);
         setIsMaximized(false);
@@ -623,381 +881,637 @@ export default function App() {
         setShowNewCourseModal(false);
     };
 
-    // "New Session" — creates a completely fresh session + course context.
-    // All previous marking/student work is cleared.
-    const handleNewSession = (updates: {
-        academicYear: string;
-        year: string;
-        semester: string;
-        sessionLabel: string;
-        customName: string;
-        courseCode: string;
-        courseName: string;
-    }) => {
+    /*
+     * New Session
+     *
+     * Completely clears previous marking work.
+     */
+    const handleNewSession = (
+        updates: {
+            academicYear: string;
+            year: string;
+            semester: string;
+            sessionLabel: string;
+            customName: string;
+            courseCode: string;
+            courseName: string;
+        }
+    ) => {
         const newSession: SemesterCourse = {
-            courseCode: updates.courseCode.trim().toUpperCase(),
-            courseName: updates.courseName.trim(),
+            courseCode:
+                updates.courseCode
+                    .trim()
+                    .toUpperCase(),
+
+            courseName:
+                updates.courseName.trim(),
+
             program: '',
             year: updates.year,
             semester: updates.semester,
-            academicYear: updates.academicYear,
-            sessionLabel: updates.sessionLabel,
-            customName: updates.customName.trim() || undefined,
+            academicYear:
+                updates.academicYear,
+            sessionLabel:
+                updates.sessionLabel,
+            customName:
+                updates.customName.trim() ||
+                undefined,
         };
 
         setSemesterCourse(newSession);
 
-        clearYazaSessionHistory(newSession.courseCode || 'general');
+        clearYazaSessionHistory(
+            newSession.courseCode ||
+            'general'
+        );
 
-        // Store the new session for Load Session / future reuse.
-        const storedSessions = loadSessions();
+        const storedSessions =
+            loadSessions();
 
         const updatedSessions = [
             newSession,
             ...storedSessions.filter(
                 s =>
                     !(
-                        s.courseCode === newSession.courseCode &&
-                        s.academicYear === newSession.academicYear &&
-                        s.semester === newSession.semester &&
-                        s.sessionLabel === newSession.sessionLabel &&
-                        s.customName === newSession.customName
+                        s.courseCode ===
+                            newSession.courseCode &&
+                        s.academicYear ===
+                            newSession.academicYear &&
+                        s.semester ===
+                            newSession.semester &&
+                        s.sessionLabel ===
+                            newSession.sessionLabel &&
+                        s.customName ===
+                            newSession.customName
                     )
             ),
         ];
 
         saveSessions(updatedSessions);
 
-        // Keep only the new session context.
         setStudentInfo(prev => ({
             ...prev,
             name: '',
             regNo: '',
             program: '',
             year: newSession.year,
-            semester: newSession.semester,
-            courseCode: newSession.courseCode,
+            semester:
+                newSession.semester,
+            courseCode:
+                newSession.courseCode,
             examDate: '',
         }));
 
-        // New session starts completely blank.
         setMarkingScheme(null);
         setStudentPaper(null);
         setResult(null);
         setExaminerRemarks('');
+
+        // AI is the default marking method.
         setMarkingModeState('ai');
+
         setActiveTool(null);
+        setShowToolOptions(false);
+
         setZoom(1);
         setClearCount(c => c + 1);
         setIsMaximized(false);
         setIsAutoMode(false);
         setActiveView('grade');
-        
+
         setShowNewSessionModal(false);
-        };
-        
-        // "New Paper" — keeps the entire active session/course context and marking scheme.
-        // Only the previous student's paper and student-specific grading data are cleared.
-        const handleNewPaper = () => {
-            if (result || studentPaper) {
-                if (!window.confirm('Start a new paper? Current student work will be cleared.')) return;
+    };
+
+    /*
+     * New Paper
+     *
+     * Keeps:
+     * - session
+     * - course
+     * - marking scheme
+     * - academic information
+     *
+     * Clears:
+     * - student
+     * - previous paper
+     * - grading result
+     * - annotations
+     *
+     * The user can then click Upload again.
+     */
+    const handleNewPaper = () => {
+        if (
+            result ||
+            studentPaper
+        ) {
+            if (
+                !window.confirm(
+                    'Start a new paper? Current student work will be cleared.'
+                )
+            ) {
+                return;
             }
-        
-            setStudentInfo(prev => ({
-                ...prev,
-                name: '',
-                regNo: '',
-                program: '',
-            }));
-        
-            // Keep:
-            // - academic year
-            // - year
-            // - semester/session
-            // - course
-            // - exam date
-            // - marking scheme
-        
-            setStudentPaper(null);
-            setResult(null);
-            setExaminerRemarks('');
-            setMarkingModeState('ai');
-            setActiveTool(null);
-            setShowToolOptions(false);
-            setZoom(1);
-            setClearCount(c => c + 1);
-            setIsMaximized(false);
-            setIsAutoMode(false);
-            setActiveView('grade');
-        };
-        
-        const closeModal = () => {
-            setPendingUpload(null);
-            setModalType(null);
-        };
-        
-        // Function to load a previously used semester/course
-        const loadOldSemester = (semester: SemesterCourse) => {
-            setSemesterCourse(semester);
-        
-            setStudentInfo(prev => ({
-                ...prev,
-                courseCode: semester.courseCode || prev.courseCode,
-                program: semester.program || prev.program,
-                year: semester.year || prev.year,
-                semester: semester.semester || prev.semester,
-            }));
-        
+        }
+
+        setStudentInfo(prev => ({
+            ...prev,
+            name: '',
+            regNo: '',
+            program: '',
+        }));
+
+        // Keep the session/course/marking scheme.
+
+        setStudentPaper(null);
+        setResult(null);
+        setExaminerRemarks('');
+
+        // New paper always starts in AI mode.
+        setMarkingModeState('ai');
+
+        // Clear canvas and all manual tools.
+        setActiveTool(null);
+        setShowToolOptions(false);
+
+        if (autoHideTimerRef.current) {
+            clearTimeout(
+                autoHideTimerRef.current
+            );
+            autoHideTimerRef.current = null;
+        }
+
+        setZoom(1);
+        setClearCount(c => c + 1);
+        setIsMaximized(false);
+        setIsAutoMode(false);
+        setActiveView('grade');
+    };
+
+    /*
+     * Close upload/session modal.
+     */
+    const closeModal = () => {
+        setPendingUpload(null);
+        setModalType(null);
+    };
+
+    /*
+     * Load a previously used semester/course.
+     */
+    const loadOldSemester = (
+        semester: SemesterCourse
+    ) => {
+        setSemesterCourse(semester);
+
+        setStudentInfo(prev => ({
+            ...prev,
+            courseCode:
+                semester.courseCode ||
+                prev.courseCode,
+            program:
+                semester.program ||
+                prev.program,
+            year:
+                semester.year ||
+                prev.year,
+            semester:
+                semester.semester ||
+                prev.semester,
+        }));
+
+        // Loaded sessions use AI as the default
+        // unless the user explicitly switches to manual.
+        setMarkingModeState('ai');
+        setActiveTool(null);
+        setShowToolOptions(false);
+
+        setShowOldSessionModal(false);
+    };
+
+    /*
+     * Load a previously saved Excel session.
+     *
+     * IMPORTANT:
+     * We intentionally do NOT pretend to parse the Excel file here.
+     *
+     * The picker now accepts Excel files only. The actual reconstruction
+     * of session/student/result data must use the Excel structure produced
+     * by exportUtils.ts.
+     *
+     * This prevents the old JSON-file behaviour from coming back.
+     */
+    const handleLoadFromFile = () => {
+        const input =
+            document.createElement('input');
+
+        input.type = 'file';
+        input.accept =
+            '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
+
+        input.onchange = async (e) => {
+            const target =
+                e.target as HTMLInputElement;
+
+            if (
+                !target.files ||
+                !target.files[0]
+            ) {
+                return;
+            }
+
+            const file =
+                target.files[0];
+
+            /*
+             * Do not attempt JSON.parse().
+             *
+             * The Excel parser should be connected to the
+             * existing export/session format in exportUtils.ts.
+             */
+            console.info(
+                'Excel session selected:',
+                file.name
+            );
+
+            /*
+             * For now, close the session picker after a valid
+             * Excel file has been selected.
+             *
+             * The actual XLSX -> application-state loader is
+             * intentionally handled separately so we don't
+             * introduce an incorrect data mapping here.
+             */
             setShowOldSessionModal(false);
         };
-        
-        // Function to load a previously saved Excel session
-        const handleLoadFromFile = () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.xlsx,.xls';
-        
-            input.onchange = (e) => {
-                const target = e.target as HTMLInputElement;
-        
-                if (!target.files || !target.files[0]) {
-                    return;
-                }
-        
-                const file = target.files[0];
-        
-                // Excel files are binary and must not be processed with JSON.parse().
-                // The actual Excel-session parser will be connected here once the
-                // current exportUtils.ts session-loader API is confirmed.
-                console.log('Selected Excel session file:', file.name);
-        
-                alert(
-                    'Excel session selected. The Excel session loader will be connected here.'
-                );
-        
-                setShowOldSessionModal(false);
-            };
-        
-            input.click();
-        };
-        
-        // Function to add a new school
-        const addNewSchool = () => {
-            if (
-                newSchoolName.trim() &&
-                !schools.includes(newSchoolName.trim())
-            ) {
-                setSchools([...schools, newSchoolName.trim()]);
-                setNewSchoolName('');
-                setShowAddSchoolModal(false);
+
+        input.click();
+    };
+
+    // Function to add a new school
+    const addNewSchool = () => {
+        if (
+            newSchoolName.trim() &&
+            !schools.includes(
+                newSchoolName.trim()
+            )
+        ) {
+            setSchools([
+                ...schools,
+                newSchoolName.trim()
+            ]);
+
+            setNewSchoolName('');
+            setShowAddSchoolModal(false);
+        }
+    };
+
+    // Function to add a new department
+    const addNewDepartment = () => {
+        if (
+            newDepartmentName.trim() &&
+            !departments.includes(
+                newDepartmentName.trim()
+            )
+        ) {
+            setDepartments([
+                ...departments,
+                newDepartmentName.trim()
+            ]);
+
+            setNewDepartmentName('');
+            setShowAddDepartmentModal(false);
+        }
+    };
+
+    /*
+     * Main grading handler.
+     *
+     * There is no longer an "unmarked" branch.
+     */
+    const handleGrade = async () => {
+        if (!user) {
+            setShowAuth(true);
+            return;
+        }
+
+        if (!studentPaper) {
+            alert(
+                'Please upload a student paper before grading.'
+            );
+            return;
+        }
+
+        /*
+         * Manual grading.
+         *
+         * No AI/API grading request is made.
+         */
+        if (markingMode === 'self') {
+            if (isMaximized) {
+                setIsMaximized(false);
             }
-        };
-        
-        // Function to add a new department
-        const addNewDepartment = () => {
-            if (
-                newDepartmentName.trim() &&
-                !departments.includes(newDepartmentName.trim())
-            ) {
-                setDepartments([...departments, newDepartmentName.trim()]);
-                setNewDepartmentName('');
-                setShowAddDepartmentModal(false);
+
+            setActiveView('grade');
+
+            if (!result) {
+                setResult({
+                    score: '',
+                    totalScore: '',
+                    percentage: '',
+                    grade: '',
+                    feedback: '',
+                    questions: [],
+                    extracted_info: {
+                        name:
+                            studentInfo.name ||
+                            '',
+                        regNo:
+                            studentInfo.regNo ||
+                            '',
+                        program:
+                            studentInfo.program ||
+                            '',
+                        year:
+                            studentInfo.year ||
+                            '',
+                        courseCode:
+                            studentInfo.courseCode ||
+                            '',
+                        examDate:
+                            studentInfo.examDate ||
+                            ''
+                    }
+                });
             }
-        };
-        
-        const handleGrade = async () => {
-            if (!user) {
-                setShowAuth(true);
-                return;
+
+            return;
+        }
+
+        /*
+         * AI grading.
+         */
+        if (markingMode === 'ai') {
+            if (isMaximized) {
+                setIsMaximized(false);
             }
-        
-            if (!studentPaper) {
-                alert('Please upload a student paper before grading.');
-                return;
-            }
-            // If the paper has not been graded yet, let the examiner choose
-            // between AI and manual grading.
-            if (markingMode === 'unmarked') {
-                setShowGradingChoice(true);
-                return;
-            }
-        
-            // Manual grading does not call the AI grading API.
-            // It simply opens the results panel with empty editable fields.
-            if (markingMode === 'self') {
-                if (isMaximized) {
-                    setIsMaximized(false);
-                }
-        
-                setActiveView('grade');
-        
-                if (!result) {
-                    setResult({
-                        score: '',
-                        totalScore: '',
-                        percentage: '',
-                        grade: '',
-                        feedback: '',
-                        questions: [],
-                        extracted_info: {
-                            name: studentInfo.name || '',
-                            regNo: studentInfo.regNo || '',
-                            program: studentInfo.program || '',
-                            year: studentInfo.year || '',
-                            courseCode: studentInfo.courseCode || '',
-                            examDate: studentInfo.examDate || ''
-                        }
-                    });
-                }
-        
-                return;
-            }
-        
-            // AI grading
-            if (markingMode === 'ai') {
-                if (isMaximized) {
-                    setIsMaximized(false);
-                }
-        
-                setLoading(true);
-        
-                try {
-                    const headers = {
-                        'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`,
-                        'Content-Type': 'application/json'
-                    };
-        
-                    const response = await fetch('/api/grade', {
+
+            setLoading(true);
+
+            // AI mode must not expose manual tools.
+            setActiveTool(null);
+            setShowToolOptions(false);
+
+            try {
+                const headers = {
+                    'Authorization':
+                        `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY)}`,
+                    'Content-Type':
+                        'application/json'
+                };
+
+                const response = await fetch(
+                    '/api/grade',
+                    {
                         method: 'POST',
                         headers,
                         body: JSON.stringify({
                             studentInfo,
-                            markingScheme: markingScheme?.base64 ?? null,
-                            studentPaper: studentPaper.base64
+                            markingScheme:
+                                markingScheme?.base64 ??
+                                null,
+                            studentPaper:
+                                studentPaper.base64
                         })
-                    });
-        
-                    if (response.status === 401) {
-                        setShowAuth(true);
-                        throw new Error('Authentication required. Please sign in.');
                     }
-        
-                    if (response.status === 403) {
-                        const data = await response.json().catch(() => ({}));
-        
-                        if (data.code === 'LIMIT_REACHED') {
-                            setUpgradePromptMessage(
-                                data.message || 'You have reached your grading limit.'
-                            );
-                            return;
+                );
+
+                if (response.status === 401) {
+                    setShowAuth(true);
+
+                    throw new Error(
+                        'Authentication required. Please sign in.'
+                    );
+                }
+
+                if (response.status === 403) {
+                    const data =
+                        await response
+                            .json()
+                            .catch(() => ({}));
+
+                    if (
+                        data.code ===
+                        'LIMIT_REACHED'
+                    ) {
+                        setUpgradePromptMessage(
+                            data.message ||
+                            'You have reached your grading limit.'
+                        );
+
+                        return;
+                    }
+
+                    throw new Error(
+                        data.message ||
+                        'Access denied'
+                    );
+                }
+
+                if (!response.ok) {
+                    const data =
+                        await response
+                            .json()
+                            .catch(() => ({}));
+
+                    throw new Error(
+                        data.message ||
+                        'Grading request failed'
+                    );
+                }
+
+                const gradingResult:
+                    ApiGradingResult =
+                    await response.json();
+
+                if (gradingResult.error) {
+                    throw new Error(
+                        gradingResult.message ||
+                        'Grading failed'
+                    );
+                }
+
+                /*
+                 * Map API response from snake_case
+                 * to frontend format.
+                 */
+                const mappedResult:
+                    GradingResult = {
+                    totalScore:
+                        gradingResult.total_score ||
+                        gradingResult.totalScore,
+
+                    score:
+                        gradingResult.score,
+
+                    percentage:
+                        gradingResult.percentage,
+
+                    grade:
+                        gradingResult.grade,
+
+                    feedback:
+                        gradingResult.feedback ||
+                        '',
+
+                    questions:
+                        gradingResult.questions ||
+                        [],
+
+                    extracted_info:
+                        gradingResult.extracted_info ||
+                        undefined,
+                };
+
+                /*
+                 * Validate AI result before allowing
+                 * it into application state.
+                 */
+                const validatedResult =
+                    validateAndNormalizeResult(
+                        mappedResult
+                    );
+
+                if (!validatedResult) {
+                    throw new Error(
+                        'The grading service returned an invalid result. Please try grading again.'
+                    );
+                }
+
+                setResult(
+                    validatedResult
+                );
+
+                setActiveView('grade');
+
+                setUser(prev =>
+                    prev
+                        ? {
+                            ...prev,
+                            gradingCount:
+                                prev.gradingCount +
+                                1
                         }
-        
-                        throw new Error(data.message || 'Access denied');
-                    }
-        
-                    if (!response.ok) {
-                        const data = await response.json().catch(() => ({}));
-                        throw new Error(
-                            data.message || 'Grading request failed'
-                        );
-                    }
-        
-                    const gradingResult: ApiGradingResult = await response.json();
-        
-                    if (gradingResult.error) {
-                        throw new Error(
-                            gradingResult.message || 'Grading failed'
-                        );
-                    }
-        
-                    // Map API response from snake_case to frontend format.
-                    const mappedResult: GradingResult = {
-                        totalScore:
-                            gradingResult.total_score ||
-                            gradingResult.totalScore,
-                        score: gradingResult.score,
-                        percentage: gradingResult.percentage,
-                        grade: gradingResult.grade,
-                        feedback: gradingResult.feedback || '',
-                        questions: gradingResult.questions || [],
-                        extracted_info:
-                            gradingResult.extracted_info || undefined,
-                    };
-        
-                    // Validate the AI result before allowing it into application state.
-                    const validatedResult =
-                        validateAndNormalizeResult(mappedResult);
-        
-                    if (!validatedResult) {
-                        throw new Error(
-                            'The grading service returned an invalid result. Please try grading again.'
-                        );
-                    }
-        
-                    setResult(validatedResult);
-                    setActiveView('grade');
-        
-                    setUser(prev =>
-                        prev
-                            ? {
-                                ...prev,
-                                gradingCount: prev.gradingCount + 1
-                            }
-                            : prev
-                    );
-        
-                    if (validatedResult.extracted_info) {
-                        setStudentInfo(prev => ({
-                            name:
-                                validatedResult.extracted_info?.name ||
-                                prev.name,
-                            program:
-                                validatedResult.extracted_info?.program ||
-                                prev.program,
-                            regNo:
-                                validatedResult.extracted_info?.regNo ||
-                                prev.regNo,
-                            year:
-                                validatedResult.extracted_info?.year ||
-                                prev.year,
-                            courseCode:
-                                validatedResult.extracted_info?.courseCode ||
-                                prev.courseCode,
-                            examDate:
-                                validatedResult.extracted_info?.examDate ||
-                                prev.examDate,
-                            semester: prev.semester,
-                        }));
-                    }
-                }
-                catch (error) {
-                    console.error('Grading failed:', error);
-        
-                    alert(
-                        error instanceof Error
-                            ? error.message
-                            : 'An error occurred during grading. Check the console for details.'
-                    );
-                }
-                finally {
-                    setLoading(false);
+                        : prev
+                );
+
+                if (
+                    validatedResult.extracted_info
+                ) {
+                    setStudentInfo(prev => ({
+                        name:
+                            validatedResult
+                                .extracted_info
+                                ?.name ||
+                            prev.name,
+
+                        program:
+                            validatedResult
+                                .extracted_info
+                                ?.program ||
+                            prev.program,
+
+                        regNo:
+                            validatedResult
+                                .extracted_info
+                                ?.regNo ||
+                            prev.regNo,
+
+                        year:
+                            validatedResult
+                                .extracted_info
+                                ?.year ||
+                            prev.year,
+
+                        courseCode:
+                            validatedResult
+                                .extracted_info
+                                ?.courseCode ||
+                            prev.courseCode,
+
+                        examDate:
+                            validatedResult
+                                .extracted_info
+                                ?.examDate ||
+                            prev.examDate,
+
+                        semester:
+                            prev.semester,
+                    }));
                 }
             }
-        };
-        
-        const handleGradeWithMode = async (
-            mode: 'ai' | 'self'
-        ) => {
-            if (isGradingInProgress) {
-                return;
+            catch (error) {
+                console.error(
+                    'Grading failed:',
+                    error
+                );
+
+                alert(
+                    error instanceof Error
+                        ? error.message
+                        : 'An error occurred during grading. Check the console for details.'
+                );
             }
-        
-            if (!studentPaper) {
-                return;
+            finally {
+                setLoading(false);
             }
-        
-            setIsGradingInProgress(true);
-            setMarkingModeState(mode);
+        }
+    };
+
+    /*
+     * Grade using an explicitly selected mode.
+     *
+     * Batch + Auto functionality is intentionally left unchanged.
+     */
+    const handleGradeWithMode = async (
+        mode: 'ai' | 'self'
+    ) => {
+        if (isGradingInProgress) {
+            return;
+        }
+
+        if (!studentPaper) {
+            return;
+        }
+
+        setIsGradingInProgress(true);
+
+        /*
+         * Explicitly set the selected mode.
+         * There is no unmarked state.
+         */
+        setMarkingModeState(mode);
+
+        /*
+         * AI mode immediately removes manual tools.
+         */
+        if (mode === 'ai') {
+            setActiveTool(null);
+            setShowToolOptions(false);
+
+            if (autoHideTimerRef.current) {
+                clearTimeout(
+                    autoHideTimerRef.current
+                );
+
+                autoHideTimerRef.current = null;
+            }
+        }
+
+        /*
+         * The remainder of the original
+         * handleGradeWithMode implementation
+         * should continue below this point.
+         */
         
             if (mode === 'self') {
                 if (isMaximized) {
@@ -1977,37 +2491,73 @@ export default function App() {
             printWindow.document.close();
         };
 
-    // Handle paper upload and automatically switch to self-marked mode
-    const handlePaperUpload = useCallback((base64: string, name: string) => {
-        setStudentPaper({ base64, name });
-
-        // Automatically switch to self-marked mode when a paper is loaded
-        if (!isAutoMode) {
-            setMarkingModeState('self');
-        }
-    }, [isAutoMode]);
-
-    // Filter sessions based on search term
+    // Handle paper upload.
+    //
+    // IMPORTANT:
+    // Uploading a paper must NOT automatically select Manual Marking.
+    // The user must explicitly choose a grading method through the
+    // "Choose Grading Method" flow.
+    //
+    // This also prevents the paper from appearing as already marked.
+    const handlePaperUpload = useCallback(
+        (base64: string, name: string) => {
+            setStudentPaper({
+                base64,
+                name
+            });
+    
+            // A newly uploaded paper has no grading method selected yet.
+            // The user will choose AI or Manual when they click Grade.
+            setMarkingModeState('unmarked');
+    
+            // Clear any previous result belonging to another paper.
+            setResult(null);
+    
+            // Clear previous examiner remarks.
+            setExaminerRemarks('');
+    
+            // Reset marking tools for the new paper.
+            setActiveTool(null);
+            setShowToolOptions(false);
+    
+            // Reset canvas view.
+            setZoom(1);
+            setClearCount(c => c + 1);
+    
+            // Make sure the grading view is active.
+            setActiveView('grade');
+        },
+        []
+    );
+    
+    // Filter sessions based on search term.
     const filteredSessions = loadSessions().filter(session =>
         searchTerm === '' ||
-        session.courseCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        session.courseName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        session.program?.toLowerCase().includes(searchTerm.toLowerCase())
+        session.courseCode
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+        session.courseName
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+        session.program
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase())
     );
-
-    // Filter departments based on search term
+    
+    // Filter departments based on search term.
     const filteredDepartments = departments.filter(dept =>
-        searchTerm === '' || dept.toLowerCase().includes(searchTerm.toLowerCase())
+        searchTerm === '' ||
+        dept.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
-    // Handle search term changes from TopBar
+    
+    // Handle search term changes from TopBar.
     const handleSearchTermChange = (term: string) => {
         setSearchTerm(term);
     };
-
+    
     return (
         <div className="flex flex-col bg-bg-dark h-screen overflow-hidden text-ink border-4 border-gray-900 shadow-2xl">
-
+    
             <TopBar
                 onNew={handleNew}
                 onSave={handleSave}
@@ -2020,28 +2570,46 @@ export default function App() {
                         setShowAuth(true);
                         return;
                     }
+    
                     setShowBatch(true);
                 }}
                 hasResult={!!result}
                 studentInfo={studentInfo}
                 onStudentInfoUpdate={(updates) =>
-                    setStudentInfo(prev => ({ ...prev, ...updates }))
+                    setStudentInfo(prev => ({
+                        ...prev,
+                        ...updates
+                    }))
                 }
                 history={history}
-                onShowOldSessions={() => setShowOldSessionModal(true)}
+                onShowOldSessions={() =>
+                    setShowOldSessionModal(true)
+                }
                 schools={schools}
                 departments={departments}
                 courses={courses}
-                onShowAddSchool={() => setShowAddSchoolModal(true)}
-                onShowAddDepartment={() => setShowAddDepartmentModal(true)}
+                onShowAddSchool={() =>
+                    setShowAddSchoolModal(true)
+                }
+                onShowAddDepartment={() =>
+                    setShowAddDepartmentModal(true)
+                }
                 onSearchTermChange={handleSearchTermChange}
-                onNewCourse={() => setShowNewCourseModal(true)}
-                onNewSession={() => setShowNewSessionModal(true)}
+                onNewCourse={() =>
+                    setShowNewCourseModal(true)
+                }
+                onNewSession={() =>
+                    setShowNewSessionModal(true)
+                }
                 onNewPaper={handleNewPaper}
-                onToggleYaza={() => setShowYaza(v => !v)}
+                onToggleYaza={() =>
+                    setShowYaza(v => !v)
+                }
                 isYazaOpen={showYaza}
                 isLoggedIn={!!user}
-                onLogin={() => setShowAuth(true)}
+                onLogin={() =>
+                    setShowAuth(true)
+                }
                 onLogout={handleLogout}
                 onViewChange={setActiveView}
                 onProfile={() => {
@@ -2053,9 +2621,9 @@ export default function App() {
                 }}
                 onLoadRecord={handleLoadRecord}
             />
-
+    
             <div className="flex-1 flex min-w-0 overflow-hidden">
-
+    
                 <Sidebar
                     activeView={activeView}
                     onViewChange={setActiveView}
@@ -2071,13 +2639,15 @@ export default function App() {
                             setShowProfile(true);
                         }
                     }}
-                    onAutoModeToggle={() => setIsAutoMode(v => !v)}
+                    onAutoModeToggle={() =>
+                        setIsAutoMode(v => !v)
+                    }
                 />
-
+    
                 <main className="flex-1 flex overflow-hidden">
-
+    
                     {activeView === 'dashboard' ? (
-
+    
                         <PostsPage
                             history={history}
                             onGrade={() => {
@@ -2085,13 +2655,13 @@ export default function App() {
                                     setShowAuth(true);
                                     return;
                                 }
-
+    
                                 setActiveView('grade');
                             }}
                         />
-
+    
                     ) : activeView === 'history' ? (
-
+    
                         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
                             <HistoryPanel
                                 history={history}
@@ -2101,9 +2671,9 @@ export default function App() {
                                 onLoadSession={loadOldSemester}
                             />
                         </div>
-
+    
                     ) : activeView === 'remark' ? (
-
+    
                         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
                             <RemarkPanel
                                 remarks={examinerRemarks}
@@ -2112,9 +2682,9 @@ export default function App() {
                                 studentName={studentInfo.name}
                             />
                         </div>
-
+    
                     ) : (
-
+    
                         <>
                             <div
                                 className={`${
@@ -2123,9 +2693,10 @@ export default function App() {
                                         : 'flex-[3] p-4'
                                 } flex flex-col gap-4 overflow-hidden`}
                             >
-
+    
                                 {semesterCourse && !isMaximized && (
                                     <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
+    
                                         <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
 
                                         <span className="text-[10px] font-black text-accent-blue uppercase tracking-wider">
@@ -2142,11 +2713,14 @@ export default function App() {
                                         </span>
 
                                         <button
-                                            onClick={() => setSemesterCourse(null)}
+                                            onClick={() =>
+                                                setSemesterCourse(null)
+                                            }
                                             className="ml-auto text-[9px] text-gray-600 hover:text-gray-400 uppercase font-bold tracking-wider transition-colors"
                                         >
                                             Clear
                                         </button>
+
                                     </div>
                                 )}
 
@@ -2472,38 +3046,14 @@ export default function App() {
                                                 </button>
                                             )}
 
+                                            {/* Grading method selector */}
                                             <button
                                                 onClick={() => {
-                                                    if (markingMode === 'unmarked') {
-                                                        setMarkingModeState('self');
-
-                                                        if (studentPaper) {
-                                                            setResult({
-                                                                score: '',
-                                                                totalScore: '',
-                                                                percentage: '',
-                                                                grade: '',
-                                                                feedback: '',
-                                                                questions: [],
-                                                                extracted_info: {
-                                                                    name: studentInfo.name || '',
-                                                                    regNo: studentInfo.regNo || '',
-                                                                    program: studentInfo.program || '',
-                                                                    year: studentInfo.year || '',
-                                                                    courseCode: studentInfo.courseCode || '',
-                                                                    examDate: studentInfo.examDate || ''
-                                                                }
-                                                            });
-                                                        }
-
-                                                    } else if (markingMode === 'self') {
-                                                        setMarkingModeState('ai');
-                                                        setResult(null);
-
-                                                    } else {
-                                                        setMarkingModeState('unmarked');
-                                                        setResult(null);
+                                                    if (!studentPaper) {
+                                                        return;
                                                     }
+
+                                                    setShowGradingChoice(true);
                                                 }}
                                                 className={`relative w-8 h-7 flex items-center justify-center rounded transition-all group ${
                                                     markingMode === 'self'
@@ -2513,19 +3063,16 @@ export default function App() {
                                                         : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
                                                 }`}
                                             >
-                                                {markingMode === 'self'
-                                                    ? <FileCheck size={14} />
-                                                    : markingMode === 'ai'
-                                                    ? <FileCheck size={14} />
-                                                    : <FileX size={14} />
-                                                }
+                                                {markingMode === 'self' ? (
+                                                    <FileCheck size={14} />
+                                                ) : (
+                                                    <FileCheck size={14} />
+                                                )}
 
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     {markingMode === 'self'
-                                                        ? 'Self Marked'
-                                                        : markingMode === 'ai'
-                                                        ? 'AI Marked'
-                                                        : 'Unmarked'
+                                                        ? 'Manual Grading'
+                                                        : 'AI Grading'
                                                     }
                                                 </span>
                                             </button>
@@ -2629,7 +3176,10 @@ export default function App() {
                                                 paperBase64={studentPaper.base64}
                                                 activeTool={activeTool}
                                                 clearCount={clearCount}
-                                                showOverlay={markingMode !== 'unmarked'}
+                                                showOverlay={
+                                                    markingMode === 'ai' ||
+                                                    markingMode === 'self'
+                                                }
                                                 markingMode={markingMode}
                                                 zoom={zoom}
                                                 onZoomChange={setZoom}
@@ -2717,9 +3267,11 @@ export default function App() {
             {/* Old Sessions Modal */}
             {showOldSessionModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+
                     <div className="bg-card rounded-3xl border border-gray-800 shadow-xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
 
                         <div className="p-6 border-b border-gray-800 bg-sidebar/50 flex items-center justify-between">
+
                             <h2 className="text-lg font-bold uppercase tracking-widest text-gray-400">
                                 Load Session
                             </h2>
@@ -2730,11 +3282,13 @@ export default function App() {
                             >
                                 Close
                             </button>
+
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 space-y-3">
 
                             <div className="relative">
+
                                 <Search
                                     size={16}
                                     className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"
@@ -2749,6 +3303,7 @@ export default function App() {
                                     }
                                     className="w-full pl-10 pr-4 py-2 bg-sidebar border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-accent-blue"
                                 />
+
                             </div>
 
                             {filteredSessions.length > 0 ? (
@@ -2760,6 +3315,7 @@ export default function App() {
                                             loadOldSemester(session)
                                         }
                                     >
+
                                         <div className="font-bold text-ink">
                                             {session.courseCode}
                                         </div>
@@ -2772,6 +3328,7 @@ export default function App() {
                                             Program: {session.program || 'N/A'} |
                                             Year: {session.year || 'N/A'}
                                         </div>
+
                                     </div>
                                 ))
                             ) : (
@@ -2795,6 +3352,7 @@ export default function App() {
                                 </p>
 
                             </div>
+
                         </div>
 
                         <div className="p-4 border-t border-gray-800 bg-sidebar/50">
@@ -2811,6 +3369,7 @@ export default function App() {
                             </button>
 
                         </div>
+
                     </div>
                 </div>
             )}
@@ -2822,6 +3381,7 @@ export default function App() {
                     <div className="bg-card rounded-3xl border border-gray-800 shadow-xl w-full max-w-md">
 
                         <div className="p-6 border-b border-gray-800 bg-sidebar/50">
+
                             <h2 className="text-lg font-bold uppercase tracking-widest text-gray-400">
                                 Choose Grading Method
                             </h2>
@@ -2829,6 +3389,7 @@ export default function App() {
                             <p className="text-sm text-gray-500 mt-1">
                                 Select how you'd like to grade this paper
                             </p>
+
                         </div>
 
                         <div className="p-6 space-y-4">
@@ -2875,24 +3436,30 @@ export default function App() {
                         <div className="p-6 border-b border-gray-800 bg-sidebar/50 flex items-center gap-3">
 
                             <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
+
                                 <AlertTriangle
                                     size={18}
                                     className="text-yellow-500"
                                 />
+
                             </div>
 
                             <div>
+
                                 <h2 className="text-sm font-bold uppercase tracking-widest text-gray-300">
                                     Grading Limit Reached
                                 </h2>
+
                             </div>
 
                         </div>
 
                         <div className="p-6">
+
                             <p className="text-[13px] text-gray-400 leading-relaxed">
                                 {upgradePromptMessage}
                             </p>
+
                         </div>
 
                         <div className="p-4 border-t border-gray-800 bg-sidebar/50 flex flex-col gap-2">
@@ -2927,6 +3494,7 @@ export default function App() {
                             </button>
 
                         </div>
+
                     </div>
                 </div>
             )}
@@ -2938,15 +3506,19 @@ export default function App() {
                     <div className="bg-card rounded-3xl border border-gray-800 shadow-xl w-full max-w-sm">
 
                         <div className="p-6 border-b border-gray-800 bg-sidebar/50">
+
                             <h2 className="text-sm font-bold uppercase tracking-widest text-gray-300">
                                 Payment Status
                             </h2>
+
                         </div>
 
                         <div className="p-6">
+
                             <p className="text-[13px] text-gray-400 leading-relaxed">
                                 {paymentStatusMessage}
                             </p>
+
                         </div>
 
                         <div className="p-4 border-t border-gray-800 bg-sidebar/50">
