@@ -17,7 +17,7 @@ interface PaperCanvasProps {
 
     showOverlay: boolean;
 
-    markingMode: 'unmarked' | 'self' | 'ai'; // Added marking mode
+    markingMode: 'self' | 'ai';
 
     zoom: number;
 
