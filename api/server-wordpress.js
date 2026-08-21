@@ -807,6 +807,52 @@ app.post('/api/history', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Failed to save history record' });
   }
 });
+app.get('/api/sessions', authMiddleware, async (req, res) => {
+  try {
+    const sessions = (await getUserMeta(req.user.id, 'redpen_sessions')) || [];
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Sessions fetch error:', error.message);
+    res.status(500).json({ message: 'Failed to load sessions' });
+  }
+});
+
+app.post('/api/sessions', authMiddleware, async (req, res) => {
+  try {
+    const { session } = req.body;
+
+    if (!session || !session.id) {
+      return res.status(400).json({ message: 'session is required' });
+    }
+
+    const existingSessions =
+      (await getUserMeta(req.user.id, 'redpen_sessions')) || [];
+
+    const filteredSessions = existingSessions.filter(
+      existing => existing.id !== session.id
+    );
+
+    const updatedSessions = [session, ...filteredSessions];
+
+    const ok = await updateUserMeta(
+      req.user.id,
+      'redpen_sessions',
+      updatedSessions
+    );
+
+    if (!ok) {
+      return res.status(500).json({ message: 'Failed to save session' });
+    }
+
+    res.status(201).json({
+      message: 'Session saved',
+      session,
+    });
+  } catch (error) {
+    console.error('Session save error:', error.message);
+    res.status(500).json({ message: 'Failed to save session' });
+  }
+});
 
 // ========== Settings / API Keys / Profile Endpoints ==========
 
