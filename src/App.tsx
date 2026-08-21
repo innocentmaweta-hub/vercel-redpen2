@@ -11,10 +11,8 @@ import { AuthModal } from './components/AuthModal';
 import { BatchModal } from './components/BatchModal';
 import { HelpModal } from './components/HelpModal';
 import { RefreshModal } from './components/RefreshModal';
-import { NewSemesterModal } from './components/NewSemesterModal';
-import { ContinueSemesterModal } from './components/ContinueSemesterModal';
-import { NewCourseModal } from './components/NewCourseModal';
-import { NewSessionModal } from './components/NewSessionModal';
+// Course/session related modals are exported from CourseSessionModal
+import { NewSemesterModal, ContinueSemesterModal, NewCourseModal, NewSessionModal } from './components/CourseSessionModal';
 import { AnimatePresence } from 'motion/react';
 
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
