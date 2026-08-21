@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, X, ChevronRight, ArrowRight, AlertCircle, Search } from 'lucide-react';
+import { BookOpen, X, ChevronRight, ArrowRight, AlertCircle } from 'lucide-react';
 
 export interface SemesterCourse {
   courseCode: string;
@@ -8,9 +8,9 @@ export interface SemesterCourse {
   program: string;
   year: string;
   semester: string;
-  academicYear: string; // e.g. "2026/27 academic year"
-  sessionLabel: string; // e.g. "Assignment", "End of Semester" — used in saved session filenames
-  customName?: string; // Fully custom workbook name — overrides academicYear-semester-sessionLabel entirely when set
+  academicYear: string;
+  sessionLabel: string;
+  customName?: string;
 }
 
 interface NewSemesterModalProps {
@@ -92,238 +92,21 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls = "bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700";
 
-export const NewSemesterModal = ({ courses, onConfirm, onSkip, onCancel }: NewSemesterModalProps) => {
-  const [form, setForm] = useState<SemesterCourse>({ courseCode: '', courseName: '', program: '', year: '', semester: '', academicYear: '', sessionLabel: '' });
-  const [error, setError] = useState('');
-  const [departmentSearch, setDepartmentSearch] = useState('');
-  const [courseMode, setCourseMode] = useState<'select' | 'custom'>(courses.length > 0 ? 'select' : 'custom');
-
-  const set = (k: keyof SemesterCourse) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(prev => ({ ...prev, [k]: e.target.value }));
-
-    const handleConfirm = () => {
-    if (!form.courseCode.trim()) {
-      setError('Course code is required.');
-      return;
+// First-upload flow intentionally reuses the exact New Session UI/validation.
+// The adapter keeps the existing upload continuation logic in App.tsx intact.
+export const NewSemesterModal = ({ courses, onConfirm, onCancel }: NewSemesterModalProps) => (
+  <NewSessionModal
+    currentSemesterCourse={null}
+    courses={courses}
+    onConfirm={(updates) =>
+      onConfirm({
+        ...updates,
+        program: '',
+      })
     }
-
-    if (!form.academicYear.trim()) {
-      setError('Academic year is required.');
-      return;
-    }
-
-    if (!form.year.trim()) {
-      setError('Year of study is required.');
-      return;
-    }
-
-    if (!form.semester.trim() && !form.customName?.trim() && !form.sessionLabel.trim()) {
-      setError('Select a semester or enter a custom session name.');
-      return;
-    }
-
-    onConfirm(form);
-  };
-
-  const filteredDepartments = DEPARTMENTS.filter(dept =>
-    dept.toLowerCase().includes(departmentSearch.toLowerCase())
-  );
-
-  return (
-    <Backdrop onClose={onCancel}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.93, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.93, y: 20 }}
-        transition={{ duration: 0.2 }}
-        onClick={e => e.stopPropagation()}
-        className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center">
-              <BookOpen size={16} className="text-accent-blue" />
-            </div>
-            <div>
-              <p className="text-[13px] font-black text-white">New Semester</p>
-              <p className="text-[10px] text-gray-500">Enter course details before uploading</p>
-            </div>
-          </div>
-          <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors">
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="p-5 flex flex-col gap-4">
-          {courseMode === 'select' && courses.length > 0 ? (
-            <Field label="Course *">
-              <select
-                className={inputCls}
-                value={form.courseCode}
-                onChange={(e) => {
-                  const chosen = courses.find(c => c.courseCode === e.target.value);
-                  setForm(prev => ({
-                    ...prev,
-                    courseCode: chosen?.courseCode || '',
-                    courseName: chosen?.courseName || '',
-                  }));
-                }}
-                autoFocus
-              >
-                <option value="">Select a course…</option>
-                {courses.map(c => (
-                  <option key={c.courseCode} value={c.courseCode}>
-                    {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => { setCourseMode('custom'); setForm(prev => ({ ...prev, courseCode: '', courseName: '' })); }}
-                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold mt-1"
-              >
-                + Add a new course instead
-              </button>
-            </Field>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Course Code *">
-                <input
-                  className={inputCls}
-                  placeholder="e.g. CS301"
-                  value={form.courseCode}
-                  onChange={set('courseCode')}
-                  autoFocus
-                />
-              </Field>
-              <Field label="Course Name">
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Data Structures"
-                  value={form.courseName}
-                  onChange={set('courseName')}
-                />
-              </Field>
-              {courses.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setCourseMode('select')}
-                  className="col-span-2 text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold text-left"
-                >
-                  ← Choose an existing course instead
-                </button>
-              )}
-            </div>
-          )}
-
-          <Field label="Department">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={14} />
-              <input
-                type="text"
-                className={`${inputCls} pl-9`}
-                placeholder="Search department..."
-                value={departmentSearch}
-                onChange={(e) => setDepartmentSearch(e.target.value)}
-              />
-            </div>
-            <div className="mt-2 max-h-32 overflow-y-auto border border-gray-700 rounded-lg">
-              {filteredDepartments.length > 0 ? (
-                filteredDepartments.map((dept, index) => (
-                  <div
-                    key={index}
-                    className={`px-3 py-2 text-[12px] cursor-pointer hover:bg-gray-800 ${form.program === dept ? 'bg-accent-blue/20' : ''
-                      }`}
-                    onClick={() => setForm({ ...form, program: dept })}
-                  >
-                    {dept}
-                  </div>
-                ))
-              ) : (
-                <div className="px-3 py-2 text-[12px] text-gray-500">No departments found</div>
-              )}
-            </div>
-          </Field>
-
-          <Field label="Program of Study">
-            <select className={inputCls} value={form.program} onChange={set('program')}>
-              <option value="">Select program…</option>
-              {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Year of Study">
-              <select className={inputCls} value={form.year} onChange={set('year')}>
-                <option value="">Select year…</option>
-                {YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </Field>
-            <Field label="Semester">
-              <select className={inputCls} value={form.semester} onChange={set('semester')}>
-                <option value="">Select semester…</option>
-                {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-          </div>
-
-                    <Field label="Academic Year">
-            <select className={inputCls} value={form.academicYear} onChange={set('academicYear')}>
-              <option value="">Select academic year…</option>
-              {ACADEMIC_YEARS.map(ay => (
-                <option key={ay} value={ay}>{ay}</option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Custom Session Name">
-            <input
-              className={inputCls}
-              placeholder="e.g. Midterm Examination"
-              value={form.customName || ''}
-              onChange={set('customName')}
-            />
-            <span className="text-[9px] text-gray-600">
-              Use this for a custom session instead of a semester.
-            </span>
-          </Field>
-
-          <Field label="Session Label">
-            <input
-              className={inputCls}
-              placeholder="e.g. Assignment, End of Semester"
-              value={form.sessionLabel}
-              onChange={set('sessionLabel')}
-            />
-          </Field>
-
-          {error && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <AlertCircle size={12} className="text-red-400 shrink-0" />
-              <p className="text-[11px] text-red-400">{error}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 pb-5 flex items-center gap-2">
-          <button
-            onClick={handleConfirm}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20"
-          >
-            Start Semester & Upload
-            <ArrowRight size={14} />
-          </button>
-          <button
-            onClick={onSkip}
-            className="px-4 py-2.5 text-[11px] font-bold text-gray-500 hover:text-gray-300 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors"
-          >
-            Skip
-          </button>
-        </div>
-      </motion.div>
-    </Backdrop>
-  );
-};
+    onCancel={onCancel}
+  />
+);
 
 export const ContinueSemesterModal = ({
   semesterCourse, uploadLabel, onContinue, onNewSemester, onCancel
@@ -564,32 +347,25 @@ export const NewSessionModal = ({
         </div>
 
         <div className="p-5 flex flex-col gap-4">
-
           {courseMode === 'select' && courses.length > 0 ? (
             <Field label="Course *">
               <select
                 className={inputCls}
                 value={courseCode}
                 onChange={(e) => {
-                  const chosen = courses.find(
-                    c => c.courseCode === e.target.value
-                  );
-
+                  const chosen = courses.find(c => c.courseCode === e.target.value);
                   setCourseCode(chosen?.courseCode || '');
                   setCourseName(chosen?.courseName || '');
                 }}
                 autoFocus
               >
                 <option value="">Select a course…</option>
-
                 {courses.map(c => (
                   <option key={c.courseCode} value={c.courseCode}>
-                    {c.courseCode}
-                    {c.courseName ? ` — ${c.courseName}` : ''}
+                    {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
                   </option>
                 ))}
               </select>
-
               <button
                 type="button"
                 onClick={() => {
@@ -613,7 +389,6 @@ export const NewSessionModal = ({
                   autoFocus
                 />
               </Field>
-
               <Field label="Course Name">
                 <input
                   className={inputCls}
@@ -622,7 +397,6 @@ export const NewSessionModal = ({
                   onChange={(e) => setCourseName(e.target.value)}
                 />
               </Field>
-
               {courses.length > 0 && (
                 <button
                   type="button"
@@ -637,70 +411,33 @@ export const NewSessionModal = ({
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Academic Year">
-              <select
-                className={inputCls}
-                value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
-              >
+              <select className={inputCls} value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
                 <option value="">Select academic year…</option>
-                {ACADEMIC_YEARS.map(ay => (
-                  <option key={ay} value={ay}>
-                    {ay}
-                  </option>
-                ))}
+                {ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}
               </select>
             </Field>
-
             <Field label="Year of Study">
-              <select
-                className={inputCls}
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-              >
+              <select className={inputCls} value={year} onChange={(e) => setYear(e.target.value)}>
                 <option value="">Select year…</option>
-                {YEARS_OF_STUDY.map(y => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
+                {YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </Field>
           </div>
 
           <Field label="Semester">
-            <select
-              className={inputCls}
-              value={semester}
-              onChange={(e) => setSemester(e.target.value)}
-            >
+            <select className={inputCls} value={semester} onChange={(e) => setSemester(e.target.value)}>
               <option value="">Select semester…</option>
-              {SEMESTERS.map(s => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
+              {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
 
           <Field label="Custom Session Name">
-            <input
-              className={inputCls}
-              placeholder="e.g. Midterm Examination"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-            />
-            <span className="text-[9px] text-gray-600">
-              Use this instead of a semester for a custom session.
-            </span>
+            <input className={inputCls} placeholder="e.g. Midterm Examination" value={customName} onChange={(e) => setCustomName(e.target.value)} />
+            <span className="text-[9px] text-gray-600">Use this instead of a semester for a custom session.</span>
           </Field>
 
           <Field label="Session Label">
-            <input
-              className={inputCls}
-              placeholder="e.g. Assignment, End of Semester"
-              value={sessionLabel}
-              onChange={(e) => setSessionLabel(e.target.value)}
-            />
+            <input className={inputCls} placeholder="e.g. Assignment, End of Semester" value={sessionLabel} onChange={(e) => setSessionLabel(e.target.value)} />
           </Field>
 
           {error && (
@@ -712,10 +449,7 @@ export const NewSessionModal = ({
         </div>
 
         <div className="px-5 pb-5">
-          <button
-            onClick={handleConfirm}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20"
-          >
+          <button onClick={handleConfirm} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20">
             Start New Session
             <ArrowRight size={14} />
           </button>
@@ -729,7 +463,7 @@ const Backdrop = ({ children, onClose }: { children: React.ReactNode; onClose: (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
+    exit={{ opacity: 1 }}
     className="fixed inset-0 z-[9998] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
     onClick={onClose}
   >
