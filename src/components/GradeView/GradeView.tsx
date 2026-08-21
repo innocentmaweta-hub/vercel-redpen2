@@ -1,8 +1,8 @@
 import React, { forwardRef } from 'react';
-import UploadZone from '../components/UploadZone';
-import StudentForm from '../components/StudentForm';
-import PaperCanvas from '../components/PaperCanvas';
-import ResultsPanel from '../components/ResultsPanel';
+import { UploadZone } from '../UploadZone';
+import { StudentForm } from '../StudentForm';
+import { PaperCanvas } from '../PaperCanvas';
+import { ResultsPanel } from '../ResultsPanel';
 
 interface GradeViewProps {
   // The hook return from useGrading; keeping it loose to avoid coupling in this initial split
