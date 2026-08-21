@@ -1,0 +1,22 @@
+name: one-time-persistence-fix
+on:
+  push:
+    branches: [main-restored]
+    paths: [.github/redpen-persistence-trigger.txt]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: python3 .github/patch_persistence.py
+      - name: Commit fixes
+        run: |
+          git config user.name "redpen-bot"
+          git config user.email "actions@github.com"
+          rm -f .github/redpen-persistence-trigger.txt .github/workflows/one-time-persistence-fix.yml .github/patch_persistence.py
+          git add api src .github
+          git commit -m "Persist sessions and papers; harden exports"
+          git push
