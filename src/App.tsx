@@ -130,6 +130,22 @@ export default function App() {
     const [sessions, setSessions] =
         useState<SemesterCourse[]>([]);
     
+    // Course options are derived from sessions.
+    // There is no separate course storage/state.
+    const courses = Array.from(
+        new Map(
+            sessions
+                .filter(session => session.courseCode?.trim())
+                .map(session => [
+                    session.courseCode.trim(),
+                    {
+                        courseCode: session.courseCode.trim(),
+                        courseName: session.courseName || '',
+                    }
+                ])
+        ).values()
+    );
+    
     const [activeSessionId, setActiveSessionId] =
         useState<string | null>(null);
     const [sessionSaveState, setSessionSaveState] =
