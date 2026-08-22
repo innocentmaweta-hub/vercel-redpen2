@@ -86,10 +86,6 @@ async function readApiError(response: Response): Promise<{ message: string; code
   return { message: `API request failed: ${response.status}` };
 }
 
-function throwApiError(response: Response): never {
-  throw new Error(`API request failed: ${response.status}`);
-}
-
 export async function apiGet<T = unknown>(url: string): Promise<T> {
   const response = await apiFetch(url);
   if (!response.ok) {
@@ -127,9 +123,9 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
 export async function refreshAuthSession<T = any>(): Promise<T | null> {
   const token = getStoredString(AUTH_TOKEN_KEY);
   if (!token) return null;
+
   try {
-    const data = await apiGet<T>(API_ENDPOINTS.auth.me);
-    return data;
+    return await apiGet<T>(API_ENDPOINTS.auth.me);
   } catch {
     return null;
   }
