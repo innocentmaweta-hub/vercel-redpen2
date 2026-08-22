@@ -316,24 +316,92 @@ export default function App() {
     const [upgradePromptMessage, setUpgradePromptMessage] =
         useState<string | null>(null);
 
-    const [paymentStatusMessage, setPaymentStatusMessage] =
-        useState<string | null>(null);
-
-    // Auth header helper
     const authHeaders = useCallback(
         (): Record<string, string> => {
-            const t = localStorage.getItem(AUTH_TOKEN_KEY);
+            const t =
+                localStorage.getItem(
+                    AUTH_TOKEN_KEY
+                );
     
             return t
                 ? {
                     'Authorization': `Bearer ${t}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 }
                 : {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 };
         },
         []
+    );
+    
+    const handleSaveApiKeys = useCallback(
+        async (
+            keys: {
+                openai?: string;
+                gemini?: string;
+                anthropic?: string;
+            }
+        ) => {
+            if (!token) {
+                alert(
+                    'Please sign in before saving API keys.'
+                );
+                return;
+            }
+    
+            try {
+                const response =
+                    await fetch(
+                        '/api/user/api-keys',
+                        {
+                            method: 'PUT',
+                            headers: {
+                                ...authHeaders(),
+                                'Content-Type':
+                                    'application/json',
+                            },
+                            body: JSON.stringify(
+                                keys
+                            ),
+                        }
+                    );
+    
+                if (!response.ok) {
+                    const data =
+                        await response
+                            .json()
+                            .catch(
+                                () => null
+                            );
+    
+                    throw new Error(
+                        data?.error ||
+                        'Failed to save API keys.'
+                    );
+                }
+    
+                alert(
+                    'API keys saved successfully.'
+                );
+            }
+            catch (error) {
+                console.error(
+                    'Failed to save API keys:',
+                    error
+                );
+    
+                alert(
+                    error instanceof Error
+                        ? error.message
+                        : 'Failed to save API keys.'
+                );
+            }
+        },
+        [
+            token,
+            authHeaders,
+        ]
     );
     
     /**
