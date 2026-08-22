@@ -44,7 +44,13 @@ export function dedupeSessions(sessions: SemesterCourse[]): SemesterCourse[] {
 }
 
 /** Reconstruct session entries from saved grading history when a session entry
- * was never explicitly persisted (for example, an Excel import while logged out). */
+ * was never explicitly persisted (for example, an Excel import while logged out).
+ *
+ * History records do not carry the exported session filename/custom name, so a
+ * history-derived session is deliberately treated as a fallback. If a real
+ * stored session already represents the same course/year/semester, the real
+ * stored session wins and the fallback is not added.
+ */
 function sessionsFromHistory(): SemesterCourse[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
@@ -77,11 +83,25 @@ function sessionsFromHistory(): SemesterCourse[] {
   }
 }
 
+function sameCoursePeriod(a: SemesterCourse, b: SemesterCourse): boolean {
+  return clean(a.courseCode).toUpperCase() === clean(b.courseCode).toUpperCase()
+    && clean(a.year) === clean(b.year)
+    && clean(a.semester) === clean(b.semester);
+}
+
 export function loadLocalSessions(): SemesterCourse[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || '[]');
-    const stored = Array.isArray(parsed) ? parsed : [];
-    return dedupeSessions([...stored, ...sessionsFromHistory()]);
+    const stored = Array.isArray(parsed) ? dedupeSessions(parsed) : [];
+    const historyFallbacks = sessionsFromHistory();
+
+    // Prefer explicitly stored sessions. History-derived sessions are only
+    // needed when no real session exists for that course/period.
+    const missingFallbacks = historyFallbacks.filter(historySession =>
+      !stored.some(storedSession => sameCoursePeriod(storedSession, historySession))
+    );
+
+    return dedupeSessions([...stored, ...missingFallbacks]);
   } catch {
     return sessionsFromHistory();
   }
@@ -118,10 +138,10 @@ export function resolveActiveSession(sessions: SemesterCourse[], requestedId?: s
 
 export async function fetchCloudSessions(token: string): Promise<SemesterCourse[]> {
   const data = await apiGet<{ sessions?: SemesterCourse[] }>(API_ENDPOINTS.sessions.list);
-  return dedupeSessions([
-    ...(Array.isArray(data.sessions) ? data.sessions : []),
-    ...loadLocalSessions(),
-  ]);
+  return mergeCloudAndLocalSessions(
+    Array.isArray(data.sessions) ? data.sessions : [],
+    loadLocalSessions()
+  );
 }
 
 export async function saveCloudSession(token: string, session: SemesterCourse): Promise<{ session: SemesterCourse; sessions: SemesterCourse[] }> {
