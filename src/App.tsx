@@ -655,13 +655,25 @@ export default function App() {
 
     // Load stored sessions on mount
     useEffect(() => {
-        const storedSessions = loadSessions();
-
-        if (storedSessions.length > 0) {
-            const latestSession =
-                storedSessions[0];
-
-            if (latestSession) {
+        const loadAllSessions = async () => {
+            const localSessions = loadSessions();
+            const cloudSessions = await loadCloudSessions();
+    
+            const mergedSessions = [
+                ...cloudSessions,
+                ...localSessions.filter(
+                    local =>
+                        !cloudSessions.some(
+                            cloud => cloud.id === local.id
+                        )
+                ),
+            ];
+    
+            saveSessions(mergedSessions);
+    
+            if (mergedSessions.length > 0) {
+                const latestSession = mergedSessions[0];
+    
                 setStudentInfo(prev => ({
                     ...prev,
                     program:
@@ -675,7 +687,9 @@ export default function App() {
                         prev.year,
                 }));
             }
-        }
+        };
+    
+        loadAllSessions();
     }, []);
 
     // Save schools and departments
@@ -765,6 +779,23 @@ export default function App() {
         ];
 
         saveSessions(updatedSessions);
+
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        
+        if (token) {
+            fetch('/api/sessions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    session: semester,
+                }),
+            }).catch(error => {
+                console.error('Failed to save session to cloud:', error);
+            });
+        }
 
         setStudentInfo(prev => ({
             ...prev,
