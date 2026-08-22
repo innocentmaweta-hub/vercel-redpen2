@@ -8,10 +8,8 @@ const BASE_API = '/api';
 const API_TIMEOUT_MS = 60_000;
 
 export const AUTH_TOKEN_KEY = 'yaza_auth_token';
+const SESSIONS_STORAGE_KEY = 'stored_sessions';
 
-/**
- * Get authorization headers without allowing a storage failure to crash the app.
- */
 export function getAuthHeaders(): Record<string, string> {
   const token = getStoredString(AUTH_TOKEN_KEY);
   return {
@@ -55,10 +53,6 @@ function mergeSignals(externalSignal?: AbortSignal): { signal: AbortSignal; clea
   };
 }
 
-/**
- * Fetch wrapper with auth headers, timeout protection and safe cleanup.
- * A caller-provided AbortSignal is still respected.
- */
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const { signal, cleanup } = mergeSignals(options.signal ?? undefined);
 
@@ -88,6 +82,25 @@ async function readApiError(response: Response): Promise<{ message: string; code
   }
   return { message: `API request failed: ${response.status}` };
 }
+
+async function syncCloudSessionsAfterAuth(token: string) {
+  try {
+    const response = await fetch('/api/sessions', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return;
+
+    const data = await response.json().catch(() => ({}));
+    if (Array.isArray(data.sessions)) {
+      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(data.sessions));
+      window.dispatchEvent(new CustomEvent('redpen:sessions-updated'));
+    }
+  } catch (error) {
+    // Authentication should never fail just because session hydration failed.
+    console.error('Failed to hydrate cloud sessions after authentication:', error);
+  }
+}
+
 export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
   const response = await apiFetch(url, {
     method: 'POST',
@@ -99,14 +112,29 @@ export async function apiPost<T = unknown>(url: string, body: unknown): Promise<
     if (code) error.code = code;
     throw error;
   }
-  return response.json();
+
+  const data = await response.json();
+  const authEndpoints = [
+    API_ENDPOINTS.auth.login,
+    API_ENDPOINTS.auth.google,
+    API_ENDPOINTS.auth.verifyEmail,
+  ];
+  if (authEndpoints.includes(url) && typeof data?.token === 'string') {
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    void syncCloudSessionsAfterAuth(data.token);
+  }
+
+  return data as T;
 }
 
 export async function apiGet<T = unknown>(url: string): Promise<T> {
   const response = await apiFetch(url);
 
   if (!response.ok) {
-    throw new Error(await readApiError(response));
+    const { message, code } = await readApiError(response);
+    const error: any = new Error(message);
+    if (code) error.code = code;
+    throw error;
   }
 
   return response.json();
