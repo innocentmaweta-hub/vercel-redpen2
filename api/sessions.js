@@ -1,10 +1,14 @@
 import jwt from 'jsonwebtoken';
 import { getUserMeta, updateUserMeta } from './wordpress-auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const SESSIONS_META_KEY = 'redpen_sessions';
 
 function authenticate(req, res) {
+  if (!JWT_SECRET) {
+    res.status(500).json({ code: 'SERVER_CONFIG_ERROR', message: 'Authentication is not configured on the server' });
+    return null;
+  }
   const header = req.headers.authorization || '';
   if (!header.startsWith('Bearer ')) {
     res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Authentication required' });
@@ -16,8 +20,6 @@ function authenticate(req, res) {
 
 function clean(value) { return typeof value === 'string' ? value.trim() : ''; }
 
-// Canonical identity shared by the frontend store and backend.
-// sessionLabel is display metadata and must not create duplicate sessions.
 function sessionKey(session) {
   return [
     clean(session.courseCode).toUpperCase(),
@@ -40,7 +42,7 @@ function normalizeSession(input) {
     sessionLabel: clean(input?.sessionLabel),
     customName: clean(input?.customName) || undefined,
     createdAt: clean(input?.createdAt) || undefined,
-    updatedAt: new Date().toISOString(),
+    updatedAt: clean(input?.updatedAt) || new Date().toISOString(),
   };
 }
 
@@ -51,12 +53,24 @@ function dedupeSessions(sessions) {
     if (!session.courseCode) continue;
     const key = sessionKey(session);
     const previous = byKey.get(key);
-    // Keep the newest version when legacy data contains duplicates.
-    if (!previous || String(session.updatedAt).localeCompare(String(previous.updatedAt)) > 0) {
+    const sessionTime = Date.parse(session.updatedAt) || 0;
+    const previousTime = previous ? (Date.parse(previous.updatedAt) || 0) : 0;
+    if (!previous || sessionTime >= previousTime) {
       byKey.set(key, { ...session, id: session.id || previous?.id || key });
     }
   }
-  return Array.from(byKey.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  return Array.from(byKey.values()).sort((a, b) =>
+    String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+  );
+}
+
+async function saveSessionsOrThrow(userId, sessions) {
+  const ok = await updateUserMeta(userId, SESSIONS_META_KEY, sessions);
+  if (!ok) {
+    const error = new Error('WordPress did not persist the session data');
+    error.code = 'SESSION_STORAGE_UNAVAILABLE';
+    throw error;
+  }
 }
 
 export default async function handler(req, res) {
@@ -68,7 +82,10 @@ export default async function handler(req, res) {
   try {
     const stored = await getUserMeta(userId, SESSIONS_META_KEY);
     const sessions = dedupeSessions(stored);
-    if (JSON.stringify(stored || []) !== JSON.stringify(sessions)) await updateUserMeta(userId, SESSIONS_META_KEY, sessions);
+
+    if (JSON.stringify(stored || []) !== JSON.stringify(sessions)) {
+      await saveSessionsOrThrow(userId, sessions);
+    }
 
     if (req.method === 'GET') return res.status(200).json({ sessions });
 
@@ -95,7 +112,7 @@ export default async function handler(req, res) {
       const next = sessions.filter((s, index) => index !== matchIndex && sessionKey(s) !== key);
       next.unshift(saved);
       const deduped = dedupeSessions(next);
-      await updateUserMeta(userId, SESSIONS_META_KEY, deduped);
+      await saveSessionsOrThrow(userId, deduped);
       return res.status(existing ? 200 : 201).json({ session: saved, sessions: deduped });
     }
 
@@ -104,14 +121,20 @@ export default async function handler(req, res) {
       const key = clean(req.query?.key) || clean(req.body?.key);
       if (!id && !key) return res.status(400).json({ code: 'MISSING_SESSION', message: 'Session id or key is required' });
       const next = sessions.filter(s => s.id !== id && sessionKey(s) !== key);
-      await updateUserMeta(userId, SESSIONS_META_KEY, next);
-      return res.status(200).json({ deleted: sessions.length !== next.length, sessions: next });
+      const deleted = sessions.length !== next.length;
+      if (deleted) await saveSessionsOrThrow(userId, next);
+      return res.status(200).json({ deleted, sessions: next });
     }
 
     res.setHeader('Allow', 'GET, POST, DELETE');
     return res.status(405).json({ code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' });
   } catch (error) {
     console.error('Session API error:', error);
-    return res.status(500).json({ code: 'SESSION_API_FAILED', message: 'Failed to access cloud sessions' });
+    return res.status(500).json({
+      code: error?.code || 'SESSION_API_FAILED',
+      message: error?.code === 'SESSION_STORAGE_UNAVAILABLE'
+        ? 'Cloud session storage is unavailable. Please try again later.'
+        : 'Failed to access cloud sessions',
+    });
   }
 }
