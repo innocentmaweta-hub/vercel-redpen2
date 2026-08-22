@@ -277,18 +277,6 @@ export default function App() {
     const [showNewSessionModal, setShowNewSessionModal] =
         useState(false);
 
-    const [showAddSchoolModal, setShowAddSchoolModal] =
-        useState(false);
-
-    const [showAddDepartmentModal, setShowAddDepartmentModal] =
-        useState(false);
-
-    const [newSchoolName, setNewSchoolName] =
-        useState('');
-
-    const [newDepartmentName, setNewDepartmentName] =
-        useState('');
-
     // Search functionality
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -351,9 +339,15 @@ export default function App() {
     
             setSessions(response.sessions);
             setSemesterCourse(response.session);
-    
+            
+            const savedSessionId =
+                response.session.id ||
+                sessionIdentityKey(response.session);
+            
+            setActiveSessionId(savedSessionId);
+            
             setSessionSaveState('saved');
-    
+            
             return response.session;
         }
         catch (error) {
@@ -536,9 +530,28 @@ export default function App() {
                 // Cloud is authoritative after authentication.
                 setSessions(cloudSessions);
                 setHistory(cloudHistory);
-    
+                
                 writeLocalHistory(cloudHistory);
-    
+                
+                // Restore the previously active session.
+                // If none is stored, use the first available session.
+                const storedActiveSessionId =
+                    localStorage.getItem('yaza_active_session_id');
+                
+                const restoredActiveSession =
+                    cloudSessions.find(
+                        session =>
+                            session.id === storedActiveSessionId
+                    ) || cloudSessions[0] || null;
+                
+                setActiveSessionId(
+                    restoredActiveSession?.id || null
+                );
+                
+                if (restoredActiveSession) {
+                    setSemesterCourse(restoredActiveSession);
+                }
+                
                 setSessionSaveState('saved');
             }
             catch (error) {
@@ -557,6 +570,19 @@ export default function App() {
             cancelled = true;
         };
     }, [user, token]);
+    useEffect(() => {
+        if (!activeSessionId) {
+            localStorage.removeItem(
+                'yaza_active_session_id'
+            );
+            return;
+        }
+    
+        localStorage.setItem(
+            'yaza_active_session_id',
+            activeSessionId
+        );
+    }, [activeSessionId]);
 
     // Detect return from PayChangu checkout
     useEffect(() => {
@@ -2778,7 +2804,7 @@ export default function App() {
                         setShowAuth(true);
                         return;
                     }
-    
+            
                     setShowBatch(true);
                 }}
                 hasResult={!!result}
@@ -2792,15 +2818,6 @@ export default function App() {
                 history={history}
                 onShowOldSessions={() =>
                     setShowOldSessionModal(true)
-                }
-                schools={schools}
-                departments={departments}
-                courses={courses}
-                onShowAddSchool={() =>
-                    setShowAddSchoolModal(true)
-                }
-                onShowAddDepartment={() =>
-                    setShowAddDepartmentModal(true)
                 }
                 onSearchTermChange={handleSearchTermChange}
                 onNewCourse={() =>
@@ -2829,6 +2846,44 @@ export default function App() {
                 }}
                 onLoadRecord={handleLoadRecord}
             />
+            {user && (
+                <div className="px-4 py-2 border-b bg-white">
+                    <ActiveSessionSelector
+                        sessions={sessions}
+                        activeSessionId={activeSessionId}
+                        onSelect={(session) => {
+                            if (hasUnsavedResult) {
+                                const confirmed = window.confirm(
+                                    'You have an unsaved grading result.\n\n' +
+                                    'Switching sessions will replace the current session.\n\n' +
+                                    'Continue?'
+                                );
+            
+                                if (!confirmed) {
+                                    return;
+                                }
+                            }
+            
+                            setActiveSessionId(session.id || sessionIdentityKey(session));
+                            setSemesterCourse(session);
+            
+                            setStudentInfo(prev => ({
+                                ...prev,
+                                courseCode: session.courseCode || '',
+                                program: session.program || '',
+                                year: session.year || '',
+                                semester: session.semester || ''
+                            }));
+            
+                            setResult(null);
+                            setHasUnsavedResult(false);
+                        }}
+                        onNew={() =>
+                            setShowNewSessionModal(true)
+                        }
+                    />
+                </div>
+            )}
     
             <div className="flex-1 flex min-w-0 overflow-hidden">
     
