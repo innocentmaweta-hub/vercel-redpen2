@@ -83,7 +83,11 @@ export interface SemesterCourse {
     customName?: string;
     examDate?: string;
     duration?: number;
+    createdAt?: string;
+    updatedAt?: string;
 }
+
+export type CourseSession = SemesterCourse;
 
 export function parseScore(value: string | number | undefined): number {
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
