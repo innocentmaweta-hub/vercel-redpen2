@@ -22,8 +22,12 @@ import { CloudSaveStatus } from './components/CloudSaveStatus';
 
 import {
     sessionIdentityKey,
-    normalizeSession,
+    loadLocalSessions,
+    writeLocalSessions,
     dedupeSessions,
+    mergeCloudAndLocalSessions,
+    resolveActiveSession,
+    normalizeSession,
     fetchCloudSessions,
     saveCloudSession,
     deleteCloudSession,
@@ -128,7 +132,7 @@ export default function App() {
 
     const [history, setHistory] = useState<HistoryRecord[]>([]);
     const [sessions, setSessions] =
-        useState<SemesterCourse[]>([]);
+        useState<SemesterCourse[]>(() => loadLocalSessions());
     
     // Course options are derived from sessions.
     // There is no separate course storage/state.
@@ -339,6 +343,17 @@ export default function App() {
         },
         []
     );
+    useEffect(() => {
+      const refreshSessions = () => {
+        setSessions(loadLocalSessions());
+      };
+    
+      window.addEventListener('redpen:sessions-updated', refreshSessions);
+    
+      return () => {
+        window.removeEventListener('redpen:sessions-updated', refreshSessions);
+      };
+    }, []);
     
     const handleSaveApiKeys = useCallback(
         async (
