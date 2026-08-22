@@ -3,7 +3,7 @@ import { getUserMeta, updateUserMeta } from './wordpress-auth.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const HISTORY_META_KEY = 'redpen_grading_history';
-const MAX_HISTORY = 50;
+const MAX_HISTORY = 500;
 
 function authenticate(req, res) {
   if (!JWT_SECRET) {
