@@ -88,7 +88,18 @@ export async function saveCloudSession(token: string, session: SemesterCourse): 
   if (!normalized.courseCode) throw new Error('Course code is required');
   const data = await apiPost<{ session?: SemesterCourse; sessions?: SemesterCourse[] }>(API_ENDPOINTS.sessions.save, { session: normalized });
   const saved = normalizeSession(data.session || normalized);
-  return { session: saved, sessions: dedupeSessions(Array.isArray(data.sessions) ? data.sessions : [saved]) };
+
+  // The session API can return only the newly saved session in some import
+  // flows. Keep locally imported sessions in the returned collection so that
+  // loading multiple Excel session files does not replace the previous ones.
+  const mergedSessions = dedupeSessions([
+    ...loadLocalSessions(),
+    ...(Array.isArray(data.sessions) ? data.sessions : []),
+    saved,
+  ]);
+  writeLocalSessions(mergedSessions);
+
+  return { session: saved, sessions: mergedSessions };
 }
 
 export async function deleteCloudSession(token: string, session: SemesterCourse): Promise<SemesterCourse[]> {
@@ -96,7 +107,9 @@ export async function deleteCloudSession(token: string, session: SemesterCourse)
   const key = sessionIdentityKey(session);
   const params = new URLSearchParams(id ? { id } : { key });
   const data = await apiDelete<{ sessions?: SemesterCourse[] }>(`${API_ENDPOINTS.sessions.delete}?${params.toString()}`);
-  return dedupeSessions(Array.isArray(data.sessions) ? data.sessions : []);
+  const sessions = dedupeSessions(Array.isArray(data.sessions) ? data.sessions : []);
+  writeLocalSessions(sessions);
+  return sessions;
 }
 
 export function mergeCloudAndLocalSessions(cloud: SemesterCourse[], local: SemesterCourse[]): SemesterCourse[] {
