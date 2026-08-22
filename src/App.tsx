@@ -2,7 +2,6 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */ 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -20,6 +19,8 @@ import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
 import { CloudSaveStatus } from './components/CloudSaveStatus';
+import { ActiveSessionSelector } from './components/ActiveSessionSelector';
+
 import {
     sessionIdentityKey,
     normalizeSession,
@@ -35,6 +36,7 @@ import {
     deleteCloudHistory,
     writeLocalHistory,
 } from './lib/historyStore';
+
 import {
     NewSemesterModal,
     ContinueSemesterModal,
@@ -42,6 +44,7 @@ import {
     NewSessionModal,
     SemesterCourse
 } from './components/CourseSessionModal';
+
 import { ToolOptionsBar } from './components/ToolOptionsBar';
 
 import {
@@ -54,6 +57,7 @@ import {
     AuthResponse,
     parseScore
 } from './types';
+
 import {
     Play,
     AlertTriangle,
@@ -80,67 +84,20 @@ import {
     Plus,
     Search
 } from 'lucide-react';
+
 import { motion, AnimatePresence } from 'motion/react';
 import { YazaPanel } from './components/YazaPanel';
 import { getSavedFolder } from './lib/fileStorage';
+
 import {
     buildPaperPdfBlob,
     buildPaperPdfFilename,
     appendResultToSessionExcel
 } from './lib/exportUtils';
+
 import { writeFileToFolder } from './lib/fileStorage';
 
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
-const SCHOOLS_KEY = 'stored_schools';
-const DEPARTMENTS_KEY = 'stored_departments';
-const COURSES_KEY = 'stored_courses';
-
-// School management functions
-function loadSchools(): string[] {
-    try {
-        return JSON.parse(localStorage.getItem(SCHOOLS_KEY) || '[]');
-    }
-    catch {
-        return [];
-    }
-}
-
-function saveSchools(schools: string[]) {
-    localStorage.setItem(SCHOOLS_KEY, JSON.stringify(schools));
-}
-
-// Department management functions
-function loadDepartments(): string[] {
-    try {
-        return JSON.parse(localStorage.getItem(DEPARTMENTS_KEY) || '[]');
-    }
-    catch {
-        return [];
-    }
-}
-
-function saveDepartments(departments: string[]) {
-    localStorage.setItem(DEPARTMENTS_KEY, JSON.stringify(departments));
-}
-
-// Course list management functions
-interface StoredCourse {
-    courseCode: string;
-    courseName: string;
-}
-
-function loadCourses(): StoredCourse[] {
-    try {
-        return JSON.parse(localStorage.getItem(COURSES_KEY) || '[]');
-    }
-    catch {
-        return [];
-    }
-}
-
-function saveCourses(courses: StoredCourse[]) {
-    localStorage.setItem(COURSES_KEY, JSON.stringify(courses));
-}
 
 export default function App() {
     const [studentInfo, setStudentInfo] = useState<StudentInfo>({
@@ -315,16 +272,6 @@ export default function App() {
 
     const [showNewSessionModal, setShowNewSessionModal] =
         useState(false);
-
-    // School and department management
-    const [schools, setSchools] =
-        useState<string[]>(loadSchools());
-
-    const [departments, setDepartments] =
-        useState<string[]>(loadDepartments());
-
-    const [courses, setCourses] =
-        useState<StoredCourse[]>(loadCourses());
 
     const [showAddSchoolModal, setShowAddSchoolModal] =
         useState(false);
