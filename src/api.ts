@@ -21,6 +21,7 @@ export const API_ENDPOINTS = {
   auth: {
     login: `${BASE_API}/auth/login`,
     register: `${BASE_API}/auth/register`,
+    me: `${BASE_API}/auth/me`,
     google: `${BASE_API}/auth/google`,
     verifyEmail: `${BASE_API}/auth/verify-email`,
     resendVerification: `${BASE_API}/auth/resend-verification`,
@@ -29,7 +30,6 @@ export const API_ENDPOINTS = {
   },
   grading: {
     grade: `${BASE_API}/grade`,
-    history: `${BASE_API}/history`,
   },
   sessions: {
     list: `${BASE_API}/sessions`,
@@ -86,15 +86,8 @@ async function readApiError(response: Response): Promise<{ message: string; code
   return { message: `API request failed: ${response.status}` };
 }
 
-export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
-  const response = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
-  if (!response.ok) {
-    const { message, code } = await readApiError(response);
-    const error: any = new Error(message);
-    if (code) error.code = code;
-    throw error;
-  }
-  return response.json();
+function throwApiError(response: Response): never {
+  throw new Error(`API request failed: ${response.status}`);
 }
 
 export async function apiGet<T = unknown>(url: string): Promise<T> {
@@ -106,4 +99,38 @@ export async function apiGet<T = unknown>(url: string): Promise<T> {
     throw error;
   }
   return response.json();
+}
+
+export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
+  const response = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+  if (!response.ok) {
+    const { message, code } = await readApiError(response);
+    const error: any = new Error(message);
+    if (code) error.code = code;
+    throw error;
+  }
+  return response.json();
+}
+
+export async function apiDelete<T = unknown>(url: string): Promise<T> {
+  const response = await apiFetch(url, { method: 'DELETE' });
+  if (!response.ok) {
+    const { message, code } = await readApiError(response);
+    const error: any = new Error(message);
+    if (code) error.code = code;
+    throw error;
+  }
+  return response.json();
+}
+
+/** Explicitly validate/refresh the current authenticated user. */
+export async function refreshAuthSession<T = any>(): Promise<T | null> {
+  const token = getStoredString(AUTH_TOKEN_KEY);
+  if (!token) return null;
+  try {
+    const data = await apiGet<T>(API_ENDPOINTS.auth.me);
+    return data;
+  } catch {
+    return null;
+  }
 }
