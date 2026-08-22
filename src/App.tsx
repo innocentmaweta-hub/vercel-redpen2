@@ -307,6 +307,11 @@ export default function App() {
     const [showSettings, setShowSettings] = useState(false);
     const [showYaza, setShowYaza] = useState(false);
     const [showBatch, setShowBatch] = useState(false);
+    
+    const [
+        paymentStatusMessage,
+        setPaymentStatusMessage
+    ] = useState<string | null>(null);
 
     // Auto mode
     const [isAutoMode, setIsAutoMode] = useState(false);
