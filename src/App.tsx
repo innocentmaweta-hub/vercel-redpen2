@@ -90,9 +90,7 @@ import {
 } from './lib/exportUtils';
 import { writeFileToFolder } from './lib/fileStorage';
 
-const HISTORY_KEY = 'grading_history';
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
-const SESSIONS_KEY = 'stored_sessions';
 const SCHOOLS_KEY = 'stored_schools';
 const DEPARTMENTS_KEY = 'stored_departments';
 const COURSES_KEY = 'stored_courses';
@@ -2647,16 +2645,6 @@ export default function App() {
                     })
                 );
         
-            const updated = [
-                ...records,
-                ...history
-            ].slice(0, 50);
-        
-            setHistory(updated);
-            saveHistory(updated);
-        
-            // Sync each record to the backend so history
-            // persists across devices.
             const handleSaveAllBatch = async (
                 results: {
                     file: any;
