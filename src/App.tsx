@@ -91,7 +91,8 @@ import { getSavedFolder } from './lib/fileStorage';
 import {
     buildPaperPdfBlob,
     buildPaperPdfFilename,
-    appendResultToSessionExcel
+    appendResultToSessionExcel,
+    loadSessionFromExcelFile,
 } from './lib/exportUtils';
 
 import { writeFileToFolder } from './lib/fileStorage';
