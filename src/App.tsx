@@ -322,7 +322,7 @@ export default function App() {
     const authHeaders = useCallback(
         (): Record<string, string> => {
             const t = localStorage.getItem(AUTH_TOKEN_KEY);
-
+    
             return t
                 ? {
                     'Authorization': `Bearer ${t}`,
@@ -334,6 +334,14 @@ export default function App() {
         },
         []
     );
+    
+    /**
+     * Persist the currently active session to cloud storage.
+     *
+     * This is the single path used by autosave and explicit session saves.
+     * It also keeps the local active-session pointer synchronized with the
+     * canonical session returned by the API.
+     */
     const persistSession = useCallback(async (
         session: SemesterCourse
     ): Promise<SemesterCourse | null> => {
@@ -352,18 +360,31 @@ export default function App() {
                 normalized
             );
     
-            setSessions(response.sessions);
-            setSemesterCourse(response.session);
-            
+            const savedSession =
+                normalizeSession(response.session);
+    
             const savedSessionId =
-                response.session.id ||
-                sessionIdentityKey(response.session);
-            
+                savedSession.id ||
+                sessionIdentityKey(savedSession);
+    
+            // Update the complete cloud session list.
+            setSessions(response.sessions);
+    
+            // Keep the currently displayed session synchronized
+            // with the canonical version returned by the server.
+            setSemesterCourse(savedSession);
+    
+            // Keep active-session state and localStorage synchronized.
             setActiveSessionId(savedSessionId);
-            
+    
+            localStorage.setItem(
+                'yaza_active_session_id',
+                savedSessionId
+            );
+    
             setSessionSaveState('saved');
-            
-            return response.session;
+    
+            return savedSession;
         }
         catch (error) {
             console.error(
@@ -376,6 +397,10 @@ export default function App() {
             return null;
         }
     }, [token]);
+    
+    /**
+     * Retry saving a grading-history record that previously failed.
+     */
     const retryHistorySave = useCallback(async () => {
         if (!pendingHistoryRecord || !token) {
             return;
@@ -409,8 +434,19 @@ export default function App() {
         pendingHistoryRecord,
         token,
     ]);
+    
+    /**
+     * Automatically persist session metadata changes.
+     *
+     * studentInfo contains the editable course/session information in the
+     * grading UI, while semesterCourse represents the currently selected
+     * session. We merge the relevant editable fields into the session before
+     * comparing/saving it.
+     */
     useEffect(() => {
-        if (!token || !semesterCourse) return;
+        if (!token || !semesterCourse) {
+            return;
+        }
     
         const nextSession = normalizeSession({
             ...semesterCourse,
@@ -432,23 +468,35 @@ export default function App() {
                 semesterCourse.semester,
         });
     
-        const currentKey =
-            sessionIdentityKey(semesterCourse);
+        const currentSession =
+            normalizeSession(semesterCourse);
     
-        const nextKey =
-            sessionIdentityKey(nextSession);
-    
+        /*
+         * Compare the complete normalized session rather than only the
+         * identity key + a few fields.
+         *
+         * This catches changes to:
+         * - course code
+         * - course name
+         * - program
+         * - year
+         * - semester
+         * - academic year
+         * - custom name
+         * - session label
+         * - and any other fields represented by normalizeSession()
+         */
         const changed =
-            currentKey !== nextKey ||
-            nextSession.program !== semesterCourse.program ||
-            nextSession.year !== semesterCourse.year ||
-            nextSession.semester !== semesterCourse.semester;
+            JSON.stringify(nextSession) !==
+            JSON.stringify(currentSession);
     
-        if (!changed) return;
+        if (!changed) {
+            return;
+        }
     
         const timer = window.setTimeout(() => {
             persistSession(nextSession);
-        }, 250);
+        }, 500);
     
         return () => {
             window.clearTimeout(timer);
@@ -466,27 +514,33 @@ export default function App() {
     useEffect(() => {
         const storedToken =
             localStorage.getItem(AUTH_TOKEN_KEY);
-
+    
         if (!storedToken) {
             return;
         }
-
+    
         setToken(storedToken);
-
-        (async () => {
+    
+        let cancelled = false;
+    
+        const restoreAuthentication = async () => {
             try {
                 const res = await fetch('/api/auth/me', {
                     headers: {
                         'Authorization': `Bearer ${storedToken}`
                     }
                 });
-
+    
                 if (!res.ok) {
                     throw new Error('Session expired');
                 }
-
+    
                 const data = await res.json();
-
+    
+                if (cancelled) {
+                    return;
+                }
+    
                 setUser({
                     id: data.user.id,
                     name:
@@ -512,67 +566,150 @@ export default function App() {
                     avatarUrl:
                         data.user.avatarUrl || '',
                 });
-
+    
                 setShowAuth(false);
             }
             catch (err) {
+                if (cancelled) {
+                    return;
+                }
+    
                 console.error(
                     'Failed to restore session:',
                     err
                 );
-
+    
                 localStorage.removeItem(AUTH_TOKEN_KEY);
+                localStorage.removeItem(
+                    'yaza_active_session_id'
+                );
+    
                 setToken(null);
                 setUser(null);
+                setActiveSessionId(null);
+                setSemesterCourse(null);
             }
-        })();
+        };
+    
+        restoreAuthentication();
+    
+        return () => {
+            cancelled = true;
+        };
     }, []);
-
+    
+    /**
+     * Restore cloud sessions and grading history after authentication.
+     *
+     * Cloud is authoritative once the user has successfully authenticated.
+     * The previously active session is restored using both its explicit ID
+     * and the deterministic session identity key so older sessions without
+     * an explicit ID continue to work.
+     */
     useEffect(() => {
-        if (!user || !token) return;
+        if (!user || !token) {
+            return;
+        }
     
         let cancelled = false;
     
         const syncCloudData = async () => {
             try {
-                const [cloudSessions, cloudHistory] = await Promise.all([
+                const [
+                    cloudSessions,
+                    cloudHistory
+                ] = await Promise.all([
                     fetchCloudSessions(token),
                     fetchCloudHistory(token),
                 ]);
     
-                if (cancelled) return;
+                if (cancelled) {
+                    return;
+                }
     
                 // Cloud is authoritative after authentication.
                 setSessions(cloudSessions);
                 setHistory(cloudHistory);
-                
+    
                 writeLocalHistory(cloudHistory);
-                
-                // Restore the previously active session.
-                // If none is stored, use the first available session.
+    
+                /*
+                 * Restore the previously active session.
+                 *
+                 * We first try the stored ID. For sessions created before
+                 * explicit IDs were introduced, fall back to the deterministic
+                 * sessionIdentityKey().
+                 */
                 const storedActiveSessionId =
-                    localStorage.getItem('yaza_active_session_id');
-                
+                    localStorage.getItem(
+                        'yaza_active_session_id'
+                    );
+    
                 const restoredActiveSession =
-                    cloudSessions.find(
-                        session =>
-                            session.id === storedActiveSessionId
-                    ) || cloudSessions[0] || null;
-                
-                setActiveSessionId(
-                    restoredActiveSession?.id || null
-                );
-                
+                    cloudSessions.find(session => {
+                        const sessionId =
+                            session.id ||
+                            sessionIdentityKey(session);
+    
+                        return (
+                            sessionId ===
+                            storedActiveSessionId
+                        );
+                    }) ||
+                    cloudSessions[0] ||
+                    null;
+    
                 if (restoredActiveSession) {
-                    setSemesterCourse(restoredActiveSession);
+                    const normalized =
+                        normalizeSession(
+                            restoredActiveSession
+                        );
+    
+                    const restoredSessionId =
+                        normalized.id ||
+                        sessionIdentityKey(normalized);
+    
+                    setSemesterCourse(normalized);
+    
+                    setActiveSessionId(
+                        restoredSessionId
+                    );
+    
+                    /*
+                     * Keep localStorage synchronized with the actual
+                     * session that was restored.
+                     */
+                    localStorage.setItem(
+                        'yaza_active_session_id',
+                        restoredSessionId
+                    );
                 }
-                
+                else {
+                    /*
+                     * There are no cloud sessions.
+                     * Explicitly clear stale local state so a deleted
+                     * session cannot reappear after refresh.
+                     */
+                    setSemesterCourse(null);
+                    setActiveSessionId(null);
+    
+                    localStorage.removeItem(
+                        'yaza_active_session_id'
+                    );
+                }
+    
                 setSessionSaveState('saved');
+                setHistorySaveState('saved');
             }
             catch (error) {
-                if (cancelled) return;
+                if (cancelled) {
+                    return;
+                }
     
-                console.error('Failed to restore cloud data:', error);
+                console.error(
+                    'Failed to restore cloud data:',
+                    error
+                );
     
                 setSessionSaveState('error');
                 setHistorySaveState('error');
@@ -1205,52 +1342,252 @@ export default function App() {
      *
      * This prevents the old JSON-file behaviour from coming back.
      */
-    const handleLoadFromFile = () => {
+    const handleLoadFromFile = useCallback(() => {
         const input =
             document.createElement('input');
-
+    
         input.type = 'file';
+    
         input.accept =
             '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
-
+    
         input.onchange = async (e) => {
             const target =
                 e.target as HTMLInputElement;
-
+    
             if (
                 !target.files ||
                 !target.files[0]
             ) {
                 return;
             }
-
+    
             const file =
                 target.files[0];
-
-            /*
-             * Do not attempt JSON.parse().
-             *
-             * The Excel parser should be connected to the
-             * existing export/session format in exportUtils.ts.
-             */
-            console.info(
-                'Excel session selected:',
-                file.name
-            );
-
-            /*
-             * For now, close the session picker after a valid
-             * Excel file has been selected.
-             *
-             * The actual XLSX -> application-state loader is
-             * intentionally handled separately so we don't
-             * introduce an incorrect data mapping here.
-             */
-            setShowOldSessionModal(false);
+    
+            try {
+                /*
+                 * Make sure the selected file is actually an Excel file.
+                 */
+                const isExcelFile =
+                    file.name
+                        .toLowerCase()
+                        .endsWith('.xlsx') ||
+                    file.name
+                        .toLowerCase()
+                        .endsWith('.xls');
+    
+                if (!isExcelFile) {
+                    alert(
+                        'Please select a valid Excel (.xlsx or .xls) file.'
+                    );
+    
+                    return;
+                }
+    
+                /*
+                 * Import the grading history from the RedPen
+                 * Excel export.
+                 */
+                const importedRecords =
+                    await loadHistoryFromExcelFile(file);
+    
+                /*
+                 * If the workbook contains no grading records,
+                 * don't modify the current application state.
+                 */
+                if (
+                    !importedRecords ||
+                    importedRecords.length === 0
+                ) {
+                    alert(
+                        'No grading records were found in this Excel file.'
+                    );
+    
+                    return;
+                }
+    
+                /*
+                 * Merge imported records with the existing local
+                 * history without creating duplicates.
+                 */
+                const existingIds =
+                    new Set(
+                        history.map(
+                            record => record.id
+                        )
+                    );
+    
+                const newRecords =
+                    importedRecords.filter(
+                        record =>
+                            !existingIds.has(
+                                record.id
+                            )
+                    );
+    
+                /*
+                 * If every imported record already exists locally,
+                 * still report that the import was processed.
+                 */
+                if (newRecords.length === 0) {
+                    alert(
+                        'These grading records are already in your history.'
+                    );
+    
+                    setShowOldSessionModal(false);
+    
+                    return;
+                }
+    
+                /*
+                 * Update local application history first.
+                 */
+                const mergedHistory = [
+                    ...history,
+                    ...newRecords,
+                ];
+    
+                setHistory(
+                    mergedHistory
+                );
+    
+                writeLocalHistory(
+                    mergedHistory
+                );
+    
+                /*
+                 * If the user is authenticated, persist each imported
+                 * grading record to cloud history as well.
+                 */
+                if (token) {
+                    setHistorySaveState('saving');
+    
+                    let cloudHistory =
+                        await fetchCloudHistory(token);
+    
+                    for (
+                        const record of newRecords
+                    ) {
+                        cloudHistory =
+                            await saveCloudHistory(
+                                token,
+                                record
+                            );
+                    }
+    
+                    setHistory(
+                        cloudHistory
+                    );
+    
+                    writeLocalHistory(
+                        cloudHistory
+                    );
+    
+                    setHistorySaveState(
+                        'saved'
+                    );
+                }
+    
+                /*
+                 * Try to restore the session information contained
+                 * in the Excel workbook.
+                 *
+                 * This requires the session loader exposed by
+                 * exportUtils.ts.
+                 */
+                try {
+                    const importedSession =
+                        await loadSessionFromExcelFile(
+                            file
+                        );
+    
+                    if (importedSession) {
+                        const normalizedSession =
+                            normalizeSession(
+                                importedSession
+                            );
+    
+                        const sessionId =
+                            normalizedSession.id ||
+                            sessionIdentityKey(
+                                normalizedSession
+                            );
+    
+                        setSemesterCourse(
+                            normalizedSession
+                        );
+    
+                        setActiveSessionId(
+                            sessionId
+                        );
+    
+                        localStorage.setItem(
+                            'yaza_active_session_id',
+                            sessionId
+                        );
+    
+                        /*
+                         * Persist the imported session to the cloud
+                         * when the user is authenticated.
+                         */
+                        if (token) {
+                            await persistSession(
+                                normalizedSession
+                            );
+                        }
+                    }
+                }
+                catch (sessionError) {
+                    /*
+                     * A workbook can still contain valid grading
+                     * history even if session metadata cannot be
+                     * reconstructed.
+                     */
+                    console.warn(
+                        'Could not restore session metadata from Excel:',
+                        sessionError
+                    );
+                }
+    
+                setShowOldSessionModal(false);
+    
+                alert(
+                    `Imported ${newRecords.length} grading result${
+                        newRecords.length === 1
+                            ? ''
+                            : 's'
+                    } successfully.`
+                );
+            }
+            catch (error) {
+                console.error(
+                    'Excel import failed:',
+                    error
+                );
+    
+                setHistorySaveState(
+                    'error'
+                );
+    
+                alert(
+                    'We could not import this Excel file. Please make sure it is a valid RedPen export.'
+                );
+            }
+            finally {
+                /*
+                 * Allow the user to select the same file again later.
+                 */
+                target.value = '';
+            }
         };
-
+    
         input.click();
-    };
+    }, [
+        history,
+        token,
+        persistSession,
+    ]);
 
     
     /*
@@ -2539,12 +2876,27 @@ export default function App() {
             return validatedResult;
         };
         
-        const handleSaveAllBatch = (
+        const handleSaveAllBatch = async (
             results: {
                 file: any;
-                result: GradingResult
+                result: GradingResult;
             }[]
         ) => {
+            if (!results || results.length === 0) {
+                alert('There are no grading results to save.');
+                return;
+            }
+        
+            if (!token) {
+                setShowAuth(true);
+        
+                alert(
+                    'Please sign in before saving grading history.'
+                );
+        
+                return;
+            }
+        
             const records: HistoryRecord[] =
                 results.map(
                     ({ file, result }, idx) => ({
@@ -2555,13 +2907,14 @@ export default function App() {
                             '_' +
                             Math.random()
                                 .toString(36)
-                                .substr(2, 9),
+                                .slice(2, 9),
         
                         date:
                             new Date().toISOString(),
         
                         studentInfo: {
                             ...studentInfo,
+        
                             name:
                                 result.extracted_info?.name ||
                                 studentInfo.name ||
@@ -2576,90 +2929,52 @@ export default function App() {
                     })
                 );
         
-            const handleSaveAllBatch = async (
-                results: {
-                    file: any;
-                    result: GradingResult;
-                }[]
-            ) => {
-                const records: HistoryRecord[] =
-                    results.map(({ file, result }, idx) => ({
-                        id:
-                            Date.now().toString() +
-                            '_' +
-                            idx +
-                            '_' +
-                            Math.random()
-                                .toString(36)
-                                .slice(2, 9),
-            
-                        date:
-                            new Date().toISOString(),
-            
-                        studentInfo: {
-                            ...studentInfo,
-            
-                            name:
-                                result.extracted_info?.name ||
-                                studentInfo.name ||
-                                file.name,
-            
-                            regNo:
-                                result.extracted_info?.regNo ||
-                                studentInfo.regNo,
-                        },
-            
-                        result,
-                    }));
-            
-                if (!token) {
-                    alert('Please sign in before saving grading history.');
-                    return;
-                }
-            
-                setHistorySaveState('saving');
-            
-                try {
-                    let cloudHistory = history;
-            
-                    for (const record of records) {
-                        cloudHistory =
-                            await saveCloudHistory(
-                                token,
-                                record
-                            );
-                    }
-            
-                    setHistory(cloudHistory);
-                    writeLocalHistory(cloudHistory);
-            
-                    setHistorySaveState('saved');
-            
-                    alert(
-                        `Saved ${records.length} grading results to history!`
-                    );
-            
-                    setShowBatch(false);
-                }
-                catch (error) {
-                    console.error(
-                        'Batch history save failed:',
-                        error
-                    );
-            
-                    setHistorySaveState('error');
-            
-                    alert(
-                        'Some grading results could not be saved to the cloud. Please retry.'
-                    );
-                }
-            };
+            setHistorySaveState('saving');
         
-            alert(
-                `Saved ${records.length} grading results to history!`
-            );
+            try {
+                /*
+                 * Save every batch result sequentially.
+                 *
+                 * We deliberately use the history returned by each request
+                 * so the next save is based on the latest cloud state.
+                 */
+                let cloudHistory =
+                    await fetchCloudHistory(token);
         
-            setShowBatch(false);
+                for (const record of records) {
+                    cloudHistory =
+                        await saveCloudHistory(
+                            token,
+                            record
+                        );
+                }
+        
+                // Cloud is now authoritative.
+                setHistory(cloudHistory);
+                writeLocalHistory(cloudHistory);
+        
+                setHistorySaveState('saved');
+        
+                alert(
+                    `Saved ${records.length} grading result${
+                        records.length === 1 ? '' : 's'
+                    } to history!`
+                );
+        
+                setShowBatch(false);
+            }
+            catch (error) {
+                console.error(
+                    'Batch history save failed:',
+                    error
+                );
+        
+                setHistorySaveState('error');
+        
+                alert(
+                    'Some grading results could not be saved to the cloud. Please retry.'
+                );
+            }
         };
         
         const handlePrint = () => {
