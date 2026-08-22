@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { HistoryRecord, SemesterCourse } from '../types';
 import { Clock, Trash2, ChevronRight, BookOpen, ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { AUTH_TOKEN_KEY, sessionIdentityKey, deleteCloudSession, dedupeSessions, writeLocalSessions } from '../lib/sessionStore';
 
 interface Props {
   history: HistoryRecord[];
@@ -13,34 +14,18 @@ interface Props {
 
 type Tab = 'grading' | 'sessions';
 
-const SESSION_STORAGE_KEY = 'stored_sessions';
-const AUTH_TOKEN_KEY = 'yaza_auth_token';
-
-const sessionKey = (session: SemesterCourse) => [
-  (session.courseCode || '').trim().toUpperCase(),
-  (session.academicYear || '').trim(),
-  (session.year || '').trim(),
-  (session.semester || '').trim(),
-  (session.sessionLabel || '').trim(),
-  (session.customName || '').trim(),
-].join('|');
-
 export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSession }: Props) => {
   const [tab, setTab] = useState<Tab>('grading');
   const [selectedSession, setSelectedSession] = useState<SemesterCourse | null>(null);
-  const [sessionList, setSessionList] = useState<SemesterCourse[]>(sessions);
+  const [sessionList, setSessionList] = useState<SemesterCourse[]>(dedupeSessions(sessions));
 
   useEffect(() => {
-    setSessionList(sessions);
+    setSessionList(dedupeSessions(sessions));
   }, [sessions]);
 
   useEffect(() => {
     const sync = () => {
-      try {
-        setSessionList(JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || '[]'));
-      } catch {
-        setSessionList(sessions);
-      }
+      setSessionList(dedupeSessions(sessions));
     };
     window.addEventListener('redpen:sessions-updated', sync);
     return () => window.removeEventListener('redpen:sessions-updated', sync);
@@ -50,36 +35,22 @@ export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSessio
     const label = `${session.courseCode}${session.courseName ? ` — ${session.courseName}` : ''}`;
     if (!window.confirm(`Delete session "${label}"? This removes it from your saved sessions.`)) return;
 
-    const id = (session as SemesterCourse & { id?: string }).id;
-    const key = sessionKey(session);
-
     try {
       const token = localStorage.getItem(AUTH_TOKEN_KEY);
-      if (token) {
-        const params = new URLSearchParams(id ? { id } : { key });
-        const response = await fetch(`/api/sessions?${params.toString()}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!response.ok) throw new Error(`Delete failed: ${response.status}`);
-      }
+      if (!token) throw new Error('Please sign in to delete a cloud session.');
 
-      const next = sessionList.filter((item) => sessionKey(item) !== key);
+      const next = await deleteCloudSession(token, session);
       setSessionList(next);
-      setSelectedSession((current) => current && sessionKey(current) === key ? null : current);
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
-      window.dispatchEvent(new CustomEvent('redpen:sessions-updated'));
+      writeLocalSessions(next);
+      setSelectedSession(current => current && sessionIdentityKey(current) === sessionIdentityKey(session) ? null : current);
     } catch (error) {
       console.error('Failed to delete session:', error);
-      alert('Could not delete this session. Please try again.');
+      alert(error instanceof Error ? error.message : 'Could not delete this session. Please try again.');
     }
   };
 
   const tabBtnClass = (active: boolean) =>
-    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${active
-      ? 'bg-accent-blue text-white shadow-lg shadow-accent-blue/20'
-      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-    }`;
+    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${active ? 'bg-accent-blue text-white shadow-lg shadow-accent-blue/20' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`;
 
   return (
     <div className="flex-1 flex flex-col p-4 gap-3 overflow-hidden">
@@ -167,16 +138,14 @@ export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSessio
                 </div>
               ) : (
                 sessionList.map((session, idx) => (
-                  <motion.div key={(session as SemesterCourse & { id?: string }).id || `${sessionKey(session)}-${idx}`} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: idx * 0.05 }} className="group bg-card border border-gray-800 rounded-2xl p-4 hover:border-accent-blue/40 hover:bg-accent-blue/5 transition-all duration-200 cursor-pointer" onClick={() => setSelectedSession(session)}>
+                  <motion.div key={(session as SemesterCourse & { id?: string }).id || sessionIdentityKey(session)} initial={{ x: -20, opacity: 0 }} animate={{ x: 0 }} transition={{ delay: idx * 0.05 }} className="group bg-card border border-gray-800 rounded-2xl p-4 hover:border-accent-blue/40 hover:bg-accent-blue/5 transition-all duration-200 cursor-pointer" onClick={() => setSelectedSession(session)}>
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="px-2 py-0.5 bg-accent-blue/10 text-accent-blue text-[11px] font-black rounded-md border border-accent-blue/20">{session.courseCode}</span>
                         </div>
                         <p className="text-xs font-bold text-gray-300 truncate">{session.courseName || 'No course name'}</p>
-                        <p className="text-[10px] text-gray-600 mt-0.5 uppercase font-medium">
-                          {session.year || '—'} {session.semester ? `· ${session.semester}` : ''} {session.academicYear ? `· ${session.academicYear}` : ''}
-                        </p>
+                        <p className="text-[10px] text-gray-600 mt-0.5 uppercase font-medium">{session.year || '—'} {session.semester ? `· ${session.semester}` : ''} {session.academicYear ? `· ${session.academicYear}` : ''}</p>
                       </div>
                       <div className="flex items-center gap-2 ml-3 shrink-0">
                         <button onClick={(e) => { e.stopPropagation(); deleteSession(session); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-gray-600 transition-all" aria-label="Delete session">
