@@ -3,6 +3,10 @@
   const TOKEN_KEY = 'yaza_auth_token';
   let timer = null;
   let lastSignature = '';
+  let currentSessionId = null;
+  let lastSavedKey = '';
+  let cloudLoadedForToken = '';
+  let switchingSession = false;
 
   const clean = (value) => typeof value === 'string' ? value.trim() : '';
 
@@ -34,7 +38,6 @@
       (input) => input.placeholder === 'Program of Study'
     );
     if (programInput) values.program = clean(programInput.value);
-
     return values;
   }
 
@@ -49,15 +52,40 @@
     ].join('|');
   }
 
+  function readLocal() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch { return []; }
+  }
+
   function updateLocal(session) {
     try {
-      const current = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const current = readLocal();
       const sessionKey = key(session);
-      const next = current.filter((item) => key(item) !== sessionKey);
+      const next = current.filter((item) => key(item) !== sessionKey && item.id !== session.id);
       next.unshift(session);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
-      // Local persistence is best-effort; cloud remains authoritative.
+      // Cloud remains authoritative.
+    }
+  }
+
+  async function loadCloudSessions() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token || token === cloudLoadedForToken) return;
+
+    try {
+      const response = await fetch('/api/sessions', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!Array.isArray(data.sessions)) return;
+
+      cloudLoadedForToken = token;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.sessions));
+      window.dispatchEvent(new CustomEvent('redpen:sessions-updated'));
+    } catch (error) {
+      console.warn('Cloud session verification failed:', error);
     }
   }
 
@@ -68,11 +96,8 @@
     const values = readForm();
     if (!values.courseCode) return;
 
-    const signature = JSON.stringify(values);
-    if (signature === lastSignature) return;
-    lastSignature = signature;
-
     const session = {
+      id: currentSessionId || undefined,
       courseCode: values.courseCode,
       courseName: values.courseName,
       program: values.program,
@@ -81,6 +106,19 @@
       academicYear: values.academicYear,
       sessionLabel: values.semester || 'Session',
     };
+    const currentKey = key(session);
+
+    if (JSON.stringify(values) === lastSignature && currentKey === lastSavedKey) return;
+    lastSignature = JSON.stringify(values);
+
+    // A deliberate session switch should attach to the already-existing session
+    // instead of mutating the previous one. Ordinary field edits keep the current id.
+    if (switchingSession) {
+      const existing = readLocal().find((item) => key(item) === currentKey);
+      currentSessionId = existing?.id || null;
+      session.id = currentSessionId || undefined;
+      switchingSession = false;
+    }
 
     try {
       const response = await fetch('/api/sessions', {
@@ -91,23 +129,25 @@
         },
         body: JSON.stringify({ session }),
       });
-
       if (!response.ok) {
         console.warn('Session autosave failed:', response.status);
         return;
       }
 
       const data = await response.json().catch(() => ({}));
-      updateLocal(data.session || session);
+      const saved = data.session || session;
+      currentSessionId = saved.id || currentSessionId;
+      lastSavedKey = key(saved);
+      updateLocal(saved);
       window.dispatchEvent(new CustomEvent('redpen:sessions-updated'));
     } catch (error) {
       console.warn('Session autosave failed:', error);
     }
   }
 
-  function scheduleSave() {
+  function scheduleSave(delay = 150) {
     window.clearTimeout(timer);
-    timer = window.setTimeout(saveCurrentSession, 50);
+    timer = window.setTimeout(saveCurrentSession, delay);
   }
 
   document.addEventListener('change', (event) => {
@@ -118,14 +158,32 @@
   document.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    if (target.textContent?.trim() === 'Set Course' || target.textContent?.trim() === 'Switch Course') {
-      scheduleSave();
+    const text = target.textContent?.trim();
+
+    if (text === 'Load Session') {
+      switchingSession = true;
+      scheduleSave(600);
+      return;
     }
+
+    if (text === 'New Session') {
+      currentSessionId = null;
+      lastSavedKey = '';
+      switchingSession = false;
+      lastSignature = '';
+      return;
+    }
+
+    if (text === 'Set Course' || text === 'Switch Course') scheduleSave(250);
   }, true);
 
-  window.addEventListener('storage', (event) => {
-    if (event.key === TOKEN_KEY) scheduleSave();
-  });
+  // React writes the auth token in the same tab, so the browser storage event
+  // does not fire here. Poll briefly and verify cloud sessions as soon as login succeeds.
+  const poll = window.setInterval(loadCloudSessions, 500);
+  window.addEventListener('beforeunload', () => window.clearInterval(poll));
 
-  window.setTimeout(scheduleSave, 1000);
+  window.setTimeout(() => {
+    loadCloudSessions();
+    scheduleSave(500);
+  }, 1000);
 })();
