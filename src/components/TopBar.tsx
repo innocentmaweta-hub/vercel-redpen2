@@ -243,6 +243,19 @@ export const TopBar = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
 
+  useEffect(() => {
+    const handler = () => onShowOldSessions();
+    window.addEventListener('redpen:open-load-session', handler);
+    return () => window.removeEventListener('redpen:open-load-session', handler);
+  }, [onShowOldSessions]);
+
+  useEffect(() => {
+    document.documentElement.dataset.redpenSessionActive = activeSession ? 'true' : 'false';
+    return () => {
+      delete document.documentElement.dataset.redpenSessionActive;
+    };
+  }, [activeSession]);
+
   const handleMenuClick = (name: string, e: React.MouseEvent<HTMLButtonElement>) => {
     if (activeMenu?.name === name) { setActiveMenu(null); return; }
     setShowSettings(false);
