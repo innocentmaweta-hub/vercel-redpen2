@@ -22,6 +22,51 @@ export function writeLocalHistory(records: HistoryRecord[]): HistoryRecord[] {
   return next;
 }
 
+async function uploadLocalOnlyHistory(
+  token: string,
+  cloud: HistoryRecord[],
+  local: HistoryRecord[]
+): Promise<HistoryRecord[]> {
+  const cloudKeys = new Set(cloud.map(historyIdentity));
+  let mergedCloud = [...cloud];
+
+  for (const record of local) {
+    if (!record || cloudKeys.has(historyIdentity(record))) continue;
+
+    try {
+      const response = await fetch('/api/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(record),
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json().catch(() => ({}));
+      const returned = Array.isArray(data.history)
+        ? data.history
+        : [record];
+
+      mergedCloud = mergeCloudAndLocalHistory(
+        mergedCloud,
+        returned
+      );
+
+      for (const uploaded of returned) {
+        cloudKeys.add(historyIdentity(uploaded));
+      }
+    } catch (error) {
+      // Keep the record locally if cloud synchronization fails.
+      console.warn('Failed to sync local grading history:', error);
+    }
+  }
+
+  return mergedCloud;
+}
+
 export async function fetchCloudHistory(token: string): Promise<HistoryRecord[]> {
   const response = await fetch('/api/history', {
     headers: { Authorization: `Bearer ${token}` },
@@ -30,11 +75,23 @@ export async function fetchCloudHistory(token: string): Promise<HistoryRecord[]>
 
   const data = await response.json();
   const cloud = Array.isArray(data.history) ? data.history : [];
+  const local = loadLocalHistory();
 
-  // Never let an empty/partial cloud response erase results that already
-  // exist locally. This is especially important when a user imports an
-  // Excel session before signing in and then authenticates afterwards.
-  const merged = mergeCloudAndLocalHistory(cloud, loadLocalHistory());
+  // When a user imported an Excel session before signing in, its grading
+  // results exist locally but not necessarily in the cloud. On authentication,
+  // promote those local-only results to the cloud instead of creating a
+  // cloud session with no corresponding grading history.
+  const syncedCloud = await uploadLocalOnlyHistory(
+    token,
+    cloud,
+    local
+  );
+
+  const merged = mergeCloudAndLocalHistory(
+    syncedCloud,
+    local
+  );
+
   writeLocalHistory(merged);
   return merged;
 }
