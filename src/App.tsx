@@ -1821,6 +1821,11 @@ export default function App() {
         const handleSave = async (
             resultToSave?: GradingResult
         ) => {
+            if (!token) {
+                setHistorySaveState('error');
+                alert('Please sign in before saving grading results.');
+                return;
+            }
             const currentResult = resultToSave || result;
         
             if (!currentResult) {
@@ -2812,7 +2817,7 @@ export default function App() {
     );
     
     // Filter sessions based on search term.
-    const filteredSessions = loadSessions().filter(session =>
+    const filteredSessions = sessions.filter(session =>
         searchTerm === '' ||
         session.courseCode
             .toLowerCase()
@@ -2948,8 +2953,9 @@ export default function App() {
                                 history={history}
                                 onLoad={handleLoadRecord}
                                 onDelete={handleDeleteRecord}
-                                sessions={loadSessions()}
+                                sessions={sessions}
                                 onLoadSession={loadOldSemester}
+                                onSessionsChanged={setSessions}
                             />
                         </div>
     
@@ -2977,6 +2983,15 @@ export default function App() {
     
                                 {semesterCourse && !isMaximized && (
                                     <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
+                                        <CloudSaveStatus
+                                            state={sessionSaveState}
+                                            onRetry={() => {
+                                                if (semesterCourse) {
+                                                    persistSession(semesterCourse);
+                                                }
+                                            }}
+                                            label="Session"
+                                        />
     
                                         <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
 
@@ -3032,8 +3047,25 @@ export default function App() {
                                         <div className="flex-1">
                                             <StudentForm
                                                 info={studentInfo}
-                                                onChange={setStudentInfo}
+                                                onChange={(nextInfo) => {
+                                                    const sessionChanged =
+                                                        nextInfo.courseCode !== studentInfo.courseCode ||
+                                                        nextInfo.year !== studentInfo.year ||
+                                                        nextInfo.semester !== studentInfo.semester ||
+                                                        nextInfo.academicYear !== studentInfo.academicYear;
+                                            
+                                                    if (sessionChanged && hasUnsavedResult) {
+                                                        // StudentForm already presents its confirmation
+                                                        // dialog for course/semester/workbook changes.
+                                                        // Once that dialog confirms, this callback clears
+                                                        // the dirty state.
+                                                        setHasUnsavedResult(false);
+                                                    }
+                                            
+                                                    setStudentInfo(nextInfo);
+                                                }}
                                                 courses={courses}
+                                                hasUnsavedResult={hasUnsavedResult}
                                             />
                                         </div>
 
@@ -3533,6 +3565,13 @@ export default function App() {
                                         : 'w-[400px]'
                                 } p-4 shrink-0 overflow-hidden`}
                             >
+                                <div className="flex items-center justify-end px-2 pb-1">
+                                    <CloudSaveStatus
+                                        state={historySaveState}
+                                        onRetry={retryHistorySave}
+                                        label="Result"
+                                    />
+                                </div>
                                 <ResultsPanel
                                     result={result}
                                     loading={loading}
