@@ -4,11 +4,6 @@ import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, Lo
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
 
-interface StoredCourse {
-  courseCode: string;
-  courseName: string;
-}
-
 interface TopBarProps {
   onNew: () => void;
   onNewCourse: () => void;
@@ -24,13 +19,8 @@ interface TopBarProps {
   studentInfo: StudentInfo;
   onStudentInfoUpdate: (updates: Partial<StudentInfo>) => void;
   history: HistoryRecord[];
-  courses: StoredCourse[];
-  onShowOldSessions: () => void; // Added new prop
-  schools: string[]; // Added schools prop
-  departments: string[]; // Added departments prop
-  onShowAddSchool: () => void; // Added new prop
-  onShowAddDepartment: () => void; // Added new prop
-  onSearchTermChange: (term: string) => void; // Added new prop
+  onShowOldSessions: () => void;
+  onSearchTermChange: (term: string) => void;
   isLoggedIn: boolean;
   onLogin: () => void;
   onLogout: () => void;
@@ -271,8 +261,8 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 
 export const TopBar = ({
   onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
-  hasResult, studentInfo, onStudentInfoUpdate, history, courses,
-  onShowOldSessions, schools, departments, onShowAddSchool, onShowAddDepartment, onSearchTermChange,
+  hasResult, studentInfo, onStudentInfoUpdate, history,
+  onShowOldSessions, onSearchTermChange,
   isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen,
   onViewChange, onProfile, onLoadRecord
 }: TopBarProps) => {
@@ -360,10 +350,7 @@ export const TopBar = ({
       { label: 'New Paper', action: onNewPaper },
     ],
     Course: (() => {
-        const allCodes = new Set<string>([
-            ...courses.map(c => c.courseCode),
-            ...recentCourses,
-        ]);
+        const allCodes = new Set<string>(recentCourses);
         const codeList = Array.from(allCodes);
 
         return codeList.length > 0
