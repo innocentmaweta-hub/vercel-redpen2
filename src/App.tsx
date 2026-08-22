@@ -3008,6 +3008,7 @@ export default function App() {
                                                 }}
                                                 courses={courses}
                                                 hasUnsavedResult={hasUnsavedResult}
+                                                onNewCourse={() => setShowNewCourseModal(true)}
                                             />
                                         </div>
 
