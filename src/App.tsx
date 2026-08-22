@@ -1452,7 +1452,7 @@ export default function App() {
             }
     
             const file = target.files[0];
-    
+            
             try {
                 const isExcelFile =
                     file.name
@@ -1461,23 +1461,25 @@ export default function App() {
                     file.name
                         .toLowerCase()
                         .endsWith('.xls');
-    
+            
                 if (!isExcelFile) {
                     alert(
                         'Please select a valid Excel (.xlsx or .xls) file.'
                     );
                     return;
                 }
-    
+            
                 /*
-                 * The session loader parses the workbook once and
-                 * returns both the reconstructed session and history.
+                 * Parse the workbook once.
+                 * The loader returns:
+                 *  - the reconstructed session
+                 *  - every grading record contained in the workbook
                  */
                 const {
                     session: importedSession,
                     history: importedRecords,
                 } = await loadSessionFromExcelFile(file);
-    
+            
                 if (
                     !importedRecords ||
                     importedRecords.length === 0
@@ -1487,10 +1489,9 @@ export default function App() {
                     );
                     return;
                 }
-    
+            
                 /*
-                 * Prevent duplicate imports using the actual
-                 * identifying information in each grading record.
+                 * Prevent duplicate grading-record imports.
                  */
                 const existingKeys = new Set(
                     history.map(record =>
@@ -1503,7 +1504,7 @@ export default function App() {
                         ].join('|')
                     )
                 );
-    
+            
                 const newRecords =
                     importedRecords.filter(record => {
                         const key = [
@@ -1513,30 +1514,30 @@ export default function App() {
                             record.date || '',
                             record.result?.totalScore || '',
                         ].join('|');
-    
+            
                         return !existingKeys.has(key);
                     });
-    
+            
                 /*
-                 * Update local history.
+                 * Update local grading history.
                  */
                 const mergedHistory = [
                     ...history,
                     ...newRecords,
                 ];
-    
+            
                 setHistory(mergedHistory);
                 writeLocalHistory(mergedHistory);
-    
+            
                 /*
-                 * Save imported history to the cloud.
+                 * Save newly imported history to the cloud.
                  */
                 if (token && newRecords.length > 0) {
                     setHistorySaveState('saving');
-    
+            
                     let cloudHistory =
                         await fetchCloudHistory(token);
-    
+            
                     for (const record of newRecords) {
                         cloudHistory =
                             await saveCloudHistory(
@@ -1544,44 +1545,90 @@ export default function App() {
                                 record
                             );
                     }
-    
+            
                     setHistory(cloudHistory);
                     writeLocalHistory(cloudHistory);
-    
+            
                     setHistorySaveState('saved');
                 }
-    
+            
                 /*
-                 * Restore the session contained in the workbook.
+                 * Restore and REGISTER the imported session.
+                 *
+                 * IMPORTANT:
+                 * Never replace the existing session collection with
+                 * only this imported session.
+                 *
+                 * Example:
+                 *
+                 *   existing: [CS301, CS201]
+                 *   import:   ENG101
+                 *
+                 *   result:   [ENG101, CS301, CS201]
                  */
                 if (importedSession) {
                     const normalizedSession =
                         normalizeSession(
                             importedSession
                         );
-    
+            
                     const sessionId =
                         normalizedSession.id ||
                         sessionIdentityKey(
                             normalizedSession
                         );
-    
+            
+                    /*
+                     * Merge the imported session with every session
+                     * already known locally.
+                     */
+                    const existingSessions =
+                        loadLocalSessions();
+            
+                    const mergedSessions =
+                        dedupeSessions([
+                            normalizedSession,
+                            ...existingSessions,
+                            ...sessions,
+                        ]);
+            
+                    /*
+                     * Update React state so every session-aware UI
+                     * immediately receives the complete collection.
+                     */
+                    setSessions(mergedSessions);
+            
+                    /*
+                     * Persist the complete collection locally.
+                     */
+                    writeLocalSessions(
+                        mergedSessions
+                    );
+            
+                    /*
+                     * Make the imported session the active session,
+                     * but DO NOT remove the other sessions.
+                     */
                     setSemesterCourse(
                         normalizedSession
                     );
-    
+            
                     setActiveSessionId(
                         sessionId
                     );
-    
+            
                     localStorage.setItem(
                         'yaza_active_session_id',
                         sessionId
                     );
-    
+            
                     /*
-                     * Persist the imported session to cloud
+                     * Persist the imported session to the cloud
                      * when authenticated.
+                     *
+                     * persistSession() will merge the returned
+                     * cloud session collection with the local
+                     * collection.
                      */
                     if (token) {
                         await persistSession(
@@ -1589,9 +1636,9 @@ export default function App() {
                         );
                     }
                 }
-    
+            
                 setShowOldSessionModal(false);
-    
+            
                 if (newRecords.length === 0) {
                     alert(
                         'This Excel file has already been imported.'
