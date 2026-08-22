@@ -90,7 +90,6 @@ import {
 } from './lib/exportUtils';
 import { writeFileToFolder } from './lib/fileStorage';
 
-await saveCloudHistory(token, record)
 const HISTORY_KEY = 'grading_history';
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
 const SESSIONS_KEY = 'stored_sessions';
@@ -419,6 +418,39 @@ export default function App() {
             return null;
         }
     }, [token]);
+    const retryHistorySave = useCallback(async () => {
+        if (!pendingHistoryRecord || !token) {
+            return;
+        }
+    
+        setHistorySaveState('saving');
+    
+        try {
+            const cloudHistory =
+                await saveCloudHistory(
+                    token,
+                    pendingHistoryRecord
+                );
+    
+            setHistory(cloudHistory);
+            writeLocalHistory(cloudHistory);
+    
+            setPendingHistoryRecord(null);
+            setHistorySaveState('saved');
+            setHasUnsavedResult(false);
+        }
+        catch (error) {
+            console.error(
+                'History retry failed:',
+                error
+            );
+    
+            setHistorySaveState('error');
+        }
+    }, [
+        pendingHistoryRecord,
+        token,
+    ]);
     useEffect(() => {
         if (!token || !semesterCourse) return;
     
