@@ -11,17 +11,11 @@ function authenticate(req, res) {
     res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Authentication required' });
     return null;
   }
-  try {
-    return jwt.verify(header.slice(7), JWT_SECRET);
-  } catch {
-    res.status(401).json({ code: 'INVALID_TOKEN', message: 'Invalid or expired token' });
-    return null;
-  }
+  try { return jwt.verify(header.slice(7), JWT_SECRET); }
+  catch { res.status(401).json({ code: 'INVALID_TOKEN', message: 'Invalid or expired token' }); return null; }
 }
 
-function clean(value) {
-  return typeof value === 'string' ? value.trim() : '';
-}
+function clean(value) { return typeof value === 'string' ? value.trim() : ''; }
 
 function normalizeRecord(input) {
   const now = new Date().toISOString();
@@ -44,6 +38,15 @@ function dedupeHistory(records) {
     .slice(0, MAX_HISTORY);
 }
 
+async function saveHistoryOrThrow(userId, history) {
+  const ok = await updateUserMeta(userId, HISTORY_META_KEY, history);
+  if (!ok) {
+    const error = new Error('WordPress did not persist the grading history');
+    error.code = 'HISTORY_STORAGE_UNAVAILABLE';
+    throw error;
+  }
+}
+
 export default async function handler(req, res) {
   const user = authenticate(req, res);
   if (!user) return;
@@ -56,7 +59,7 @@ export default async function handler(req, res) {
     const history = dedupeHistory(stored);
 
     if (JSON.stringify(stored || []) !== JSON.stringify(history)) {
-      await updateUserMeta(userId, HISTORY_META_KEY, history);
+      await saveHistoryOrThrow(userId, history);
     }
 
     if (req.method === 'GET') return res.status(200).json({ history });
@@ -68,7 +71,7 @@ export default async function handler(req, res) {
       if (existingIndex >= 0) next.splice(existingIndex, 1);
       next.unshift(incoming);
       const saved = dedupeHistory(next);
-      await updateUserMeta(userId, HISTORY_META_KEY, saved);
+      await saveHistoryOrThrow(userId, saved);
       return res.status(existingIndex >= 0 ? 200 : 201).json({ record: incoming, history: saved });
     }
 
@@ -76,14 +79,20 @@ export default async function handler(req, res) {
       const id = clean(req.query?.id) || clean(req.body?.id);
       if (!id) return res.status(400).json({ code: 'MISSING_RECORD', message: 'History record id is required' });
       const next = history.filter(record => record.id !== id);
-      await updateUserMeta(userId, HISTORY_META_KEY, next);
-      return res.status(200).json({ deleted: next.length !== history.length, history: next });
+      const deleted = next.length !== history.length;
+      if (deleted) await saveHistoryOrThrow(userId, next);
+      return res.status(200).json({ deleted, history: next });
     }
 
     res.setHeader('Allow', 'GET, POST, DELETE');
     return res.status(405).json({ code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' });
   } catch (error) {
     console.error('History API error:', error);
-    return res.status(500).json({ code: 'HISTORY_API_FAILED', message: 'Failed to access grading history' });
+    return res.status(500).json({
+      code: error?.code || 'HISTORY_API_FAILED',
+      message: error?.code === 'HISTORY_STORAGE_UNAVAILABLE'
+        ? 'Cloud grading history storage is unavailable. Please try again later.'
+        : 'Failed to access grading history',
+    });
   }
 }
