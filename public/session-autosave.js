@@ -111,8 +111,6 @@
     if (JSON.stringify(values) === lastSignature && currentKey === lastSavedKey) return;
     lastSignature = JSON.stringify(values);
 
-    // A deliberate session switch should attach to the already-existing session
-    // instead of mutating the previous one. Ordinary field edits keep the current id.
     if (switchingSession) {
       const existing = readLocal().find((item) => key(item) === currentKey);
       currentSessionId = existing?.id || null;
@@ -158,7 +156,8 @@
   document.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const text = target.textContent?.trim();
+    const button = target.closest('button');
+    const text = button?.textContent?.trim() || target.textContent?.trim();
 
     if (text === 'Load Session') {
       switchingSession = true;
