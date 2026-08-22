@@ -1,6 +1,7 @@
 import { HistoryRecord } from '../types';
 
 export const HISTORY_STORAGE_KEY = 'grading_history';
+export const HISTORY_MAX_LOCAL = 500;
 
 export type HistorySaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -14,8 +15,15 @@ export function loadLocalHistory(): HistoryRecord[] {
 }
 
 export function writeLocalHistory(records: HistoryRecord[]): HistoryRecord[] {
-  const next = records.slice(0, 50);
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  const next = records
+    .filter(Boolean)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    .slice(0, HISTORY_MAX_LOCAL);
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Large history should never make grading fail. Keep the in-memory state.
+  }
   return next;
 }
 
@@ -54,5 +62,7 @@ export function mergeCloudAndLocalHistory(cloud: HistoryRecord[], local: History
   for (const record of [...cloud, ...local]) {
     if (record?.id && !byId.has(record.id)) byId.set(record.id, record);
   }
-  return Array.from(byId.values()).sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 50);
+  return Array.from(byId.values())
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    .slice(0, HISTORY_MAX_LOCAL);
 }
