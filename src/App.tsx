@@ -43,6 +43,7 @@ import {
     SemesterCourse
 } from './components/CourseSessionModal';
 import { ToolOptionsBar } from './components/ToolOptionsBar';
+
 import {
     StudentInfo,
     GradingResult,
@@ -89,6 +90,7 @@ import {
 } from './lib/exportUtils';
 import { writeFileToFolder } from './lib/fileStorage';
 
+await saveCloudHistory(token, record)
 const HISTORY_KEY = 'grading_history';
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
 const SESSIONS_KEY = 'stored_sessions';
@@ -268,6 +270,7 @@ export default function App() {
                 }
             });
         }
+        setHasUnsavedResult(true);
     };
 
     const [isMaximized, setIsMaximized] = useState(false);
@@ -730,45 +733,6 @@ export default function App() {
         }, 6000);
     };
 
-    // Load stored sessions on mount
-    useEffect(() => {
-        const loadAllSessions = async () => {
-            const localSessions = loadSessions();
-            const cloudSessions = await loadCloudSessions();
-    
-            const mergedSessions = [
-                ...cloudSessions,
-                ...localSessions.filter(
-                    local =>
-                        !cloudSessions.some(
-                            cloud => cloud.id === local.id
-                        )
-                ),
-            ];
-    
-            saveSessions(mergedSessions);
-    
-            if (mergedSessions.length > 0) {
-                const latestSession = mergedSessions[0];
-    
-                setStudentInfo(prev => ({
-                    ...prev,
-                    program:
-                        latestSession.program ||
-                        prev.program,
-                    courseCode:
-                        latestSession.courseCode ||
-                        prev.courseCode,
-                    year:
-                        latestSession.year ||
-                        prev.year,
-                }));
-            }
-        };
-    
-        loadAllSessions();
-    }, []);
-
     // Save schools and departments
     useEffect(() => {
         saveSchools(schools);
@@ -1004,19 +968,6 @@ export default function App() {
      * Completely clears previous marking work.
      */
     const handleNewSession = (
-        if (hasUnsavedResult) {
-            const confirmed = window.confirm(
-                'You have an unsaved grading result.\n\n' +
-                'Starting a new session will leave this result unsaved.\n\n' +
-                'Continue?'
-            );
-        
-            if (!confirmed) {
-                return;
-            }
-        
-            setHasUnsavedResult(false);
-        }
         updates: {
             academicYear: string;
             year: string;
@@ -1027,6 +978,19 @@ export default function App() {
             courseName: string;
         }
     ) => {
+        if (hasUnsavedResult) {
+            const confirmed = window.confirm(
+                'You have an unsaved grading result.\n\n' +
+                'Starting a new session will leave this result unsaved.\n\n' +
+                'Continue?'
+            );
+    
+            if (!confirmed) {
+                return;
+            }
+    
+            setHasUnsavedResult(false);
+        }
         const newSession: SemesterCourse = {
             courseCode:
                 updates.courseCode
@@ -1365,6 +1329,7 @@ export default function App() {
                     }
                 });
             }
+            setHasUnsavedResult(true);
     
             return;
         }
@@ -1520,6 +1485,8 @@ export default function App() {
                 setResult(
                     validatedResult
                 );
+                
+                setHasUnsavedResult(true);
 
                 setActiveView('grade');
 
@@ -1666,6 +1633,7 @@ export default function App() {
                         examDate: studentInfo.examDate || ''
                     }
                 });
+                
                 setHasUnsavedResult(true);
         
                 setIsGradingInProgress(false);
