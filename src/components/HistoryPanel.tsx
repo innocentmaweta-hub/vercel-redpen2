@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { HistoryRecord, SemesterCourse } from '../types';
 import { Clock, Trash2, ChevronRight, BookOpen, ArrowLeft, ArrowRight } from 'lucide-react';
 import { AUTH_TOKEN_KEY, sessionIdentityKey, deleteCloudSession, dedupeSessions, writeLocalSessions } from '../lib/sessionStore';
+import { loadLocalHistory } from '../lib/historyStore';
 
 interface Props {
   history: HistoryRecord[];
@@ -40,19 +41,34 @@ export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSessio
   const [tab, setTab] = useState<Tab>('results');
   const [selectedSession, setSelectedSession] = useState<SemesterCourse | null>(null);
   const [sessionList, setSessionList] = useState<SemesterCourse[]>([]);
+  const [localHistory, setLocalHistory] = useState<HistoryRecord[]>(() => loadLocalHistory());
+
+  useEffect(() => {
+    const refreshHistory = () => setLocalHistory(loadLocalHistory());
+    window.addEventListener('redpen:history-updated', refreshHistory);
+    return () => window.removeEventListener('redpen:history-updated', refreshHistory);
+  }, []);
+
+  const allHistory = useMemo(() => {
+    const byId = new Map<string, HistoryRecord>();
+    for (const record of [...history, ...localHistory]) {
+      if (record?.id && !byId.has(record.id)) byId.set(record.id, record);
+    }
+    return Array.from(byId.values()).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  }, [history, localHistory]);
 
   const allHistoricalSessions = useMemo(
-    () => dedupeSessions([...sessions, ...sessionsFromHistory(history)]),
-    [sessions, history]
+    () => dedupeSessions([...sessions, ...sessionsFromHistory(allHistory)]),
+    [sessions, allHistory]
   );
 
   useEffect(() => setSessionList(allHistoricalSessions), [allHistoricalSessions]);
 
   useEffect(() => {
-    const refresh = () => setSessionList(dedupeSessions([...sessions, ...sessionsFromHistory(history)]));
+    const refresh = () => setSessionList(dedupeSessions([...sessions, ...sessionsFromHistory(allHistory)]));
     window.addEventListener('redpen:sessions-updated', refresh);
     return () => window.removeEventListener('redpen:sessions-updated', refresh);
-  }, [sessions, history]);
+  }, [sessions, allHistory]);
 
   const deleteSession = async (session: SemesterCourse) => {
     const label = `${session.courseCode}${session.courseName ? ` — ${session.courseName}` : ''}`;
@@ -89,7 +105,7 @@ export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSessio
 
       <div className="flex items-center gap-1 shrink-0 border-b border-gray-800 pb-3">
         <button onClick={() => { setTab('results'); setSelectedSession(null); }} className={tabBtnClass(tab === 'results')}>
-          <Clock size={12} /> Results <span className="ml-0.5 opacity-70">{history.length}</span>
+          <Clock size={12} /> Results <span className="ml-0.5 opacity-70">{allHistory.length}</span>
         </button>
         <button onClick={() => { setTab('sessions'); setSelectedSession(null); }} className={tabBtnClass(tab === 'sessions')}>
           <BookOpen size={12} /> Sessions <span className="ml-0.5 opacity-70">{sessionList.length}</span>
@@ -99,13 +115,13 @@ export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSessio
       <div className="flex-1 overflow-y-auto flex flex-col gap-3">
         {tab === 'results' ? (
           <div className="flex flex-col gap-3">
-            {history.length === 0 ? (
+            {allHistory.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
                 <Clock size={48} className="text-gray-800 mb-4" />
                 <h3 className="text-sm font-bold uppercase tracking-widest text-gray-600">No Results Yet</h3>
                 <p className="text-[10px] text-gray-700 mt-2 uppercase font-medium">Saved grading results will appear here</p>
               </div>
-            ) : history.map(record => (
+            ) : allHistory.map(record => (
               <div key={record.id} className="group bg-card border border-gray-800 rounded-2xl p-4 hover:border-accent-blue/40 hover:bg-accent-blue/5 transition-all duration-200 cursor-pointer" onClick={() => onLoad(record)}>
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
