@@ -19,7 +19,6 @@ import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
 import { CloudSaveStatus } from './components/CloudSaveStatus';
-import { ActiveSessionSelector } from './components/ActiveSessionSelector';
 
 import {
     sessionIdentityKey,
@@ -2777,6 +2776,21 @@ export default function App() {
         <div className="flex flex-col bg-bg-dark h-screen overflow-hidden text-ink border-4 border-gray-900 shadow-2xl">
     
             <TopBar
+                sessions={sessions}
+                activeSession={semesterCourse}
+                onSelectSession={(session) => {
+                    setSemesterCourse(session);
+                
+                    setStudentInfo(prev => ({
+                        ...prev,
+                        courseCode: session.courseCode || prev.courseCode,
+                        year: session.year || prev.year,
+                        semester: session.semester || prev.semester,
+                    }));
+                
+                    setActiveView('grade');
+                }}
+                onLoadSessionFromFile={() => setShowOldSessionModal(true)}
                 onNew={handleNew}
                 onSave={handleSave}
                 onPrint={handlePrint}
@@ -2832,41 +2846,7 @@ export default function App() {
             />
             {user && activeView === 'dashboard' && (
                 <div className="px-4 py-2 border-b">
-                    <ActiveSessionSelector
-                        sessions={sessions}
-                        activeSessionId={activeSessionId}
-                        onSelect={(session) => {
-                            if (hasUnsavedResult) {
-                                const confirmed = window.confirm(
-                                    'You have an unsaved grading result.\n\n' +
-                                    'Switching sessions will replace the current session.\n\n' +
-                                    'Continue?'
-                                );
-            
-                                if (!confirmed) {
-                                    return;
-                                }
-                            }
-            
-                            setActiveSessionId(session.id || sessionIdentityKey(session));
-                            setSemesterCourse(session);
-                            setActiveView('grade');
-            
-                            setStudentInfo(prev => ({
-                                ...prev,
-                                courseCode: session.courseCode || '',
-                                program: session.program || '',
-                                year: session.year || '',
-                                semester: session.semester || ''
-                            }));
-            
-                            setResult(null);
-                            setHasUnsavedResult(false);
-                        }}
-                        onNew={() =>
-                            setShowNewSessionModal(true)
-                        }
-                    />
+                    
                 </div>
             )}
     
