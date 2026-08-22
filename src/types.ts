@@ -40,6 +40,7 @@ export interface StudentInfo {
     program: string;
     year: string;
     semester?: string;
+    academicYear?: string;
     courseCode: string;
     examDate: string;
 }
@@ -71,6 +72,7 @@ export interface AuthResponse {
     user: User;
 }
 export interface SemesterCourse {
+    id?: string;
     courseCode: string;
     courseName?: string;
     program?: string;
