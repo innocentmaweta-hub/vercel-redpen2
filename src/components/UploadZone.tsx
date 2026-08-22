@@ -49,6 +49,19 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
     };
 
     const handleZoneClick = () => {
+      // The large student-paper surface is also the primary entry point for
+      // a user who has not selected a session yet. In that state, follow the
+      // exact same load-session flow exposed by the TopBar instead of opening
+      // the New Session modal.
+      if (
+        variant === 'large' &&
+        !hasFile &&
+        document.documentElement.dataset.redpenSessionActive !== 'true'
+      ) {
+        window.dispatchEvent(new Event('redpen:open-load-session'));
+        return;
+      }
+
       if (onZoneClick) {
         onZoneClick();
       } else {
