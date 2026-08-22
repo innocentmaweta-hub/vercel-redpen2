@@ -27,9 +27,16 @@ export async function fetchCloudHistory(token: string): Promise<HistoryRecord[]>
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error(`History load failed (${response.status})`);
+
   const data = await response.json();
   const cloud = Array.isArray(data.history) ? data.history : [];
-  return mergeCloudAndLocalHistory(cloud, loadLocalHistory());
+
+  // Never let an empty/partial cloud response erase results that already
+  // exist locally. This is especially important when a user imports an
+  // Excel session before signing in and then authenticates afterwards.
+  const merged = mergeCloudAndLocalHistory(cloud, loadLocalHistory());
+  writeLocalHistory(merged);
+  return merged;
 }
 
 export async function saveCloudHistory(token: string, record: HistoryRecord): Promise<HistoryRecord[]> {
@@ -40,8 +47,11 @@ export async function saveCloudHistory(token: string, record: HistoryRecord): Pr
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || `History save failed (${response.status})`);
+
   const cloud = Array.isArray(data.history) ? data.history : [record];
-  return mergeCloudAndLocalHistory(cloud, loadLocalHistory());
+  const merged = mergeCloudAndLocalHistory(cloud, loadLocalHistory());
+  writeLocalHistory(merged);
+  return merged;
 }
 
 export async function deleteCloudHistory(token: string, id: string): Promise<HistoryRecord[]> {
@@ -51,16 +61,45 @@ export async function deleteCloudHistory(token: string, id: string): Promise<His
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || `History delete failed (${response.status})`);
+
   const cloud = Array.isArray(data.history) ? data.history : [];
-  return mergeCloudAndLocalHistory(cloud, loadLocalHistory().filter(record => record.id !== id));
+  const localWithoutDeleted = loadLocalHistory().filter(record => record.id !== id);
+  const merged = mergeCloudAndLocalHistory(cloud, localWithoutDeleted);
+  writeLocalHistory(merged);
+  return merged;
 }
 
-export function mergeCloudAndLocalHistory(cloud: HistoryRecord[], local: HistoryRecord[]): HistoryRecord[] {
-  const byId = new Map<string, HistoryRecord>();
-  for (const record of [...cloud, ...local]) {
-    if (record?.id && !byId.has(record.id)) byId.set(record.id, record);
+function historyIdentity(record: HistoryRecord): string {
+  if (record.id) return `id:${record.id}`;
+
+  return [
+    record.date || '',
+    record.studentInfo?.regNo || '',
+    record.studentInfo?.name || '',
+    record.studentInfo?.courseCode || '',
+    record.result?.totalScore || '',
+    record.result?.grade || '',
+  ].join('|');
+}
+
+export function mergeCloudAndLocalHistory(
+  cloud: HistoryRecord[],
+  local: HistoryRecord[]
+): HistoryRecord[] {
+  const byIdentity = new Map<string, HistoryRecord>();
+
+  // Prefer cloud records when the same record exists in both sources,
+  // while still retaining every local-only record.
+  for (const record of local) {
+    if (!record) continue;
+    byIdentity.set(historyIdentity(record), record);
   }
-  return Array.from(byId.values())
-    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
-    .slice(0, 50);
+
+  for (const record of cloud) {
+    if (!record) continue;
+    byIdentity.set(historyIdentity(record), record);
+  }
+
+  return Array.from(byIdentity.values())
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 }
