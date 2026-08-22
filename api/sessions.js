@@ -10,34 +10,28 @@ function authenticate(req, res) {
     res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Authentication required' });
     return null;
   }
-  try {
-    return jwt.verify(header.slice(7), JWT_SECRET);
-  } catch {
-    res.status(401).json({ code: 'INVALID_TOKEN', message: 'Invalid or expired token' });
-    return null;
-  }
+  try { return jwt.verify(header.slice(7), JWT_SECRET); }
+  catch { res.status(401).json({ code: 'INVALID_TOKEN', message: 'Invalid or expired token' }); return null; }
 }
 
-function clean(value) {
-  return typeof value === 'string' ? value.trim() : '';
-}
+function clean(value) { return typeof value === 'string' ? value.trim() : ''; }
 
+// Canonical identity shared by the frontend store and backend.
+// sessionLabel is display metadata and must not create duplicate sessions.
 function sessionKey(session) {
   return [
     clean(session.courseCode).toUpperCase(),
     clean(session.academicYear),
     clean(session.year),
     clean(session.semester),
-    clean(session.sessionLabel),
     clean(session.customName),
   ].join('|');
 }
 
 function normalizeSession(input) {
-  const courseCode = clean(input?.courseCode).toUpperCase();
   return {
     id: clean(input?.id) || undefined,
-    courseCode,
+    courseCode: clean(input?.courseCode).toUpperCase(),
     courseName: clean(input?.courseName),
     program: clean(input?.program),
     year: clean(input?.year),
@@ -45,6 +39,7 @@ function normalizeSession(input) {
     academicYear: clean(input?.academicYear),
     sessionLabel: clean(input?.sessionLabel),
     customName: clean(input?.customName) || undefined,
+    createdAt: clean(input?.createdAt) || undefined,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -55,49 +50,38 @@ function dedupeSessions(sessions) {
     const session = normalizeSession(raw);
     if (!session.courseCode) continue;
     const key = sessionKey(session);
-    if (!byKey.has(key)) byKey.set(key, { ...session, id: session.id || key });
+    const previous = byKey.get(key);
+    // Keep the newest version when legacy data contains duplicates.
+    if (!previous || String(session.updatedAt).localeCompare(String(previous.updatedAt)) > 0) {
+      byKey.set(key, { ...session, id: session.id || previous?.id || key });
+    }
   }
-  return Array.from(byKey.values()).sort((a, b) =>
-    String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
-  );
+  return Array.from(byKey.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
 
 export default async function handler(req, res) {
   const user = authenticate(req, res);
   if (!user) return;
-
   const userId = user.id || user.wordPressId;
-  if (!userId) {
-    return res.status(401).json({ code: 'INVALID_USER', message: 'Authenticated user is missing an id' });
-  }
+  if (!userId) return res.status(401).json({ code: 'INVALID_USER', message: 'Authenticated user is missing an id' });
 
   try {
     const stored = await getUserMeta(userId, SESSIONS_META_KEY);
     const sessions = dedupeSessions(stored);
-
-    if (JSON.stringify(stored || []) !== JSON.stringify(sessions)) {
-      await updateUserMeta(userId, SESSIONS_META_KEY, sessions);
-    }
+    if (JSON.stringify(stored || []) !== JSON.stringify(sessions)) await updateUserMeta(userId, SESSIONS_META_KEY, sessions);
 
     if (req.method === 'GET') return res.status(200).json({ sessions });
 
     if (req.method === 'POST') {
       const incoming = normalizeSession(req.body?.session || {});
-      if (!incoming.courseCode) {
-        return res.status(400).json({ code: 'MISSING_COURSE', message: 'Course code is required' });
-      }
+      if (!incoming.courseCode) return res.status(400).json({ code: 'MISSING_COURSE', message: 'Course code is required' });
 
-      const existingIndex = incoming.id
-        ? sessions.findIndex((s) => s.id === incoming.id)
-        : -1;
       const key = sessionKey(incoming);
-      const keyIndex = sessions.findIndex((s) => sessionKey(s) === key);
-      const matchIndex = existingIndex >= 0 ? existingIndex : keyIndex;
+      const idIndex = incoming.id ? sessions.findIndex(s => s.id === incoming.id) : -1;
+      const keyIndex = sessions.findIndex(s => sessionKey(s) === key);
+      const matchIndex = idIndex >= 0 ? idIndex : keyIndex;
       const existing = matchIndex >= 0 ? sessions[matchIndex] : null;
 
-      // Preserve richer session metadata (custom name/label) when an autosave
-      // only sends course/year/semester fields. The stable id keeps a switched
-      // session from mutating a different saved session.
       const saved = {
         ...existing,
         ...incoming,
@@ -108,22 +92,18 @@ export default async function handler(req, res) {
         updatedAt: new Date().toISOString(),
       };
 
-      const next = sessions.filter((s, index) => index !== matchIndex && sessionKey(s) !== sessionKey(saved));
+      const next = sessions.filter((s, index) => index !== matchIndex && sessionKey(s) !== key);
       next.unshift(saved);
       const deduped = dedupeSessions(next);
       await updateUserMeta(userId, SESSIONS_META_KEY, deduped);
-
       return res.status(existing ? 200 : 201).json({ session: saved, sessions: deduped });
     }
 
     if (req.method === 'DELETE') {
       const id = clean(req.query?.id) || clean(req.body?.id);
       const key = clean(req.query?.key) || clean(req.body?.key);
-      if (!id && !key) {
-        return res.status(400).json({ code: 'MISSING_SESSION', message: 'Session id or key is required' });
-      }
-
-      const next = sessions.filter((s) => s.id !== id && sessionKey(s) !== key);
+      if (!id && !key) return res.status(400).json({ code: 'MISSING_SESSION', message: 'Session id or key is required' });
+      const next = sessions.filter(s => s.id !== id && sessionKey(s) !== key);
       await updateUserMeta(userId, SESSIONS_META_KEY, next);
       return res.status(200).json({ deleted: sessions.length !== next.length, sessions: next });
     }
