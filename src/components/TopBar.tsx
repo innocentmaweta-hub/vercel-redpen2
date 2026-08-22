@@ -1,10 +1,16 @@
 import logo from '../assets/logo.png';
+import { ActiveSessionSelector } from './ActiveSessionSelector';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, History as HistoryIcon, User, Save, Printer, Plus, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
+import { ActiveSessionSelector } from './ActiveSessionSelector';
 
 interface TopBarProps {
+  sessions: SemesterCourse[];
+  activeSession: SemesterCourse | null;
+  onSelectSession: (session: SemesterCourse) => void;
+  onLoadSessionFromFile: () => void;
   onNew: () => void;
   onNewCourse: () => void;
   onNewSession: () => void;
@@ -260,7 +266,18 @@ const SettingsDropdown = ({ x, onClose }: { x: number; onClose: () => void }) =>
 };
 
 export const TopBar = ({
-  onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch,
+  sessions,
+  activeSession,
+  onSelectSession,
+  onLoadSessionFromFile,
+  onNew, 
+  onNewCourse, 
+  onNewSession, 
+  onNewPaper, onSave, onPrint, 
+  onClearResult, 
+  onRefresh, 
+  onSettings, 
+  onBatch,
   hasResult, studentInfo, onStudentInfoUpdate, history,
   onShowOldSessions, onSearchTermChange,
   isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen,
@@ -332,7 +349,7 @@ export const TopBar = ({
 
   const menus: Record<string, DropdownItem[]> = {
     File: [
-      { label: 'Load Session', action: onShowOldSessions }, // Updated menu item name
+      { label: 'Save Results', action: onSave, disabled: !hasResult },
       { divider: true },
       { label: 'Save Results', action: onSave, disabled: !hasResult },
       { label: 'Save As...', action: onSave, disabled: !hasResult },
@@ -345,9 +362,25 @@ export const TopBar = ({
       { label: 'Reset All', action: onNew },
     ],
     New: [
-      { label: 'New Session', action: onNewSession },
-      { label: 'New Course', action: onNewCourse },
-      { label: 'New Paper', action: onNewPaper },
+      {
+        label: 'New Session',
+        action: onNewSession
+      },
+      {
+        label: 'New Course',
+        action: onNewCourse
+      },
+      {
+        label: 'New Paper',
+        action: onNewPaper
+      },
+      {
+        divider: true
+      },
+      {
+        label: 'Load Session from File',
+        action: onLoadSessionFromFile
+      }
     ],
     Course: (() => {
         const allCodes = new Set<string>(recentCourses);
@@ -407,6 +440,12 @@ export const TopBar = ({
           ))}
         </div>
       </div>
+      <ActiveSessionSelector
+        sessions={sessions}
+        activeSession={activeSession}
+        onSelectSession={onSelectSession}
+        onNewSession={onNewSession}
+      />
 
       <div className="flex-1 flex justify-center">
         <div className="relative w-full max-w-lg" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
