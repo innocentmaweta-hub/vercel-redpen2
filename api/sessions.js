@@ -1,10 +1,14 @@
 import jwt from 'jsonwebtoken';
 import { getUserMeta, updateUserMeta } from './wordpress-auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const SESSIONS_META_KEY = 'redpen_sessions';
 
 function authenticate(req, res) {
+  if (!JWT_SECRET) {
+    res.status(500).json({ code: 'SERVER_CONFIG_ERROR', message: 'Authentication is not configured on the server' });
+    return null;
+  }
   const header = req.headers.authorization || '';
   if (!header.startsWith('Bearer ')) {
     res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Authentication required' });
