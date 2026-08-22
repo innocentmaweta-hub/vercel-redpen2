@@ -84,13 +84,16 @@
       cloudLoadedForToken = token;
       const cloud = data.sessions;
       const local = readLocal();
-      const seen = new Set();
+      const seenKeys = new Set();
+      const seenIds = new Set();
       const merged = [];
 
       for (const session of [...cloud, ...local]) {
         const sessionKey = key(session);
-        if (!sessionKey || seen.has(sessionKey)) continue;
-        seen.add(sessionKey);
+        const sessionId = clean(session.id);
+        if (!sessionKey || seenKeys.has(sessionKey) || (sessionId && seenIds.has(sessionId))) continue;
+        seenKeys.add(sessionKey);
+        if (sessionId) seenIds.add(sessionId);
         merged.push(session);
       }
 
@@ -123,6 +126,8 @@
     if (JSON.stringify(values) === lastSignature && currentKey === lastSavedKey) return;
     lastSignature = JSON.stringify(values);
 
+    // Course/year/semester changes are session switches. Reuse an existing
+    // session with the new identity, otherwise create a new session.
     if (switchingSession) {
       const existing = readLocal().find((item) => key(item) === currentKey);
       currentSessionId = existing?.id || null;
@@ -162,7 +167,10 @@
 
   document.addEventListener('change', (event) => {
     const target = event.target;
-    if (target instanceof HTMLSelectElement && classifySelect(target)) scheduleSave();
+    if (target instanceof HTMLSelectElement && classifySelect(target)) {
+      switchingSession = true;
+      scheduleSave();
+    }
   }, true);
 
   document.addEventListener('click', (event) => {
@@ -185,7 +193,10 @@
       return;
     }
 
-    if (text === 'Set Course' || text === 'Switch Course') scheduleSave(250);
+    if (text === 'Set Course' || text === 'Switch Course') {
+      switchingSession = true;
+      scheduleSave(250);
+    }
   }, true);
 
   // React writes the auth token in the same tab, so the browser storage event
