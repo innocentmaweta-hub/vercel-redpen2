@@ -740,15 +740,6 @@ export default function App() {
         }, 6000);
     };
 
-    // Save schools and departments
-    useEffect(() => {
-        saveSchools(schools);
-    }, [schools]);
-
-    useEffect(() => {
-        saveDepartments(departments);
-    }, [departments]);
-
     const schemeRef =
         useRef<UploadZoneHandle>(null);
 
@@ -2776,12 +2767,6 @@ export default function App() {
         session.program
             ?.toLowerCase()
             .includes(searchTerm.toLowerCase())
-    );
-    
-    // Filter departments based on search term.
-    const filteredDepartments = departments.filter(dept =>
-        searchTerm === '' ||
-        dept.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
     // Handle search term changes from TopBar.
