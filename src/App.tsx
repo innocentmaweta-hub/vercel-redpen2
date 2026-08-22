@@ -19,6 +19,22 @@ import { ProfileModal } from './components/ProfileModal';
 import { SettingsModal, PENDING_TX_KEY } from './components/SettingsModal';
 import { BatchModal } from './components/BatchModal';
 import { PostsPage } from './components/PostsPage';
+import { CloudSaveStatus } from './components/CloudSaveStatus';
+import {
+    sessionIdentityKey,
+    normalizeSession,
+    dedupeSessions,
+    fetchCloudSessions,
+    saveCloudSession,
+    deleteCloudSession,
+} from './lib/sessionStore';
+
+import {
+    fetchCloudHistory,
+    saveCloudHistory,
+    deleteCloudHistory,
+    writeLocalHistory,
+} from './lib/historyStore';
 import {
     NewSemesterModal,
     ContinueSemesterModal,
@@ -79,53 +95,6 @@ const SESSIONS_KEY = 'stored_sessions';
 const SCHOOLS_KEY = 'stored_schools';
 const DEPARTMENTS_KEY = 'stored_departments';
 const COURSES_KEY = 'stored_courses';
-
-function loadHistory(): HistoryRecord[] {
-    try {
-        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-    }
-    catch {
-        return [];
-    }
-}
-
-function saveHistory(records: HistoryRecord[]) {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
-}
-
-// Session management functions
-function loadSessions(): SemesterCourse[] {
-    try {
-        return JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
-    }
-    catch {
-        return [];
-    }
-}
-async function loadCloudSessions(): Promise<SemesterCourse[]> {
-    try {
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-        if (!token) return [];
-
-        const response = await fetch('/api/sessions', {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-
-        if (!response.ok) return [];
-
-        const data = await response.json();
-        return Array.isArray(data.sessions) ? data.sessions : [];
-    } catch (error) {
-        console.error('Failed to load cloud sessions:', error);
-        return [];
-    }
-}
-
-function saveSessions(sessions: SemesterCourse[]) {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-}
 
 // School management functions
 function loadSchools(): string[] {
@@ -201,8 +170,19 @@ export default function App() {
     const [activeView, setActiveView] =
         useState<ActiveView>('dashboard');
 
-    const [history, setHistory] =
-        useState<HistoryRecord[]>(loadHistory());
+    const [history, setHistory] = useState<HistoryRecord[]>([]);
+    const [sessions, setSessions] = useState<SemesterCourse[]>([]);
+    const [sessionSaveState, setSessionSaveState] =
+    useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    
+    const [historySaveState, setHistorySaveState] =
+        useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    
+    const [pendingHistoryRecord, setPendingHistoryRecord] =
+        useState<HistoryRecord | null>(null);
+    
+    const [hasUnsavedResult, setHasUnsavedResult] =
+        useState(false);
 
     const [examinerRemarks, setExaminerRemarks] = useState('');
     const [showHelp, setShowHelp] = useState(false);
@@ -400,7 +380,95 @@ export default function App() {
         },
         []
     );
-
+    const persistSession = useCallback(async (
+        session: SemesterCourse
+    ): Promise<SemesterCourse | null> => {
+        if (!token) {
+            setSessionSaveState('error');
+            return null;
+        }
+    
+        const normalized = normalizeSession(session);
+    
+        setSessionSaveState('saving');
+    
+        try {
+            const response = await saveCloudSession(
+                token,
+                normalized
+            );
+    
+            setSessions(response.sessions);
+            setSemesterCourse(response.session);
+    
+            setSessionSaveState('saved');
+    
+            return response.session;
+        }
+        catch (error) {
+            console.error(
+                'Failed to save session:',
+                error
+            );
+    
+            setSessionSaveState('error');
+    
+            return null;
+        }
+    }, [token]);
+    useEffect(() => {
+        if (!token || !semesterCourse) return;
+    
+        const nextSession = normalizeSession({
+            ...semesterCourse,
+    
+            courseCode:
+                studentInfo.courseCode ||
+                semesterCourse.courseCode,
+    
+            program:
+                studentInfo.program ||
+                semesterCourse.program,
+    
+            year:
+                studentInfo.year ||
+                semesterCourse.year,
+    
+            semester:
+                studentInfo.semester ||
+                semesterCourse.semester,
+        });
+    
+        const currentKey =
+            sessionIdentityKey(semesterCourse);
+    
+        const nextKey =
+            sessionIdentityKey(nextSession);
+    
+        const changed =
+            currentKey !== nextKey ||
+            nextSession.program !== semesterCourse.program ||
+            nextSession.year !== semesterCourse.year ||
+            nextSession.semester !== semesterCourse.semester;
+    
+        if (!changed) return;
+    
+        const timer = window.setTimeout(() => {
+            persistSession(nextSession);
+        }, 250);
+    
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [
+        token,
+        studentInfo.courseCode,
+        studentInfo.program,
+        studentInfo.year,
+        studentInfo.semester,
+        semesterCourse,
+        persistSession,
+    ]);
     // Restore session by validating the stored token against the backend
     useEffect(() => {
         const storedToken =
@@ -467,34 +535,43 @@ export default function App() {
         })();
     }, []);
 
-    // Load grading history from the backend once authenticated
     useEffect(() => {
         if (!user || !token) return;
-
-        (async () => {
+    
+        let cancelled = false;
+    
+        const syncCloudData = async () => {
             try {
-                const res = await fetch('/api/history', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (!res.ok) return;
-
-                const data = await res.json();
-
-                if (Array.isArray(data.history)) {
-                    setHistory(data.history);
-                    saveHistory(data.history);
-                }
+                const [cloudSessions, cloudHistory] = await Promise.all([
+                    fetchCloudSessions(token),
+                    fetchCloudHistory(token),
+                ]);
+    
+                if (cancelled) return;
+    
+                // Cloud is authoritative after authentication.
+                setSessions(cloudSessions);
+                setHistory(cloudHistory);
+    
+                writeLocalHistory(cloudHistory);
+    
+                setSessionSaveState('saved');
             }
-            catch (err) {
-                console.error(
-                    'Failed to load history from server:',
-                    err
-                );
+            catch (error) {
+                if (cancelled) return;
+    
+                console.error('Failed to restore cloud data:', error);
+    
+                setSessionSaveState('error');
+                setHistorySaveState('error');
             }
-        })();
+        };
+    
+        syncCloudData();
+    
+        return () => {
+            cancelled = true;
+        };
     }, [user, token]);
 
     // Detect return from PayChangu checkout
@@ -766,36 +843,19 @@ export default function App() {
             semester.courseCode || 'general'
         );
 
-        const storedSessions =
-            loadSessions();
-
-        const updatedSessions = [
-            semester,
-            ...storedSessions.filter(
-                s =>
-                    s.courseCode !==
-                    semester.courseCode
-            )
-        ];
-
-        saveSessions(updatedSessions);
-
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        setSessions(prev => {
+            const key = sessionIdentityKey(semester);
         
-        if (token) {
-            fetch('/api/sessions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    session: semester,
-                }),
-            }).catch(error => {
-                console.error('Failed to save session to cloud:', error);
-            });
-        }
+            return dedupeSessions([
+                semester,
+                ...prev.filter(
+                    session =>
+                        sessionIdentityKey(session) !== key
+                )
+            ]);
+        });
+        
+        void persistSession(semester);
 
         setStudentInfo(prev => ({
             ...prev,
@@ -944,6 +1004,19 @@ export default function App() {
      * Completely clears previous marking work.
      */
     const handleNewSession = (
+        if (hasUnsavedResult) {
+            const confirmed = window.confirm(
+                'You have an unsaved grading result.\n\n' +
+                'Starting a new session will leave this result unsaved.\n\n' +
+                'Continue?'
+            );
+        
+            if (!confirmed) {
+                return;
+            }
+        
+            setHasUnsavedResult(false);
+        }
         updates: {
             academicYear: string;
             year: string;
@@ -982,29 +1055,19 @@ export default function App() {
             'general'
         );
 
-        const storedSessions =
-            loadSessions();
-
-        const updatedSessions = [
-            newSession,
-            ...storedSessions.filter(
-                s =>
-                    !(
-                        s.courseCode ===
-                            newSession.courseCode &&
-                        s.academicYear ===
-                            newSession.academicYear &&
-                        s.semester ===
-                            newSession.semester &&
-                        s.sessionLabel ===
-                            newSession.sessionLabel &&
-                        s.customName ===
-                            newSession.customName
-                    )
-            ),
-        ];
-
-        saveSessions(updatedSessions);
+        setSessions(prev => {
+            const key = sessionIdentityKey(newSession);
+        
+            return dedupeSessions([
+                newSession,
+                ...prev.filter(
+                    session =>
+                        sessionIdentityKey(session) !== key
+                )
+            ]);
+        });
+        
+        void persistSession(newSession);
 
         setStudentInfo(prev => ({
             ...prev,
@@ -1116,33 +1179,58 @@ export default function App() {
      * Load a previously used semester/course.
      */
     const loadOldSemester = (
-        semester: SemesterCourse
+        session: SemesterCourse
     ) => {
-        setSemesterCourse(semester);
-
+        if (hasUnsavedResult) {
+            const confirmed = window.confirm(
+                'You have an unsaved grading result.\n\n' +
+                'Loading another session will leave this result unsaved.\n\n' +
+                'Continue switching sessions?'
+            );
+    
+            if (!confirmed) {
+                return;
+            }
+    
+            setHasUnsavedResult(false);
+        }
+    
+        setSemesterCourse(session);
+    
         setStudentInfo(prev => ({
             ...prev,
+    
             courseCode:
-                semester.courseCode ||
+                session.courseCode ||
                 prev.courseCode,
+    
             program:
-                semester.program ||
+                session.program ||
                 prev.program,
+    
             year:
-                semester.year ||
+                session.year ||
                 prev.year,
+    
             semester:
-                semester.semester ||
+                session.semester ||
                 prev.semester,
+    
+            academicYear:
+                session.academicYear ||
+                prev.academicYear,
         }));
-
-        // Loaded sessions use AI as the default
-        // unless the user explicitly switches to manual.
+    
         setMarkingModeState('ai');
         setActiveTool(null);
         setShowToolOptions(false);
-
+    
+        setResult(null);
+        setStudentPaper(null);
+        setExaminerRemarks('');
+    
         setShowOldSessionModal(false);
+        setActiveView('grade');
     };
 
     /*
@@ -1578,6 +1666,7 @@ export default function App() {
                         examDate: studentInfo.examDate || ''
                     }
                 });
+                setHasUnsavedResult(true);
         
                 setIsGradingInProgress(false);
                 return;
@@ -1659,6 +1748,7 @@ export default function App() {
                 }
         
                 setResult(validatedResult);
+                setHasUnsavedResult(true);
                 setActiveView('grade');
         
                 setUser(prev =>
@@ -1838,6 +1928,83 @@ export default function App() {
                             )
                     }
                 };
+                setHistorySaveState('saving');
+                setPendingHistoryRecord(record);
+                
+                try {
+                    const cloudHistory =
+                        await saveCloudHistory(
+                            token!,
+                            record
+                        );
+                
+                    setHistory(cloudHistory);
+                    writeLocalHistory(cloudHistory);
+                
+                    setPendingHistoryRecord(null);
+                    setHistorySaveState('saved');
+                    setHasUnsavedResult(false);
+                }
+                catch (error) {
+                    console.error(
+                        'Failed to save grading history:',
+                        error
+                    );
+                
+                    // Keep it visible locally so the user doesn't lose their work.
+                    const updated = [
+                        record,
+                        ...history.filter(
+                            item => item.id !== record.id
+                        )
+                    ].slice(0, 50);
+                
+                    setHistory(updated);
+                    writeLocalHistory(updated);
+                
+                    setPendingHistoryRecord(record);
+                    setHistorySaveState('error');
+                
+                    return;
+                }
+                if (!token) {
+                    setHistorySaveState('error');
+                    setPendingHistoryRecord(record);
+                    return;
+                }
+                const retryHistorySave = useCallback(async () => {
+                    if (!pendingHistoryRecord || !token) {
+                        return;
+                    }
+                
+                    setHistorySaveState('saving');
+                
+                    try {
+                        const cloudHistory =
+                            await saveCloudHistory(
+                                token,
+                                pendingHistoryRecord
+                            );
+                
+                        setHistory(cloudHistory);
+                        writeLocalHistory(cloudHistory);
+                
+                        setPendingHistoryRecord(null);
+                        setHistorySaveState('saved');
+                        setHasUnsavedResult(false);
+                    }
+                    catch (error) {
+                        console.error(
+                            'History retry failed:',
+                            error
+                        );
+                
+                        setHistorySaveState('error');
+                    }
+                }, [
+                    pendingHistoryRecord,
+                    token,
+                ]);
         
                 const updated = [
                     record,
@@ -1928,21 +2095,52 @@ export default function App() {
         const handleLoadRecord = (
             record: HistoryRecord
         ) => {
+            if (hasUnsavedResult) {
+                const confirmed = window.confirm(
+                    'You have an unsaved grading result.\n\n' +
+                    'Loading another result will replace it.\n\n' +
+                    'Continue?'
+                );
+        
+                if (!confirmed) {
+                    return;
+                }
+            }
+        
             setStudentInfo(record.studentInfo);
             setResult(record.result);
+            setHasUnsavedResult(false);
             setMarkingModeState('self');
             setActiveView('grade');
         };
         
-        const handleDeleteRecord = (
+        const handleDeleteRecord = async (
             id: string
         ) => {
-            const updated = history.filter(
-                r => r.id !== id
-            );
+            if (!token) {
+                return;
+            }
         
-            setHistory(updated);
-            saveHistory(updated);
+            try {
+                const cloudHistory =
+                    await deleteCloudHistory(
+                        token,
+                        id
+                    );
+        
+                setHistory(cloudHistory);
+                writeLocalHistory(cloudHistory);
+            }
+            catch (error) {
+                console.error(
+                    'Failed to delete history record:',
+                    error
+                );
+        
+                alert(
+                    'Could not delete this grading record. Please try again.'
+                );
+            }
         };
         
         const handleSaveRemarks = () => {
@@ -2436,22 +2634,84 @@ export default function App() {
         
             // Sync each record to the backend so history
             // persists across devices.
-            records.forEach(record => {
-                fetch('/api/history', {
-                    method: 'POST',
-                    headers: authHeaders(),
-                    body: JSON.stringify({
-                        studentInfo:
-                            record.studentInfo,
-                        result: record.result
-                    })
-                }).catch(err =>
+            const handleSaveAllBatch = async (
+                results: {
+                    file: any;
+                    result: GradingResult;
+                }[]
+            ) => {
+                const records: HistoryRecord[] =
+                    results.map(({ file, result }, idx) => ({
+                        id:
+                            Date.now().toString() +
+                            '_' +
+                            idx +
+                            '_' +
+                            Math.random()
+                                .toString(36)
+                                .slice(2, 9),
+            
+                        date:
+                            new Date().toISOString(),
+            
+                        studentInfo: {
+                            ...studentInfo,
+            
+                            name:
+                                result.extracted_info?.name ||
+                                studentInfo.name ||
+                                file.name,
+            
+                            regNo:
+                                result.extracted_info?.regNo ||
+                                studentInfo.regNo,
+                        },
+            
+                        result,
+                    }));
+            
+                if (!token) {
+                    alert('Please sign in before saving grading history.');
+                    return;
+                }
+            
+                setHistorySaveState('saving');
+            
+                try {
+                    let cloudHistory = history;
+            
+                    for (const record of records) {
+                        cloudHistory =
+                            await saveCloudHistory(
+                                token,
+                                record
+                            );
+                    }
+            
+                    setHistory(cloudHistory);
+                    writeLocalHistory(cloudHistory);
+            
+                    setHistorySaveState('saved');
+            
+                    alert(
+                        `Saved ${records.length} grading results to history!`
+                    );
+            
+                    setShowBatch(false);
+                }
+                catch (error) {
                     console.error(
-                        'Failed to sync history to server:',
-                        err
-                    )
-                );
-            });
+                        'Batch history save failed:',
+                        error
+                    );
+            
+                    setHistorySaveState('error');
+            
+                    alert(
+                        'Some grading results could not be saved to the cloud. Please retry.'
+                    );
+                }
+            };
         
             alert(
                 `Saved ${records.length} grading results to history!`
@@ -3279,7 +3539,10 @@ export default function App() {
                                     onPrint={handlePrint}
                                     onSave={handleSave}
                                     isSaving={isSaving}
-                                    onResultChange={setResult}
+                                    onResultChange={(nextResult) => {
+                                        setResult(nextResult);
+                                        setHasUnsavedResult(true);
+                                    }}
                                 />
                             </div>
                         </>
