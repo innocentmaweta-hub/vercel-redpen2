@@ -911,25 +911,8 @@ export default function App() {
             courseCode || 'general'
         );
 
-        setCourses(prev => {
-            const withoutDupe =
-                prev.filter(
-                    c =>
-                        c.courseCode !==
-                        courseCode
-                );
-
-            const updated = [
-                {
-                    courseCode,
-                    courseName
-                },
-                ...withoutDupe,
-            ];
-
-            saveCourses(updated);
-            return updated;
-        });
+        // Course is now stored as part of the active session.
+        // Do not maintain a separate local course registry.
 
         setStudentInfo(prev => ({
             ...prev,
