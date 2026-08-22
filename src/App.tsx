@@ -1794,6 +1794,7 @@ export default function App() {
                 alert('Please sign in before saving grading results.');
                 return;
             }
+        
             const currentResult = resultToSave || result;
         
             if (!currentResult) {
@@ -1884,128 +1885,56 @@ export default function App() {
             }
         
             setIsSaving(true);
+            setHistorySaveState('saving');
+        
+            const record: HistoryRecord = {
+                id: Date.now().toString(),
+                date: new Date().toISOString(),
+                studentInfo,
+                result: {
+                    ...currentResult,
+                    feedback:
+                        currentResult.feedback +
+                        (
+                            examinerRemarks
+                                ? `\n\nExaminer Remarks: ${examinerRemarks}`
+                                : ''
+                        )
+                }
+            };
+        
+            setPendingHistoryRecord(record);
         
             try {
-                const record: HistoryRecord = {
-                    id: Date.now().toString(),
-                    date: new Date().toISOString(),
-                    studentInfo,
-                    result: {
-                        ...currentResult,
-                        feedback:
-                            currentResult.feedback +
-                            (
-                                examinerRemarks
-                                    ? `\n\nExaminer Remarks: ${examinerRemarks}`
-                                    : ''
-                            )
-                    }
-                };
-                setHistorySaveState('saving');
-                setPendingHistoryRecord(record);
-                
-                try {
-                    const cloudHistory =
-                        await saveCloudHistory(
-                            token!,
-                            record
-                        );
-                
-                    setHistory(cloudHistory);
-                    writeLocalHistory(cloudHistory);
-                
-                    setPendingHistoryRecord(null);
-                    setHistorySaveState('saved');
-                    setHasUnsavedResult(false);
-                }
-                catch (error) {
-                    console.error(
-                        'Failed to save grading history:',
-                        error
+                /*
+                 * Cloud history is now the authoritative save.
+                 *
+                 * We wait for this request to succeed before telling
+                 * the user that the grading result has been saved.
+                 */
+                const cloudHistory =
+                    await saveCloudHistory(
+                        token,
+                        record
                     );
-                
-                    // Keep it visible locally so the user doesn't lose their work.
-                    const updated = [
-                        record,
-                        ...history.filter(
-                            item => item.id !== record.id
-                        )
-                    ].slice(0, 50);
-                
-                    setHistory(updated);
-                    writeLocalHistory(updated);
-                
-                    setPendingHistoryRecord(record);
-                    setHistorySaveState('error');
-                
-                    return;
-                }
-                if (!token) {
-                    setHistorySaveState('error');
-                    setPendingHistoryRecord(record);
-                    return;
-                }
-                const retryHistorySave = useCallback(async () => {
-                    if (!pendingHistoryRecord || !token) {
-                        return;
-                    }
-                
-                    setHistorySaveState('saving');
-                
-                    try {
-                        const cloudHistory =
-                            await saveCloudHistory(
-                                token,
-                                pendingHistoryRecord
-                            );
-                
-                        setHistory(cloudHistory);
-                        writeLocalHistory(cloudHistory);
-                
-                        setPendingHistoryRecord(null);
-                        setHistorySaveState('saved');
-                        setHasUnsavedResult(false);
-                    }
-                    catch (error) {
-                        console.error(
-                            'History retry failed:',
-                            error
-                        );
-                
-                        setHistorySaveState('error');
-                    }
-                }, [
-                    pendingHistoryRecord,
-                    token,
-                ]);
         
-                const updated = [
-                    record,
-                    ...history
-                ].slice(0, 50);
+                setHistory(cloudHistory);
+                writeLocalHistory(cloudHistory);
         
-                setHistory(updated);
-                saveHistory(updated);
+                setPendingHistoryRecord(null);
+                setHistorySaveState('saved');
+                setHasUnsavedResult(false);
         
-                // Sync to backend so history persists across devices.
-                fetch('/api/history', {
-                    method: 'POST',
-                    headers: authHeaders(),
-                    body: JSON.stringify({
-                        studentInfo: record.studentInfo,
-                        result: record.result
-                    })
-                }).catch(err =>
-                    console.error(
-                        'Failed to sync history to server:',
-                        err
-                    )
-                );
-        
-                // Generate the marked-paper PDF and append the result
-                // to the session Excel workbook.
+                /*
+                 * Generate the marked-paper PDF and append the result
+                 * to the session Excel workbook.
+                 *
+                 * These exports are secondary to the cloud history save.
+                 * If they fail, the grading result is still safely saved.
+                 */
                 try {
                     const folder = await getSavedFolder();
+        
                     const paperImage =
                         paperCanvasRef.current?.captureFullPaper();
         
@@ -2056,9 +1985,38 @@ export default function App() {
                     );
         
                     alert(
-                        'Saved to history, but exporting the PDF/Excel file failed. Check the console for details.'
+                        'Your result was saved successfully, but exporting the PDF/Excel file failed. You can retry the export separately.'
                     );
                 }
+            }
+            catch (error) {
+                console.error(
+                    'Failed to save grading history:',
+                    error
+                );
+        
+                /*
+                 * Keep the result locally so the user's work is not lost.
+                 * Importantly, it remains marked as unsaved until the cloud
+                 * save succeeds.
+                 */
+                const updated = [
+                    record,
+                    ...history.filter(
+                        item => item.id !== record.id
+                    )
+                ].slice(0, 50);
+        
+                setHistory(updated);
+                writeLocalHistory(updated);
+        
+                setPendingHistoryRecord(record);
+                setHistorySaveState('error');
+                setHasUnsavedResult(true);
+        
+                alert(
+                    'The result could not be saved to the cloud. Your result is still available locally. Please use Retry when your connection is available.'
+                );
             }
             finally {
                 setIsSaving(false);
@@ -2091,6 +2049,7 @@ export default function App() {
             id: string
         ) => {
             if (!token) {
+                alert('Please sign in to delete grading history.');
                 return;
             }
         
@@ -2103,6 +2062,15 @@ export default function App() {
         
                 setHistory(cloudHistory);
                 writeLocalHistory(cloudHistory);
+        
+                /*
+                 * If the deleted record was also the pending record,
+                 * clear the pending retry state.
+                 */
+                if (pendingHistoryRecord?.id === id) {
+                    setPendingHistoryRecord(null);
+                    setHistorySaveState('idle');
+                }
             }
             catch (error) {
                 console.error(
@@ -2118,8 +2086,14 @@ export default function App() {
         
         const handleSaveRemarks = () => {
             if (examinerRemarks.trim()) {
+                /*
+                 * Remarks are part of the current grading result workflow.
+                 * They are included when Save Results is pressed.
+                 */
+                setHasUnsavedResult(true);
+        
                 alert(
-                    "Remarks saved. Use 'Save Results' to include them in the export."
+                    "Remarks added. Use 'Save Results' to include them in the saved result."
                 );
             }
         
@@ -2127,12 +2101,21 @@ export default function App() {
         };
         
         const handleNew = () => {
-            if (result || markingScheme || studentPaper) {
-                if (
-                    !window.confirm(
-                        'Start a new semester? Current work will be cleared.'
-                    )
-                ) {
+            if (
+                hasUnsavedResult ||
+                result ||
+                markingScheme ||
+                studentPaper
+            ) {
+                const confirmed = window.confirm(
+                    hasUnsavedResult
+                        ? 'You have an unsaved grading result.\n\n' +
+                          'Starting a new workspace will clear it.\n\n' +
+                          'Continue?'
+                        : 'Start a new semester? Current work will be cleared.'
+                );
+        
+                if (!confirmed) {
                     return;
                 }
             }
@@ -2154,6 +2137,9 @@ export default function App() {
             setResult(null);
             setExaminerRemarks('');
             setSemesterCourse(null);
+            setHasUnsavedResult(false);
+            setPendingHistoryRecord(null);
+            setHistorySaveState('idle');
             setActiveView('dashboard');
             setMarkingModeState('ai');
             setActiveTool(null);
@@ -2165,6 +2151,29 @@ export default function App() {
         };
         
         const handleRefresh = () => {
+            /*
+             * Refresh also clears the current grading workspace.
+             * Protect unsaved results before doing so.
+             */
+            if (
+                hasUnsavedResult ||
+                result ||
+                markingScheme ||
+                studentPaper
+            ) {
+                const confirmed = window.confirm(
+                    hasUnsavedResult
+                        ? 'You have an unsaved grading result.\n\n' +
+                          'Refreshing will clear the current work.\n\n' +
+                          'Continue?'
+                        : 'Refresh the current workspace? Any current work will be cleared.'
+                );
+        
+                if (!confirmed) {
+                    return;
+                }
+            }
+        
             setStudentInfo({
                 name: '',
                 regNo: '',
@@ -2180,6 +2189,9 @@ export default function App() {
             setResult(null);
             setExaminerRemarks('');
             setSemesterCourse(null);
+            setHasUnsavedResult(false);
+            setPendingHistoryRecord(null);
+            setHistorySaveState('idle');
             setActiveView('dashboard');
             setMarkingModeState('ai');
             setClearCount(c => c + 1);
@@ -2243,6 +2255,12 @@ export default function App() {
                     questions
                 };
             });
+        
+            /*
+             * Editing an existing grading result means the current
+             * result no longer exactly matches the last saved version.
+             */
+            setHasUnsavedResult(true);
         };
         
         // Profile handlers (institution/role)
