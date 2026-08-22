@@ -14,7 +14,7 @@ export function loadLocalHistory(): HistoryRecord[] {
 }
 
 export function writeLocalHistory(records: HistoryRecord[]): HistoryRecord[] {
-  const next = records.slice(0, 50);
+  const next = mergeCloudAndLocalHistory([], records);
   localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
   return next;
 }
@@ -25,7 +25,8 @@ export async function fetchCloudHistory(token: string): Promise<HistoryRecord[]>
   });
   if (!response.ok) throw new Error(`History load failed (${response.status})`);
   const data = await response.json();
-  return Array.isArray(data.history) ? data.history : [];
+  const cloud = Array.isArray(data.history) ? data.history : [];
+  return mergeCloudAndLocalHistory(cloud, loadLocalHistory());
 }
 
 export async function saveCloudHistory(token: string, record: HistoryRecord): Promise<HistoryRecord[]> {
@@ -36,7 +37,8 @@ export async function saveCloudHistory(token: string, record: HistoryRecord): Pr
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || `History save failed (${response.status})`);
-  return Array.isArray(data.history) ? data.history : [record];
+  const cloud = Array.isArray(data.history) ? data.history : [record];
+  return mergeCloudAndLocalHistory(cloud, loadLocalHistory());
 }
 
 export async function deleteCloudHistory(token: string, id: string): Promise<HistoryRecord[]> {
@@ -46,7 +48,8 @@ export async function deleteCloudHistory(token: string, id: string): Promise<His
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || `History delete failed (${response.status})`);
-  return Array.isArray(data.history) ? data.history : [];
+  const cloud = Array.isArray(data.history) ? data.history : [];
+  return mergeCloudAndLocalHistory(cloud, loadLocalHistory().filter(record => record.id !== id));
 }
 
 export function mergeCloudAndLocalHistory(cloud: HistoryRecord[], local: HistoryRecord[]): HistoryRecord[] {
@@ -54,5 +57,7 @@ export function mergeCloudAndLocalHistory(cloud: HistoryRecord[], local: History
   for (const record of [...cloud, ...local]) {
     if (record?.id && !byId.has(record.id)) byId.set(record.id, record);
   }
-  return Array.from(byId.values()).sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 50);
+  return Array.from(byId.values())
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    .slice(0, 50);
 }
