@@ -87,8 +87,6 @@ export default async function handler(req, res) {
         return res.status(400).json({ code: 'MISSING_COURSE', message: 'Course code is required' });
       }
 
-      // If the client supplies an id, that id is authoritative. This lets a
-      // session keep its identity while course/year/semester metadata changes.
       const existingIndex = incoming.id
         ? sessions.findIndex((s) => s.id === incoming.id)
         : -1;
@@ -97,13 +95,20 @@ export default async function handler(req, res) {
       const matchIndex = existingIndex >= 0 ? existingIndex : keyIndex;
       const existing = matchIndex >= 0 ? sessions[matchIndex] : null;
 
+      // Preserve richer session metadata (custom name/label) when an autosave
+      // only sends course/year/semester fields. The stable id keeps a switched
+      // session from mutating a different saved session.
       const saved = {
+        ...existing,
         ...incoming,
         id: existing?.id || incoming.id || key,
+        customName: incoming.customName || existing?.customName,
+        sessionLabel: incoming.sessionLabel || existing?.sessionLabel,
+        createdAt: existing?.createdAt || incoming.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      const next = sessions.filter((s, index) => index !== matchIndex && sessionKey(s) !== key);
+      const next = sessions.filter((s, index) => index !== matchIndex && sessionKey(s) !== sessionKey(saved));
       next.unshift(saved);
       const deduped = dedupeSessions(next);
       await updateUserMeta(userId, SESSIONS_META_KEY, deduped);
