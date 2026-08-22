@@ -31,6 +31,16 @@ export const API_ENDPOINTS = {
     grade: `${BASE_API}/grade`,
     history: `${BASE_API}/history`,
   },
+  sessions: {
+    list: `${BASE_API}/sessions`,
+    save: `${BASE_API}/sessions`,
+    delete: `${BASE_API}/sessions`,
+  },
+  history: {
+    list: `${BASE_API}/history`,
+    save: `${BASE_API}/history`,
+    delete: `${BASE_API}/history`,
+  },
   settings: {
     apiKeys: `${BASE_API}/settings/api-keys`,
   },
@@ -39,10 +49,8 @@ export const API_ENDPOINTS = {
 function mergeSignals(externalSignal?: AbortSignal): { signal: AbortSignal; cleanup: () => void } {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(new Error('Request timed out')), API_TIMEOUT_MS);
-
   const abortFromCaller = () => controller.abort(externalSignal?.reason);
   externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-
   return {
     signal: controller.signal,
     cleanup: () => {
@@ -54,15 +62,11 @@ function mergeSignals(externalSignal?: AbortSignal): { signal: AbortSignal; clea
 
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const { signal, cleanup } = mergeSignals(options.signal ?? undefined);
-
   try {
     return await fetch(url, {
       ...options,
       signal,
-      headers: {
-        ...getAuthHeaders(),
-        ...options.headers,
-      },
+      headers: { ...getAuthHeaders(), ...options.headers },
     });
   } finally {
     cleanup();
@@ -83,10 +87,7 @@ async function readApiError(response: Response): Promise<{ message: string; code
 }
 
 export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
-  const response = await apiFetch(url, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  const response = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
   if (!response.ok) {
     const { message, code } = await readApiError(response);
     const error: any = new Error(message);
@@ -98,13 +99,11 @@ export async function apiPost<T = unknown>(url: string, body: unknown): Promise<
 
 export async function apiGet<T = unknown>(url: string): Promise<T> {
   const response = await apiFetch(url);
-
   if (!response.ok) {
     const { message, code } = await readApiError(response);
     const error: any = new Error(message);
     if (code) error.code = code;
     throw error;
   }
-
   return response.json();
 }
