@@ -82,7 +82,19 @@
       if (!Array.isArray(data.sessions)) return;
 
       cloudLoadedForToken = token;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.sessions));
+      const cloud = data.sessions;
+      const local = readLocal();
+      const seen = new Set();
+      const merged = [];
+
+      for (const session of [...cloud, ...local]) {
+        const sessionKey = key(session);
+        if (!sessionKey || seen.has(sessionKey)) continue;
+        seen.add(sessionKey);
+        merged.push(session);
+      }
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       window.dispatchEvent(new CustomEvent('redpen:sessions-updated'));
     } catch (error) {
       console.warn('Cloud session verification failed:', error);
