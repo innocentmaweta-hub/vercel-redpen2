@@ -1362,13 +1362,9 @@ export default function App() {
                 return;
             }
     
-            const file =
-                target.files[0];
+            const file = target.files[0];
     
             try {
-                /*
-                 * Make sure the selected file is actually an Excel file.
-                 */
                 const isExcelFile =
                     file.name
                         .toLowerCase()
@@ -1381,21 +1377,18 @@ export default function App() {
                     alert(
                         'Please select a valid Excel (.xlsx or .xls) file.'
                     );
-    
                     return;
                 }
     
                 /*
-                 * Import the grading history from the RedPen
-                 * Excel export.
+                 * The session loader parses the workbook once and
+                 * returns both the reconstructed session and history.
                  */
-                const importedRecords =
-                    await loadHistoryFromExcelFile(file);
+                const {
+                    session: importedSession,
+                    history: importedRecords,
+                } = await loadSessionFromExcelFile(file);
     
-                /*
-                 * If the workbook contains no grading records,
-                 * don't modify the current application state.
-                 */
                 if (
                     !importedRecords ||
                     importedRecords.length === 0
@@ -1403,72 +1396,59 @@ export default function App() {
                     alert(
                         'No grading records were found in this Excel file.'
                     );
-    
                     return;
                 }
     
                 /*
-                 * Merge imported records with the existing local
-                 * history without creating duplicates.
+                 * Prevent duplicate imports using the actual
+                 * identifying information in each grading record.
                  */
-                const existingIds =
-                    new Set(
-                        history.map(
-                            record => record.id
-                        )
-                    );
+                const existingKeys = new Set(
+                    history.map(record =>
+                        [
+                            record.studentInfo?.regNo || '',
+                            record.studentInfo?.name || '',
+                            record.studentInfo?.courseCode || '',
+                            record.date || '',
+                            record.result?.totalScore || '',
+                        ].join('|')
+                    )
+                );
     
                 const newRecords =
-                    importedRecords.filter(
-                        record =>
-                            !existingIds.has(
-                                record.id
-                            )
-                    );
+                    importedRecords.filter(record => {
+                        const key = [
+                            record.studentInfo?.regNo || '',
+                            record.studentInfo?.name || '',
+                            record.studentInfo?.courseCode || '',
+                            record.date || '',
+                            record.result?.totalScore || '',
+                        ].join('|');
+    
+                        return !existingKeys.has(key);
+                    });
     
                 /*
-                 * If every imported record already exists locally,
-                 * still report that the import was processed.
-                 */
-                if (newRecords.length === 0) {
-                    alert(
-                        'These grading records are already in your history.'
-                    );
-    
-                    setShowOldSessionModal(false);
-    
-                    return;
-                }
-    
-                /*
-                 * Update local application history first.
+                 * Update local history.
                  */
                 const mergedHistory = [
                     ...history,
                     ...newRecords,
                 ];
     
-                setHistory(
-                    mergedHistory
-                );
-    
-                writeLocalHistory(
-                    mergedHistory
-                );
+                setHistory(mergedHistory);
+                writeLocalHistory(mergedHistory);
     
                 /*
-                 * If the user is authenticated, persist each imported
-                 * grading record to cloud history as well.
+                 * Save imported history to the cloud.
                  */
-                if (token) {
+                if (token && newRecords.length > 0) {
                     setHistorySaveState('saving');
     
                     let cloudHistory =
                         await fetchCloudHistory(token);
     
-                    for (
-                        const record of newRecords
-                    ) {
+                    for (const record of newRecords) {
                         cloudHistory =
                             await saveCloudHistory(
                                 token,
@@ -1476,89 +1456,66 @@ export default function App() {
                             );
                     }
     
-                    setHistory(
-                        cloudHistory
-                    );
+                    setHistory(cloudHistory);
+                    writeLocalHistory(cloudHistory);
     
-                    writeLocalHistory(
-                        cloudHistory
-                    );
-    
-                    setHistorySaveState(
-                        'saved'
-                    );
+                    setHistorySaveState('saved');
                 }
     
                 /*
-                 * Try to restore the session information contained
-                 * in the Excel workbook.
-                 *
-                 * This requires the session loader exposed by
-                 * exportUtils.ts.
+                 * Restore the session contained in the workbook.
                  */
-                try {
-                    const importedSession =
-                        await loadSessionFromExcelFile(
-                            file
+                if (importedSession) {
+                    const normalizedSession =
+                        normalizeSession(
+                            importedSession
                         );
     
-                    if (importedSession) {
-                        const normalizedSession =
-                            normalizeSession(
-                                importedSession
-                            );
-    
-                        const sessionId =
-                            normalizedSession.id ||
-                            sessionIdentityKey(
-                                normalizedSession
-                            );
-    
-                        setSemesterCourse(
+                    const sessionId =
+                        normalizedSession.id ||
+                        sessionIdentityKey(
                             normalizedSession
                         );
     
-                        setActiveSessionId(
-                            sessionId
-                        );
-    
-                        localStorage.setItem(
-                            'yaza_active_session_id',
-                            sessionId
-                        );
-    
-                        /*
-                         * Persist the imported session to the cloud
-                         * when the user is authenticated.
-                         */
-                        if (token) {
-                            await persistSession(
-                                normalizedSession
-                            );
-                        }
-                    }
-                }
-                catch (sessionError) {
-                    /*
-                     * A workbook can still contain valid grading
-                     * history even if session metadata cannot be
-                     * reconstructed.
-                     */
-                    console.warn(
-                        'Could not restore session metadata from Excel:',
-                        sessionError
+                    setSemesterCourse(
+                        normalizedSession
                     );
+    
+                    setActiveSessionId(
+                        sessionId
+                    );
+    
+                    localStorage.setItem(
+                        'yaza_active_session_id',
+                        sessionId
+                    );
+    
+                    /*
+                     * Persist the imported session to cloud
+                     * when authenticated.
+                     */
+                    if (token) {
+                        await persistSession(
+                            normalizedSession
+                        );
+                    }
                 }
     
                 setShowOldSessionModal(false);
     
-                alert(
-                    `Imported ${newRecords.length} grading result${
-                        newRecords.length === 1
-                            ? ''
-                            : 's'
-                    } successfully.`
-                );
+                if (newRecords.length === 0) {
+                    alert(
+                        'This Excel file has already been imported.'
+                    );
+                } else {
+                    alert(
+                        `Imported ${newRecords.length} grading result${
+                            newRecords.length === 1
+                                ? ''
+                                : 's'
+                        } successfully.`
+                    );
+                }
             }
             catch (error) {
                 console.error(
@@ -1566,18 +1523,13 @@ export default function App() {
                     error
                 );
     
-                setHistorySaveState(
-                    'error'
-                );
+                setHistorySaveState('error');
     
                 alert(
                     'We could not import this Excel file. Please make sure it is a valid RedPen export.'
                 );
             }
             finally {
-                /*
-                 * Allow the user to select the same file again later.
-                 */
                 target.value = '';
             }
         };
@@ -2889,55 +2841,43 @@ export default function App() {
         
             if (!token) {
                 setShowAuth(true);
-        
-                alert(
-                    'Please sign in before saving grading history.'
-                );
-        
+                alert('Please sign in before saving grading history.');
                 return;
             }
         
-            const records: HistoryRecord[] =
-                results.map(
-                    ({ file, result }, idx) => ({
-                        id:
-                            Date.now().toString() +
-                            '_' +
-                            idx +
-                            '_' +
-                            Math.random()
-                                .toString(36)
-                                .slice(2, 9),
+            const records: HistoryRecord[] = results.map(
+                ({ file, result }, idx) => ({
+                    id:
+                        Date.now().toString() +
+                        '_' +
+                        idx +
+                        '_' +
+                        Math.random()
+                            .toString(36)
+                            .slice(2, 9),
         
-                        date:
-                            new Date().toISOString(),
+                    date: new Date().toISOString(),
         
-                        studentInfo: {
-                            ...studentInfo,
+                    studentInfo: {
+                        ...studentInfo,
         
-                            name:
-                                result.extracted_info?.name ||
-                                studentInfo.name ||
-                                file.name,
+                        name:
+                            result.extracted_info?.name ||
+                            studentInfo.name ||
+                            file.name,
         
-                            regNo:
-                                result.extracted_info?.regNo ||
-                                studentInfo.regNo,
-                        },
+                        regNo:
+                            result.extracted_info?.regNo ||
+                            studentInfo.regNo,
+                    },
         
-                        result,
-                    })
-                );
+                    result,
+                })
+            );
         
             setHistorySaveState('saving');
         
             try {
-                /*
-                 * Save every batch result sequentially.
-                 *
-                 * We deliberately use the history returned by each request
-                 * so the next save is based on the latest cloud state.
-                 */
                 let cloudHistory =
                     await fetchCloudHistory(token);
         
@@ -2949,7 +2889,6 @@ export default function App() {
                         );
                 }
         
-                // Cloud is now authoritative.
                 setHistory(cloudHistory);
                 writeLocalHistory(cloudHistory);
         
