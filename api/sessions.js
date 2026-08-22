@@ -10,7 +10,6 @@ function authenticate(req, res) {
     res.status(401).json({ code: 'AUTH_REQUIRED', message: 'Authentication required' });
     return null;
   }
-
   try {
     return jwt.verify(header.slice(7), JWT_SECRET);
   } catch {
@@ -56,9 +55,7 @@ function dedupeSessions(sessions) {
     const session = normalizeSession(raw);
     if (!session.courseCode) continue;
     const key = sessionKey(session);
-    if (!byKey.has(key)) {
-      byKey.set(key, { ...session, id: session.id || key });
-    }
+    if (!byKey.has(key)) byKey.set(key, { ...session, id: session.id || key });
   }
   return Array.from(byKey.values()).sort((a, b) =>
     String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
@@ -78,14 +75,11 @@ export default async function handler(req, res) {
     const stored = await getUserMeta(userId, SESSIONS_META_KEY);
     const sessions = dedupeSessions(stored);
 
-    // Repair legacy/duplicate records on read so the cloud becomes the source of truth.
     if (JSON.stringify(stored || []) !== JSON.stringify(sessions)) {
       await updateUserMeta(userId, SESSIONS_META_KEY, sessions);
     }
 
-    if (req.method === 'GET') {
-      return res.status(200).json({ sessions });
-    }
+    if (req.method === 'GET') return res.status(200).json({ sessions });
 
     if (req.method === 'POST') {
       const incoming = normalizeSession(req.body?.session || {});
@@ -93,16 +87,23 @@ export default async function handler(req, res) {
         return res.status(400).json({ code: 'MISSING_COURSE', message: 'Course code is required' });
       }
 
+      // If the client supplies an id, that id is authoritative. This lets a
+      // session keep its identity while course/year/semester metadata changes.
+      const existingIndex = incoming.id
+        ? sessions.findIndex((s) => s.id === incoming.id)
+        : -1;
       const key = sessionKey(incoming);
-      const existingIndex = sessions.findIndex((s) => sessionKey(s) === key);
-      const existing = existingIndex >= 0 ? sessions[existingIndex] : null;
+      const keyIndex = sessions.findIndex((s) => sessionKey(s) === key);
+      const matchIndex = existingIndex >= 0 ? existingIndex : keyIndex;
+      const existing = matchIndex >= 0 ? sessions[matchIndex] : null;
+
       const saved = {
         ...incoming,
         id: existing?.id || incoming.id || key,
         updatedAt: new Date().toISOString(),
       };
 
-      const next = sessions.filter((s) => sessionKey(s) !== key);
+      const next = sessions.filter((s, index) => index !== matchIndex && sessionKey(s) !== key);
       next.unshift(saved);
       const deduped = dedupeSessions(next);
       await updateUserMeta(userId, SESSIONS_META_KEY, deduped);
