@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HistoryRecord, SemesterCourse } from '../types';
 import { Clock, Trash2, ChevronRight, BookOpen, ArrowLeft, ArrowRight } from 'lucide-react';
-import { AUTH_TOKEN_KEY, sessionIdentityKey, deleteCloudSession, dedupeSessions, writeLocalSessions } from '../lib/sessionStore';
+import { AUTH_TOKEN_KEY, sessionIdentityKey, deleteCloudSession, dedupeSessions, removeLocalSession, writeLocalSessions } from '../lib/sessionStore';
 
 interface Props {
   history: HistoryRecord[];
@@ -14,62 +14,38 @@ interface Props {
 
 type Tab = 'results' | 'sessions';
 
-function sessionsFromHistory(history: HistoryRecord[]): SemesterCourse[] {
-  const byKey = new Map<string, SemesterCourse>();
-  for (const record of history) {
-    const info = record.studentInfo;
-    if (!info?.courseCode) continue;
-    const session: SemesterCourse = {
-      id: `history-session-${record.id}`,
-      courseCode: info.courseCode,
-      courseName: '',
-      program: info.program || '',
-      year: info.year || '',
-      semester: info.semester || '',
-      academicYear: info.academicYear || '',
-      sessionLabel: '',
-      createdAt: record.date,
-      updatedAt: record.date,
-    };
-    byKey.set(sessionIdentityKey(session), session);
-  }
-  return Array.from(byKey.values());
-}
-
 export const HistoryPanel = ({ history, onLoad, onDelete, sessions, onLoadSession, onSessionsChanged }: Props) => {
   const [tab, setTab] = useState<Tab>('results');
   const [selectedSession, setSelectedSession] = useState<SemesterCourse | null>(null);
-  const [sessionList, setSessionList] = useState<SemesterCourse[]>([]);
+  const [sessionList, setSessionList] = useState<SemesterCourse[]>(dedupeSessions(sessions));
 
-  const allHistoricalSessions = useMemo(
-    () => dedupeSessions([...sessions, ...sessionsFromHistory(history)]),
-    [sessions, history]
-  );
-
-  useEffect(() => setSessionList(allHistoricalSessions), [allHistoricalSessions]);
+  useEffect(() => setSessionList(dedupeSessions(sessions)), [sessions]);
 
   useEffect(() => {
-    const refresh = () => setSessionList(dedupeSessions([...sessions, ...sessionsFromHistory(history)]));
+    const refresh = () => setSessionList(dedupeSessions(sessions));
     window.addEventListener('redpen:sessions-updated', refresh);
     return () => window.removeEventListener('redpen:sessions-updated', refresh);
-  }, [sessions, history]);
+  }, [sessions]);
 
   const deleteSession = async (session: SemesterCourse) => {
     const label = `${session.courseCode}${session.courseName ? ` — ${session.courseName}` : ''}`;
-    if (!window.confirm(`Delete session "${label}"? This removes it from your saved sessions.`)) return;
+    if (!window.confirm(`Delete session "${label}"? Its grading results will remain in History.`)) return;
 
     try {
       const token = localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) throw new Error('Please sign in to delete a cloud session.');
+      let next: SemesterCourse[];
 
-      const next = await deleteCloudSession(token, session);
+      if (token) {
+        next = await deleteCloudSession(token, session);
+      } else {
+        next = removeLocalSession(session);
+      }
+
       setSessionList(next);
       writeLocalSessions(next);
       onSessionsChanged?.(next);
       setSelectedSession(current =>
-        current && sessionIdentityKey(current) === sessionIdentityKey(session)
-          ? null
-          : current
+        current && sessionIdentityKey(current) === sessionIdentityKey(session) ? null : current
       );
     } catch (error) {
       console.error('Failed to delete session:', error);
