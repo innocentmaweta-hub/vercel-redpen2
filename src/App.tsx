@@ -102,6 +102,26 @@ function loadSessions(): SemesterCourse[] {
         return [];
     }
 }
+async function loadCloudSessions(): Promise<SemesterCourse[]> {
+    try {
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (!token) return [];
+
+        const response = await fetch('/api/sessions', {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        if (!response.ok) return [];
+
+        const data = await response.json();
+        return Array.isArray(data.sessions) ? data.sessions : [];
+    } catch (error) {
+        console.error('Failed to load cloud sessions:', error);
+        return [];
+    }
+}
 
 function saveSessions(sessions: SemesterCourse[]) {
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
