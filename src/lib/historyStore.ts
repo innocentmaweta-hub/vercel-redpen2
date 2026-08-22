@@ -16,6 +16,9 @@ export function loadLocalHistory(): HistoryRecord[] {
 export function writeLocalHistory(records: HistoryRecord[]): HistoryRecord[] {
   const next = mergeCloudAndLocalHistory([], records);
   localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('redpen:history-updated'));
+  }
   return next;
 }
 
