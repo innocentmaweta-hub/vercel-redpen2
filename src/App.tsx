@@ -2830,8 +2830,8 @@ export default function App() {
                 }}
                 onLoadRecord={handleLoadRecord}
             />
-            {user && (
-                <div className="px-4 py-2 border-b bg-white">
+            {user && activeView === 'dashboard' && (
+                <div className="px-4 py-2 border-b">
                     <ActiveSessionSelector
                         sessions={sessions}
                         activeSessionId={activeSessionId}
@@ -2850,6 +2850,7 @@ export default function App() {
             
                             setActiveSessionId(session.id || sessionIdentityKey(session));
                             setSemesterCourse(session);
+                            setActiveView('grade');
             
                             setStudentInfo(prev => ({
                                 ...prev,
