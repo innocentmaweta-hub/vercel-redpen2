@@ -127,7 +127,11 @@ export default function App() {
         useState<ActiveView>('dashboard');
 
     const [history, setHistory] = useState<HistoryRecord[]>([]);
-    const [sessions, setSessions] = useState<SemesterCourse[]>([]);
+    const [sessions, setSessions] =
+        useState<SemesterCourse[]>([]);
+    
+    const [activeSessionId, setActiveSessionId] =
+        useState<string | null>(null);
     const [sessionSaveState, setSessionSaveState] =
     useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     
@@ -1233,42 +1237,7 @@ export default function App() {
         input.click();
     };
 
-    // Function to add a new school
-    const addNewSchool = () => {
-        if (
-            newSchoolName.trim() &&
-            !schools.includes(
-                newSchoolName.trim()
-            )
-        ) {
-            setSchools([
-                ...schools,
-                newSchoolName.trim()
-            ]);
-
-            setNewSchoolName('');
-            setShowAddSchoolModal(false);
-        }
-    };
-
-    // Function to add a new department
-    const addNewDepartment = () => {
-        if (
-            newDepartmentName.trim() &&
-            !departments.includes(
-                newDepartmentName.trim()
-            )
-        ) {
-            setDepartments([
-                ...departments,
-                newDepartmentName.trim()
-            ]);
-
-            setNewDepartmentName('');
-            setShowAddDepartmentModal(false);
-        }
-    };
-
+    
     /*
      * Main grading handler.
      *
