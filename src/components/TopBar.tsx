@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, History as HistoryIcon, User, Save, Printer, Plus, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
-import { ActiveSessionSelector } from './ActiveSessionSelector';
 
 interface TopBarProps {
   sessions: SemesterCourse[];
