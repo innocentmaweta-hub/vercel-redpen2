@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StudentInfo } from '../types';
 import { AlertTriangle } from 'lucide-react';
 
@@ -10,6 +10,8 @@ interface Props {
 
 const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
 const SEMESTERS = ['Semester 1', 'Semester 2'];
+const SESSIONS_KEY = 'stored_sessions';
+const AUTH_TOKEN_KEY = 'yaza_auth_token';
 
 function getAcademicYearOptions(): string[] {
   const currentYear = new Date().getFullYear();
@@ -23,43 +25,130 @@ function getAcademicYearOptions(): string[] {
 
 const ACADEMIC_YEARS = getAcademicYearOptions();
 
+function clean(value: string | undefined) {
+  return (value || '').trim();
+}
+
+function sessionCoreKey(session: {
+  courseCode?: string;
+  academicYear?: string;
+  year?: string;
+  semester?: string;
+}) {
+  return [
+    clean(session.courseCode).toUpperCase(),
+    clean(session.academicYear).toLowerCase(),
+    clean(session.year).toLowerCase(),
+    clean(session.semester).toLowerCase(),
+  ].join('|');
+}
+
+function saveSessionLocally(info: StudentInfo, courses: { courseCode: string; courseName: string }[]) {
+  if (!clean(info.courseCode)) return null;
+  if (!clean(info.year) && !clean(info.semester) && !clean(info.academicYear)) return null;
+
+  let sessions: any[] = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+    sessions = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    sessions = [];
+  }
+
+  const key = sessionCoreKey(info);
+  const existingIndex = sessions.findIndex((session) => sessionCoreKey(session) === key);
+  const knownCourse = courses.find((course) => course.courseCode === info.courseCode);
+  const existing = existingIndex >= 0 ? sessions[existingIndex] : null;
+
+  const session = {
+    ...existing,
+    id: existing?.id || key,
+    courseCode: clean(info.courseCode).toUpperCase(),
+    courseName: knownCourse?.courseName || existing?.courseName || '',
+    program: clean(info.program) || existing?.program || '',
+    year: clean(info.year),
+    semester: clean(info.semester),
+    academicYear: clean(info.academicYear),
+    sessionLabel: existing?.sessionLabel || '',
+    customName: existing?.customName,
+    examDate: clean(info.examDate),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const next = existingIndex >= 0
+    ? sessions.map((item, index) => index === existingIndex ? session : item)
+    : [session, ...sessions];
+
+  // Final local dedupe protects against older duplicate records.
+  const unique = new Map<string, any>();
+  for (const item of next) unique.set(sessionCoreKey(item), item);
+  const deduped = Array.from(unique.values()).sort((a, b) =>
+    String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))
+  );
+
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify(deduped));
+  window.dispatchEvent(new Event('sessions-updated'));
+  return session;
+}
+
 export const StudentForm = ({ info, onChange, courses }: Props) => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>(() => {
     return localStorage.getItem('lastSelectedDepartment') || '';
   });
 
-  // Course is a dropdown of known courses, plus a custom-entry mode.
-  // Selecting a different course is a deliberate action (unlike a text field's
-  // blur, which can fire from clicking anything else — including Grade),
-  // so onChange is the only trigger for the confirmation popup.
   const [pendingCourseCode, setPendingCourseCode] = useState<string | null>(null);
   const [courseFieldMode, setCourseFieldMode] = useState<'select' | 'custom'>(courses.length > 0 ? 'select' : 'custom');
   const [customCourseDraft, setCustomCourseDraft] = useState('');
-
-  // Academic Year / Semester determine which workbook a result is saved into,
-  // so a change is held here pending confirmation before being applied.
   const [pendingWorkbookChange, setPendingWorkbookChange] = useState<{ field: 'academicYear' | 'semester'; value: string } | null>(null);
+  const saveSequence = useRef(0);
 
   useEffect(() => {
-    // Save department selection to localStorage when it changes
     if (selectedDepartment) {
       localStorage.setItem('lastSelectedDepartment', selectedDepartment);
     }
   }, [selectedDepartment]);
 
+  // Course/year/semester/academic-year are session identity fields. Persist them
+  // locally immediately and, when signed in, sync the same session to the cloud.
+  useEffect(() => {
+    const savedSession = saveSessionLocally(info, courses);
+    if (!savedSession) return;
+
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) return;
+
+    const sequence = ++saveSequence.current;
+    fetch('/api/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ session: savedSession }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || `Session save failed (${response.status})`);
+        if (sequence !== saveSequence.current) return;
+
+        if (Array.isArray(data.sessions)) {
+          localStorage.setItem(SESSIONS_KEY, JSON.stringify(data.sessions));
+          window.dispatchEvent(new Event('sessions-updated'));
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to sync current session to cloud:', error);
+      });
+  }, [info.courseCode, info.year, info.semester, info.academicYear, info.program, info.examDate, courses]);
+
   const handleChange = (field: keyof StudentInfo, value: string) => {
     let validatedValue = value;
 
     if (field === 'regNo') {
-      // Allow typing freely; just uppercase and strip characters that could never be valid
       validatedValue = validatedValue.toUpperCase().replace(/[^A-Z0-9/-]/g, '');
     } else if (field === 'courseCode') {
-      // Allow typing freely; just uppercase and strip characters that could never be valid
       validatedValue = validatedValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
     }
-    // 'examDate' comes from a native date input, which already enforces its own format —
-    // no need to re-validate it here (the old check was blocking valid partial typing).
-    // 'year' and 'semester' come from fixed dropdowns, so no regex needed.
 
     onChange({ ...info, [field]: validatedValue });
   };
@@ -70,240 +159,120 @@ export const StudentForm = ({ info, onChange, courses }: Props) => {
   const requestCourseChange = (value: string) => {
     const trimmed = value.trim();
     const current = (info.courseCode || '').trim();
-    if (trimmed === current || trimmed === '') return; // no real change
+    if (trimmed === current || trimmed === '') return;
     setPendingCourseCode(trimmed);
   };
 
   const confirmCourseChange = () => {
-    if (pendingCourseCode !== null) {
-      handleChange('courseCode', pendingCourseCode);
-    }
-    setPendingCourseCode(null);
-  };
-
-  const cancelCourseChange = () => {
+    if (pendingCourseCode !== null) handleChange('courseCode', pendingCourseCode);
     setPendingCourseCode(null);
   };
 
   const requestWorkbookChange = (field: 'academicYear' | 'semester', value: string) => {
     const current = info[field] || '';
-    if (value === current) return; // reselecting the same value, nothing to confirm
+    if (value === current) return;
     if (value === '') {
-      handleChange(field, ''); // clearing doesn't create/route to a different workbook
+      handleChange(field, '');
       return;
     }
     setPendingWorkbookChange({ field, value });
   };
 
   const confirmWorkbookChange = () => {
-    if (pendingWorkbookChange) {
-      handleChange(pendingWorkbookChange.field, pendingWorkbookChange.value);
-    }
-    setPendingWorkbookChange(null);
-  };
-
-  const cancelWorkbookChange = () => {
+    if (pendingWorkbookChange) handleChange(pendingWorkbookChange.field, pendingWorkbookChange.value);
     setPendingWorkbookChange(null);
   };
 
   return (
     <>
-    <div className="bg-card p-6 rounded-3xl border border-gray-800 shadow-xl space-y-1">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-2 h-4 bg-accent-blue rounded-full" />
-        <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Identity Panel</h2>
-      </div>
+      <div className="bg-card p-6 rounded-3xl border border-gray-800 shadow-xl space-y-1">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-2 h-4 bg-accent-blue rounded-full" />
+          <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Identity Panel</h2>
+        </div>
 
-      {/* Row 1: Name / Reg No */}
-      <div className="grid grid-cols-2 gap-4">
-        <input
-          type="text"
-          placeholder="Student Name"
-          className={inputClass}
-          value={info.name}
-          onChange={(e) => handleChange('name', e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Registration Number"
-          className={inputClass}
-          value={info.regNo}
-          onChange={(e) => handleChange('regNo', e.target.value)}
-        />
-      </div>
+        <div className="grid grid-cols-2 gap-4">
+          <input type="text" placeholder="Student Name" className={inputClass} value={info.name} onChange={(e) => handleChange('name', e.target.value)} />
+          <input type="text" placeholder="Registration Number" className={inputClass} value={info.regNo} onChange={(e) => handleChange('regNo', e.target.value)} />
+        </div>
 
-      {/* Row 2: Program */}
-      <input
-        type="text"
-        placeholder="Program of Study"
-        className={inputClass}
-        value={info.program}
-        onChange={(e) => handleChange('program', e.target.value)}
-      />
+        <input type="text" placeholder="Program of Study" className={inputClass} value={info.program} onChange={(e) => handleChange('program', e.target.value)} />
 
-      {/* Row 3: Year of Study (+ Semester beside it once picked) / Academic Year */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex gap-2">
-          <select
-            className={selectClass}
-            value={info.year}
-            onChange={(e) => handleChange('year', e.target.value)}
-          >
-            <option value="">Year of Study</option>
-            {YEARS_OF_STUDY.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-          <select
-            className={selectClass}
-            value={(pendingWorkbookChange?.field === 'semester' ? pendingWorkbookChange.value : info.semester) || ''}
-            onChange={(e) => requestWorkbookChange('semester', e.target.value)}
-          >
-            <option value="">Semester</option>
-            {SEMESTERS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex gap-2">
+            <select className={selectClass} value={info.year} onChange={(e) => handleChange('year', e.target.value)}>
+              <option value="">Year of Study</option>
+              {YEARS_OF_STUDY.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select className={selectClass} value={(pendingWorkbookChange?.field === 'semester' ? pendingWorkbookChange.value : info.semester) || ''} onChange={(e) => requestWorkbookChange('semester', e.target.value)}>
+              <option value="">Semester</option>
+              {SEMESTERS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <select className={selectClass} value={(pendingWorkbookChange?.field === 'academicYear' ? pendingWorkbookChange.value : info.academicYear) || ''} onChange={(e) => requestWorkbookChange('academicYear', e.target.value)}>
+            <option value="">Academic Year</option>
+            {ACADEMIC_YEARS.map((ay) => <option key={ay} value={ay}>{ay}</option>)}
           </select>
         </div>
-        <select
-          className={selectClass}
-          value={(pendingWorkbookChange?.field === 'academicYear' ? pendingWorkbookChange.value : info.academicYear) || ''}
-          onChange={(e) => requestWorkbookChange('academicYear', e.target.value)}
-        >
-          <option value="">Academic Year</option>
-          {ACADEMIC_YEARS.map((ay) => (
-            <option key={ay} value={ay}>{ay}</option>
-          ))}
-        </select>
-      </div>
 
-     {/* Row 4: Course / Exam Date */}
-      <div className="grid grid-cols-2 gap-4">
-       {courseFieldMode === 'select' && courses.length > 0 ? (
-          <select
-            className={selectClass}
-            value={info.courseCode || ''}
-            onChange={(e) => {
-              if (e.target.value === '__new__') {
-                setCourseFieldMode('custom');
-                return;
-              }
+        <div className="grid grid-cols-2 gap-4">
+          {courseFieldMode === 'select' && courses.length > 0 ? (
+            <select className={selectClass} value={info.courseCode || ''} onChange={(e) => {
+              if (e.target.value === '__new__') { setCourseFieldMode('custom'); return; }
               requestCourseChange(e.target.value);
-            }}
-          >
-            <option value="">Course</option>
-            {courses.map((c) => (
-              <option key={c.courseCode} value={c.courseCode}>
-                {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
-              </option>
-            ))}
-            <option value="__new__">+ Add a new course</option>
-          </select>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <input
-              type="text"
-              placeholder="Course"
-              className={inputClass}
-              value={customCourseDraft}
-              onChange={(e) => setCustomCourseDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => { requestCourseChange(customCourseDraft); setCustomCourseDraft(''); }}
-                className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold"
-              >
-                Set Course
-              </button>
-              {courses.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => { setCourseFieldMode('select'); setCustomCourseDraft(''); }}
-                  className="text-[10px] text-gray-500 hover:text-gray-300 font-bold"
-                >
-                  ← Choose existing
-                </button>
-              )}
+            }}>
+              <option value="">Course</option>
+              {courses.map((c) => <option key={c.courseCode} value={c.courseCode}>{c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}</option>)}
+              <option value="__new__">+ Add a new course</option>
+            </select>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <input type="text" placeholder="Course" className={inputClass} value={customCourseDraft} onChange={(e) => setCustomCourseDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { requestCourseChange(customCourseDraft); setCustomCourseDraft(''); }} className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold">Set Course</button>
+                {courses.length > 0 && <button type="button" onClick={() => { setCourseFieldMode('select'); setCustomCourseDraft(''); }} className="text-[10px] text-gray-500 hover:text-gray-300 font-bold">← Choose existing</button>}
+              </div>
             </div>
-          </div>
-        )}
-        <input
-          type="date"
-          placeholder="Date of Exams"
-          className={`${inputClass} text-gray-400`}
-          value={info.examDate}
-          onChange={(e) => handleChange('examDate', e.target.value)}
-        />
-      </div>
-    </div>
-
-    {pendingCourseCode !== null && (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-        <div className="bg-card border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
-              <AlertTriangle size={16} className="text-yellow-500" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">Change Course?</p>
-              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                Switching the course code to <span className="text-gray-300 font-mono">{pendingCourseCode}</span> will route
-                future grades into that course's worksheet within this semester's workbook — creating a new sheet if it
-                doesn't already exist.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={cancelCourseChange}
-              className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmCourseChange}
-              className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all"
-            >
-              Confirm Change
-            </button>
-          </div>
+          )}
+          <input type="date" placeholder="Date of Exams" className={`${inputClass} text-gray-400`} value={info.examDate} onChange={(e) => handleChange('examDate', e.target.value)} />
         </div>
       </div>
-    )}
 
-    {pendingWorkbookChange !== null && (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-        <div className="bg-card border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0">
-              <AlertTriangle size={16} className="text-yellow-500" />
+      {pendingCourseCode !== null && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-card border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle size={16} className="text-yellow-500" /></div>
+              <div>
+                <p className="text-sm font-bold text-white">Change Course?</p>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Switching the course code to <span className="text-gray-300 font-mono">{pendingCourseCode}</span> will route future grades into that course's worksheet within this semester's workbook.</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-white">Change {pendingWorkbookChange.field === 'academicYear' ? 'Academic Year' : 'Semester'}?</p>
-              <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                Switching to <span className="text-gray-300 font-mono">{pendingWorkbookChange.value}</span> will route future
-                grades into a different semester workbook — creating a new one if it doesn't already exist.
-              </p>
+            <div className="flex gap-2">
+              <button onClick={() => setPendingCourseCode(null)} className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all">Cancel</button>
+              <button onClick={confirmCourseChange} className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all">Confirm Change</button>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={cancelWorkbookChange}
-              className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmWorkbookChange}
-              className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all"
-            >
-              Confirm Change
-            </button>
           </div>
         </div>
-      </div>
-    )}
+      )}
+
+      {pendingWorkbookChange !== null && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-card border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 bg-yellow-500/10 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle size={16} className="text-yellow-500" /></div>
+              <div>
+                <p className="text-sm font-bold text-white">Change {pendingWorkbookChange.field === 'academicYear' ? 'Academic Year' : 'Semester'}?</p>
+                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Switching to <span className="text-gray-300 font-mono">{pendingWorkbookChange.value}</span> will route future grades into a different semester workbook.</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setPendingWorkbookChange(null)} className="flex-1 py-2 bg-gray-800 text-gray-300 text-[11px] font-bold rounded-lg hover:bg-gray-700 transition-all">Cancel</button>
+              <button onClick={confirmWorkbookChange} className="flex-1 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-lg hover:bg-blue-600 transition-all">Confirm Change</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
