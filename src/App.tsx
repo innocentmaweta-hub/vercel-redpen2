@@ -458,136 +458,226 @@ export default function App() {
     );
 
     /**
-     * Persist the currently active course worksheet.
+     * Persist the active worksheet inside the current workbook.
      *
-     * The existing App.tsx code still calls this function "persistSession".
-     * Internally it now updates the active worksheet inside the workbook
-     * and persists the workbook as the canonical object.
+     * Workbook is the canonical source of truth:
+     *
+     * Workbook
+     *   ├── Worksheet / CS301
+     *   ├── Worksheet / CS201
+     *   └── Worksheet / ENG101
+     *
+     * Local persistence happens first so the user's work is never
+     * dependent on the cloud being available.
      */
     const persistSession = useCallback(async (
         session: SemesterCourse
     ): Promise<SemesterCourse | null> => {
         const normalized = normalizeSession(session);
 
-        /*
-         * If there is no workbook yet, create one. This keeps the
-         * transition safe while the rest of App.tsx is being migrated.
-         */
-        const currentWorkbook =
-            workbook ||
-            createWorkbook(
-                normalized.courseCode
-                    ? `${normalized.courseCode}.xlsx`
-                    : 'RedPen Workbook.xlsx'
-            );
-
         const worksheetId =
             normalized.id ||
             sessionIdentityKey(normalized);
 
-        const existingWorksheet =
-            currentWorkbook.sheets.find(
-                sheet => sheet.id === worksheetId
+        const now =
+            new Date().toISOString();
+
+        /*
+         * Use the current workbook if one exists.
+         *
+         * If this is the first course ever created, create the workbook
+         * around that course.
+         */
+        const currentWorkbook =
+            workbook ||
+            createWorkbook(
+                normalized.customName ||
+                normalized.courseCode ||
+                'RedPen Workbook'
             );
 
-        const nextWorkbook: RedPenWorkbook = {
-            ...currentWorkbook,
-            updatedAt: new Date().toISOString(),
-            activeSheetId: worksheetId,
-            sheets: existingWorksheet
+        const existingWorksheet =
+            currentWorkbook.sheets.find(
+                sheet =>
+                    sheet.id === worksheetId ||
+                    sessionIdentityKey(sheet.course) ===
+                    sessionIdentityKey(normalized)
+            );
+
+        const worksheet = existingWorksheet
+            ? {
+                ...existingWorksheet,
+
+                id:
+                    existingWorksheet.id ||
+                    worksheetId,
+
+                name:
+                    normalized.courseCode ||
+                    normalized.customName ||
+                    existingWorksheet.name ||
+                    'Course',
+
+                course: {
+                    ...existingWorksheet.course,
+                    ...normalized,
+                    id:
+                        existingWorksheet.id ||
+                        worksheetId,
+                },
+
+                updatedAt: now,
+            }
+            : {
+                id: worksheetId,
+
+                name:
+                    normalized.courseCode ||
+                    normalized.customName ||
+                    'Course',
+
+                course: {
+                    ...normalized,
+                    id: worksheetId,
+                },
+
+                rows: [],
+
+                createdAt:
+                    normalized.createdAt ||
+                    now,
+
+                updatedAt: now,
+            };
+
+        /*
+         * Replace the existing worksheet rather than creating duplicates.
+         */
+        const nextSheets =
+            existingWorksheet
                 ? currentWorkbook.sheets.map(sheet =>
-                    sheet.id === worksheetId
-                        ? {
-                            ...sheet,
-                            name:
-                                normalized.courseCode ||
-                                normalized.customName ||
-                                sheet.name ||
-                                'Course',
-                            course: {
-                                ...sheet.course,
-                                ...normalized,
-                            },
-                            updatedAt:
-                                new Date().toISOString(),
-                        }
+                    sheet.id === existingWorksheet.id
+                        ? worksheet
                         : sheet
                 )
                 : [
                     ...currentWorkbook.sheets,
-                    {
-                        id: worksheetId,
-                        name:
-                            normalized.courseCode ||
-                            normalized.customName ||
-                            'Course',
-                        course: {
-                            ...normalized,
-                            id: worksheetId,
-                        },
-                        rows: [],
-                        createdAt:
-                            normalized.createdAt ||
-                            new Date().toISOString(),
-                        updatedAt:
-                            new Date().toISOString(),
-                    }
-                ],
+                    worksheet,
+                ];
+
+        const nextWorkbook: RedPenWorkbook = {
+            ...currentWorkbook,
+
+            updatedAt: now,
+
+            activeSheetId:
+                worksheet.id,
+
+            sheets: nextSheets,
         };
 
         /*
-         * Always keep the workbook locally available.
+         * LOCAL FIRST
          *
-         * This means the workbook remains usable even when cloud
-         * persistence is unavailable.
+         * This is important for offline safety and for users who are
+         * temporarily unable to reach the cloud.
          */
-        const locallySaved =
-            writeLocalWorkbook(nextWorkbook);
-
-        setWorkbook(locallySaved);
-
-        const nextSessions =
-            locallySaved.sheets.map(
-                sheet => normalizeSession(sheet.course)
+        const savedLocalWorkbook =
+            writeLocalWorkbook(
+                nextWorkbook
             );
 
-        setSessions(nextSessions);
+        setWorkbook(
+            savedLocalWorkbook
+        );
 
-        setSemesterCourse(normalized);
-        setActiveSessionId(worksheetId);
+        const nextSessions =
+            savedLocalWorkbook.sheets.map(
+                sheet =>
+                    normalizeSession(
+                        sheet.course
+                    )
+            );
+
+        setSessions(
+            nextSessions
+        );
+
+        const activeWorksheet =
+            savedLocalWorkbook.sheets.find(
+                sheet =>
+                    sheet.id ===
+                    savedLocalWorkbook.activeSheetId
+            );
+
+        const activeSession =
+            activeWorksheet
+                ? normalizeSession(
+                    activeWorksheet.course
+                )
+                : normalized;
+
+        setSemesterCourse(
+            activeSession
+        );
+
+        setActiveSessionId(
+            activeWorksheet?.id ||
+            worksheet.id
+        );
 
         localStorage.setItem(
             'yaza_active_session_id',
-            worksheetId
+            activeWorksheet?.id ||
+            worksheet.id
         );
 
         /*
-         * Cloud persistence is only attempted when authenticated.
-         *
-         * Local workbook persistence is already complete before this
-         * network operation begins.
+         * No authenticated user means local persistence is the complete
+         * save operation.
          */
         if (!token) {
-            setSessionSaveState('saved');
-            return normalized;
+            setSessionSaveState(
+                'saved'
+            );
+
+            return activeSession;
         }
 
-        setSessionSaveState('saving');
+        /*
+         * CLOUD SAVE
+         *
+         * The complete workbook is saved, not an individual legacy
+         * session. This preserves all worksheets/courses.
+         */
+        setSessionSaveState(
+            'saving'
+        );
 
         try {
-            const response =
+            const cloudResponse =
                 await saveCloudWorkbook(
                     token,
-                    locallySaved
+                    savedLocalWorkbook
                 );
 
-            const savedWorkbook =
-                response.workbook;
+            const cloudWorkbook =
+                cloudResponse.workbook;
 
-            setWorkbook(savedWorkbook);
+            /*
+             * Cloud is now authoritative because the save succeeded.
+             */
+            const normalizedCloudWorkbook =
+                writeLocalWorkbook(
+                    cloudWorkbook
+                );
+
+            setWorkbook(
+                normalizedCloudWorkbook
+            );
 
             setSessions(
-                savedWorkbook.sheets.map(
+                normalizedCloudWorkbook.sheets.map(
                     sheet =>
                         normalizeSession(
                             sheet.course
@@ -595,35 +685,44 @@ export default function App() {
                 )
             );
 
-            const savedWorksheet =
-                savedWorkbook.sheets.find(
+            const cloudActiveWorksheet =
+                normalizedCloudWorkbook.sheets.find(
                     sheet =>
                         sheet.id ===
-                        savedWorkbook.activeSheetId
+                        normalizedCloudWorkbook.activeSheetId
                 );
 
-            const savedSession =
-                savedWorksheet
-                    ? normalizeSession(
-                        savedWorksheet.course
-                    )
-                    : normalized;
+            if (cloudActiveWorksheet) {
+                const cloudSession =
+                    normalizeSession(
+                        cloudActiveWorksheet.course
+                    );
 
-            setSemesterCourse(savedSession);
-            setActiveSessionId(
-                savedWorksheet?.id ||
-                worksheetId
+                setSemesterCourse(
+                    cloudSession
+                );
+
+                setActiveSessionId(
+                    cloudActiveWorksheet.id
+                );
+
+                localStorage.setItem(
+                    'yaza_active_session_id',
+                    cloudActiveWorksheet.id
+                );
+
+                setSessionSaveState(
+                    'saved'
+                );
+
+                return cloudSession;
+            }
+
+            setSessionSaveState(
+                'saved'
             );
 
-            localStorage.setItem(
-                'yaza_active_session_id',
-                savedWorksheet?.id ||
-                worksheetId
-            );
-
-            setSessionSaveState('saved');
-
-            return savedSession;
+            return activeSession;
         }
         catch (error) {
             console.error(
@@ -632,12 +731,16 @@ export default function App() {
             );
 
             /*
-             * The local workbook has already been saved, so cloud failure
-             * does not destroy the user's current work.
+             * IMPORTANT:
+             *
+             * Do NOT roll back the local workbook.
+             * The user's latest work is already safely stored locally.
              */
-            setSessionSaveState('error');
+            setSessionSaveState(
+                'error'
+            );
 
-            return normalized;
+            return activeSession;
         }
     }, [
         workbook,
