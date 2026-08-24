@@ -31,6 +31,12 @@ export const API_ENDPOINTS = {
   grading: {
     grade: `${BASE_API}/grade`,
   },
+  workbooks: {
+    list: `${BASE_API}/workbooks`,
+    save: `${BASE_API}/workbooks`,
+    delete: `${BASE_API}/workbooks`,
+  },
+  // Kept for backward compatibility with older clients/data migrations.
   sessions: {
     list: `${BASE_API}/sessions`,
     save: `${BASE_API}/sessions`,
