@@ -3261,772 +3261,893 @@ export default function App() {
                 }
             }
         
-            /*
+                        /*
              * Refresh the grading workspace only.
-             * Do not destroy the workbook or its courses.
+             *
+             * IMPORTANT:
+             * The workbook and its courses are persistent workspace state.
+             * Refreshing must never destroy them.
              */
-            setStudentInfo({
-                name: '',
-                regNo: '',
-                program: '',
-                year:
-                    semesterCourse?.year ||
-                    '',
-                semester:
-                    semesterCourse?.semester ||
-                    '',
-                courseCode:
-                    semesterCourse?.courseCode ||
-                    '',
-                examDate: ''
-            });
-        
-            setMarkingScheme(
-                null
-            );
-        
-            setStudentPaper(
-                null
-            );
-        
-            setResult(
-                null
-            );
-        
-            setExaminerRemarks(
-                ''
-            );
-        
-            setHasUnsavedResult(
-                false
-            );
-        
-            setPendingHistoryRecord(
-                null
-            );
-        
-            setHistorySaveState(
-                'idle'
-            );
-        
-            setActiveView(
-                'dashboard'
-            );
-        
-            setMarkingModeState(
-                'ai'
-            );
-        
-            setClearCount(
-                c => c + 1
-            );
-        
-            setZoom(
-                1
-            );
-        
-            setActiveTool(
-                null
-            );
-        
-            setShowToolOptions(
-                false
-            );
-        
-            setIsMaximized(
-                false
-            );
-        
-            setIsAutoMode(
-                false
-            );
-        
-            setShowRefresh(
-                false
-            );
-        };
-        
-        // Auth handlers
-        const handleAuthSuccess = (
-            data: AuthResponse
-        ) => {
-            localStorage.setItem(
-                AUTH_TOKEN_KEY,
-                data.token
-            );
-        
-            setToken(
-                data.token
-            );
-        
-            setUser(
-                data.user
-            );
-        
-            setShowAuth(
-                false
-            );
-        };
-        
-        const handleLogout = () => {
-            localStorage.removeItem(
-                AUTH_TOKEN_KEY
-            );
-        
-            setToken(
-                null
-            );
-        
-            setUser(
-                null
-            );
-        
-            setShowProfile(
-                false
-            );
-        };
-        
-        // Settings handlers
-        const handleYazaEditQuestionScore = (
-            questionNumber: number,
-            score?: string,
-            feedback?: string
-        ) => {
-            setResult(prev => {
-                if (!prev) {
-                    return prev;
-                }
-        
-                const questions =
-                    (
-                        prev.questions ||
-                        []
-                    ).map(q =>
-                        q.q === questionNumber
-                            ? {
-                                ...q,
-        
-                                ...(score !== undefined && {
-                                    score
-                                }),
-        
-                                ...(feedback !== undefined && {
-                                    feedback
-                                })
-                            }
-                            : q
+            const handleRefresh = () => {
+                if (
+                    hasUnsavedResult ||
+                    result ||
+                    markingScheme ||
+                    studentPaper
+                ) {
+                    const confirmed = window.confirm(
+                        hasUnsavedResult
+                            ? 'You have an unsaved grading result.\n\n' +
+                              'Refreshing will clear the current work, but your workbook and courses will remain.\n\n' +
+                              'Continue?'
+                            : 'Refresh the current grading workspace? Any current student work will be cleared.'
                     );
-        
-                return {
-                    ...prev,
-                    questions
-                };
-            });
-        
-            setHasUnsavedResult(
-                true
-            );
-        };
-        
-        // Profile handlers
-        const handleSaveProfile = async (
-            institution: string,
-            role: string
-        ) => {
-            if (!user) {
-                return;
-            }
-        
-            const res =
-                await fetch(
-                    '/api/settings/profile',
-                    {
-                        method: 'POST',
-                        headers:
-                            authHeaders(),
-        
-                        body: JSON.stringify({
+    
+                    if (!confirmed) {
+                        return;
+                    }
+                }
+    
+                setStudentInfo({
+                    name: '',
+                    regNo: '',
+                    program: '',
+                    year:
+                        semesterCourse?.year ||
+                        '',
+                    semester:
+                        semesterCourse?.semester ||
+                        '',
+                    courseCode:
+                        semesterCourse?.courseCode ||
+                        '',
+                    examDate: ''
+                });
+    
+                setMarkingScheme(null);
+                setStudentPaper(null);
+                setResult(null);
+                setExaminerRemarks('');
+    
+                setHasUnsavedResult(false);
+                setPendingHistoryRecord(null);
+                setHistorySaveState('idle');
+    
+                setActiveView('dashboard');
+                setMarkingModeState('ai');
+    
+                setClearCount(
+                    c => c + 1
+                );
+    
+                setZoom(1);
+                setActiveTool(null);
+                setShowToolOptions(false);
+    
+                setIsMaximized(false);
+                setIsAutoMode(false);
+    
+                setShowRefresh(false);
+            };
+    
+            // Auth handlers
+            const handleAuthSuccess = (
+                data: AuthResponse
+            ) => {
+                localStorage.setItem(
+                    AUTH_TOKEN_KEY,
+                    data.token
+                );
+    
+                setToken(data.token);
+                setUser(data.user);
+                setShowAuth(false);
+            };
+    
+            const handleLogout = () => {
+                localStorage.removeItem(
+                    AUTH_TOKEN_KEY
+                );
+    
+                setToken(null);
+                setUser(null);
+                setShowProfile(false);
+            };
+    
+            // Settings handlers
+            const handleYazaEditQuestionScore = (
+                questionNumber: number,
+                score?: string,
+                feedback?: string
+            ) => {
+                setResult(prev => {
+                    if (!prev) {
+                        return prev;
+                    }
+    
+                    const questions =
+                        (
+                            prev.questions ||
+                            []
+                        ).map(q =>
+                            q.q === questionNumber
+                                ? {
+                                    ...q,
+    
+                                    ...(score !== undefined && {
+                                        score
+                                    }),
+    
+                                    ...(feedback !== undefined && {
+                                        feedback
+                                    })
+                                }
+                                : q
+                        );
+    
+                    return {
+                        ...prev,
+                        questions
+                    };
+                });
+    
+                setHasUnsavedResult(true);
+            };
+    
+            // Profile handlers
+            const handleSaveProfile = async (
+                institution: string,
+                role: string
+            ) => {
+                if (!user) {
+                    return;
+                }
+    
+                const res =
+                    await fetch(
+                        '/api/settings/profile',
+                        {
+                            method: 'POST',
+                            headers:
+                                authHeaders,
+    
+                            body: JSON.stringify({
+                                institution,
+                                role
+                            }),
+                        }
+                    );
+    
+                if (!res.ok) {
+                    const data =
+                        await res
+                            .json()
+                            .catch(
+                                () => ({})
+                            );
+    
+                    alert(
+                        data.message ||
+                        'Failed to save profile'
+                    );
+    
+                    return;
+                }
+    
+                setUser(prev =>
+                    prev
+                        ? {
+                            ...prev,
                             institution,
                             role
-                        }),
-                    }
+                        }
+                        : prev
                 );
-        
-            if (!res.ok) {
-                const data =
-                    await res
-                        .json()
-                        .catch(
-                            () => ({})
-                        );
-        
-                alert(
-                    data.message ||
-                    'Failed to save profile'
-                );
-        
-                return;
-            }
-        
-            setUser(prev =>
-                prev
-                    ? {
-                        ...prev,
-                        institution,
-                        role
-                    }
-                    : prev
-            );
-        };
-        
-        // Avatar upload handler
-        const handleUploadAvatar = async (
-            file: File
-        ): Promise<{
-            success: boolean;
-            message?: string
-        }> => {
-            if (!user) {
-                return {
-                    success: false,
-                    message: 'Not logged in'
-                };
-            }
-        
-            return new Promise(resolve => {
-                const reader = new FileReader();
-        
-                reader.onload = async () => {
-                    try {
-                        const base64 =
-                            reader.result as string;
-        
-                        const res = await fetch(
-                            '/api/settings/avatar',
-                            {
-                                method: 'POST',
-                                headers: authHeaders(),
-                                body: JSON.stringify({
-                                    imageBase64: base64,
-                                    filename: file.name,
-                                    mimeType: file.type,
-                                }),
+            };
+    
+            // Avatar upload handler
+            const handleUploadAvatar = async (
+                file: File
+            ): Promise<{
+                success: boolean;
+                message?: string
+            }> => {
+                if (!user) {
+                    return {
+                        success: false,
+                        message: 'Not logged in'
+                    };
+                }
+    
+                return new Promise(resolve => {
+                    const reader =
+                        new FileReader();
+    
+                    reader.onload = async () => {
+                        try {
+                            const base64 =
+                                reader.result as string;
+    
+                            const res =
+                                await fetch(
+                                    '/api/settings/avatar',
+                                    {
+                                        method: 'POST',
+                                        headers:
+                                            authHeaders(),
+                                        body:
+                                            JSON.stringify({
+                                                imageBase64:
+                                                    base64,
+                                                filename:
+                                                    file.name,
+                                                mimeType:
+                                                    file.type,
+                                            }),
+                                    }
+                                );
+    
+                            const data =
+                                await res
+                                    .json()
+                                    .catch(
+                                        () => ({})
+                                    );
+    
+                            if (!res.ok) {
+                                resolve({
+                                    success: false,
+                                    message:
+                                        data.message ||
+                                        'Failed to upload image'
+                                });
+    
+                                return;
                             }
-                        );
-        
-                        const data =
-                            await res.json().catch(() => ({}));
-        
-                        if (!res.ok) {
+    
+                            setUser(prev =>
+                                prev
+                                    ? {
+                                        ...prev,
+                                        avatarUrl:
+                                            data.avatarUrl
+                                    }
+                                    : prev
+                            );
+    
+                            resolve({
+                                success: true
+                            });
+                        }
+                        catch (err) {
                             resolve({
                                 success: false,
                                 message:
-                                    data.message ||
                                     'Failed to upload image'
                             });
-        
-                            return;
                         }
-        
-                        setUser(prev =>
-                            prev
-                                ? {
-                                    ...prev,
-                                    avatarUrl:
-                                        data.avatarUrl
-                                }
-                                : prev
-                        );
-        
-                        resolve({
-                            success: true
-                        });
-                    }
-                    catch (err) {
+                    };
+    
+                    reader.onerror = () =>
                         resolve({
                             success: false,
                             message:
-                                'Failed to upload image'
+                                'Failed to read image file'
                         });
+    
+                    reader.readAsDataURL(file);
+                });
+            };
+    
+            // Change password handler
+            const handleChangePassword = async (
+                currentPassword: string,
+                newPassword: string
+            ): Promise<{
+                success: boolean;
+                message?: string
+            }> => {
+                try {
+                    const res =
+                        await fetch(
+                            '/api/auth/change-password',
+                            {
+                                method: 'POST',
+                                headers:
+                                    authHeaders(),
+                                body:
+                                    JSON.stringify({
+                                        currentPassword,
+                                        newPassword
+                                    }),
+                            }
+                        );
+    
+                    const data =
+                        await res
+                            .json()
+                            .catch(
+                                () => ({})
+                            );
+    
+                    if (!res.ok) {
+                        return {
+                            success: false,
+                            message:
+                                data.message ||
+                                'Failed to change password'
+                        };
                     }
-                };
-        
-                reader.onerror = () =>
-                    resolve({
-                        success: false,
-                        message:
-                            'Failed to read image file'
-                    });
-        
-                reader.readAsDataURL(file);
-            });
-        };
-        
-        // Change password handler
-        const handleChangePassword = async (
-            currentPassword: string,
-            newPassword: string
-        ): Promise<{
-            success: boolean;
-            message?: string
-        }> => {
-            try {
-                const res = await fetch(
-                    '/api/auth/change-password',
-                    {
-                        method: 'POST',
-                        headers: authHeaders(),
-                        body: JSON.stringify({
-                            currentPassword,
-                            newPassword
-                        }),
-                    }
-                );
-        
-                const data =
-                    await res.json().catch(() => ({}));
-        
-                if (!res.ok) {
+    
+                    return {
+                        success: true
+                    };
+                }
+                catch (err) {
                     return {
                         success: false,
                         message:
-                            data.message ||
                             'Failed to change password'
                     };
                 }
-        
-                return {
-                    success: true
-                };
-            }
-            catch (err) {
-                return {
-                    success: false,
-                    message:
-                        'Failed to change password'
-                };
-            }
-        };
-        
-        // Delete account handler
-        const handleDeleteAccount = async (
-            password: string
-        ): Promise<{
-            success: boolean;
-            message?: string
-        }> => {
-            try {
-                const res = await fetch(
-                    '/api/auth/delete-account',
-                    {
-                        method: 'POST',
-                        headers: authHeaders(),
-                        body: JSON.stringify({
-                            password
-                        }),
+            };
+    
+            // Delete account handler
+            const handleDeleteAccount = async (
+                password: string
+            ): Promise<{
+                success: boolean;
+                message?: string
+            }> => {
+                try {
+                    const res =
+                        await fetch(
+                            '/api/auth/delete-account',
+                            {
+                                method: 'POST',
+                                headers:
+                                    authHeaders(),
+                                body:
+                                    JSON.stringify({
+                                        password
+                                    }),
+                            }
+                        );
+    
+                    const data =
+                        await res
+                            .json()
+                            .catch(
+                                () => ({})
+                            );
+    
+                    if (!res.ok) {
+                        return {
+                            success: false,
+                            message:
+                                data.message ||
+                                'Failed to delete account'
+                        };
                     }
-                );
-        
-                const data =
-                    await res.json().catch(() => ({}));
-        
-                if (!res.ok) {
+    
+                    // Account deleted successfully — log the user out locally.
+                    handleLogout();
+    
+                    return {
+                        success: true
+                    };
+                }
+                catch (err) {
                     return {
                         success: false,
                         message:
-                            data.message ||
                             'Failed to delete account'
                     };
                 }
-        
-                // Account deleted successfully — log the user out locally.
-                handleLogout();
-        
-                return {
-                    success: true
-                };
-            }
-            catch (err) {
-                return {
-                    success: false,
-                    message:
-                        'Failed to delete account'
-                };
-            }
-        };
-        
-        const handleUpgrade = () => {
-            setShowSettings(true);
-        };
-        
-        // Batch grading handlers
-        const handleGradeSingle = async (
-            paperBase64: string
-        ): Promise<GradingResult> => {
-            if (!user) {
-                throw new Error(
-                    'Please sign in first'
-                );
-            }
-        
-            const payload = {
-                studentInfo,
-                markingScheme:
-                    markingScheme?.base64 ?? null,
-                studentPaper: paperBase64
             };
-        
-            const headers = {
-                ...authHeaders()
+    
+            const handleUpgrade = () => {
+                setShowSettings(true);
             };
-        
-            const response = await fetch(
-                '/api/grade',
-                {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(payload)
+    
+            // Batch grading handlers
+            const handleGradeSingle = async (
+                paperBase64: string
+            ): Promise<GradingResult> => {
+                if (!user) {
+                    throw new Error(
+                        'Please sign in first'
+                    );
                 }
-            );
-        
-            if (response.status === 401) {
-                throw new Error(
-                    'Authentication required'
-                );
-            }
-        
-            if (response.status === 403) {
-                const data =
-                    await response.json().catch(() => ({}));
-        
-                throw new Error(
-                    data.message ||
-                    'Access denied'
-                );
-            }
-        
-            if (!response.ok) {
-                const data =
-                    await response.json().catch(() => ({}));
-        
-                throw new Error(
-                    data.message ||
-                    `Grading request failed (${response.status})`
-                );
-            }
-        
-            const apiResult: ApiGradingResult =
-                await response.json();
-        
-            if (apiResult.error) {
-                throw new Error(
-                    apiResult.message ||
-                    'Grading failed'
-                );
-            }
-        
-            const mappedResult: GradingResult = {
-                totalScore:
-                    apiResult.total_score ||
-                    apiResult.totalScore,
-                score: apiResult.score,
-                percentage: apiResult.percentage,
-                grade: apiResult.grade,
-                feedback: apiResult.feedback || '',
-                questions:
-                    apiResult.questions || [],
-                extracted_info:
-                    apiResult.extracted_info ||
-                    undefined,
+    
+                const payload = {
+                    studentInfo,
+                    markingScheme:
+                        markingScheme?.base64 ?? null,
+                    studentPaper: paperBase64
+                };
+    
+                const headers = {
+                    ...authHeaders()
+                };
+    
+                const response =
+                    await fetch(
+                        '/api/grade',
+                        {
+                            method: 'POST',
+                            headers,
+                            body:
+                                JSON.stringify(
+                                    payload
+                                )
+                        }
+                    );
+    
+                if (response.status === 401) {
+                    throw new Error(
+                        'Authentication required'
+                    );
+                }
+    
+                if (response.status === 403) {
+                    const data =
+                        await response
+                            .json()
+                            .catch(
+                                () => ({})
+                            );
+    
+                    throw new Error(
+                        data.message ||
+                        'Access denied'
+                    );
+                }
+    
+                if (!response.ok) {
+                    const data =
+                        await response
+                            .json()
+                            .catch(
+                                () => ({})
+                            );
+    
+                    throw new Error(
+                        data.message ||
+                        `Grading request failed (${response.status})`
+                    );
+                }
+    
+                const apiResult:
+                    ApiGradingResult =
+                    await response.json();
+    
+                if (apiResult.error) {
+                    throw new Error(
+                        apiResult.message ||
+                        'Grading failed'
+                    );
+                }
+    
+                const mappedResult:
+                    GradingResult = {
+                    totalScore:
+                        apiResult.total_score ||
+                        apiResult.totalScore,
+                    score:
+                        apiResult.score,
+                    percentage:
+                        apiResult.percentage,
+                    grade:
+                        apiResult.grade,
+                    feedback:
+                        apiResult.feedback ||
+                        '',
+                    questions:
+                        apiResult.questions ||
+                        [],
+                    extracted_info:
+                        apiResult.extracted_info ||
+                        undefined,
+                };
+    
+                const validatedResult =
+                    validateAndNormalizeResult(
+                        mappedResult
+                    );
+    
+                if (!validatedResult) {
+                    throw new Error(
+                        'The grading service returned an invalid result.'
+                    );
+                }
+    
+                return validatedResult;
             };
         
-            const validatedResult =
-                validateAndNormalizeResult(mappedResult);
-        
-            if (!validatedResult) {
-                throw new Error(
-                    'The grading service returned an invalid result.'
-                );
-            }
-        
-            return validatedResult;
-        };
-        
-        const handleSaveAllBatch = async (
-            results: {
-                file: any;
-                result: GradingResult;
-            }[]
-        ) => {
-            if (!results || results.length === 0) {
-                alert('There are no grading results to save.');
-                return;
-            }
-        
-            if (!token) {
-                setShowAuth(true);
-                alert('Please sign in before saving grading history.');
-                return;
-            }
-        
-            const records: HistoryRecord[] = results.map(
-                ({ file, result }, idx) => ({
-                    id:
-                        Date.now().toString() +
-                        '_' +
-                        idx +
-                        '_' +
-                        Math.random()
-                            .toString(36)
-                            .slice(2, 9),
-        
-                    date: new Date().toISOString(),
-        
-                    studentInfo: {
-                        ...studentInfo,
-        
-                        name:
-                            result.extracted_info?.name ||
-                            studentInfo.name ||
-                            file.name,
-        
-                        regNo:
-                            result.extracted_info?.regNo ||
-                            studentInfo.regNo,
-                    },
-        
-                    result,
-                })
-            );
-        
-            setHistorySaveState('saving');
-        
-            try {
-                let cloudHistory =
-                    await fetchCloudHistory(token);
-        
-                for (const record of records) {
-                    cloudHistory =
-                        await saveCloudHistory(
-                            token,
-                            record
+            const handleSaveAllBatch = async (
+                results: {
+                    file: any;
+                    result: GradingResult;
+                }[]
+            ) => {
+                if (
+                    !results ||
+                    results.length === 0
+                ) {
+                    alert(
+                        'There are no grading results to save.'
+                    );
+                    return;
+                }
+    
+                if (!token) {
+                    setShowAuth(true);
+    
+                    alert(
+                        'Please sign in before saving grading history.'
+                    );
+    
+                    return;
+                }
+    
+                const records:
+                    HistoryRecord[] =
+                    results.map(
+                        ({ file, result }, idx) => ({
+                            id:
+                                Date.now()
+                                    .toString() +
+                                '_' +
+                                idx +
+                                '_' +
+                                Math.random()
+                                    .toString(36)
+                                    .slice(2, 9),
+    
+                            date:
+                                new Date()
+                                    .toISOString(),
+    
+                            studentInfo: {
+                                ...studentInfo,
+    
+                                name:
+                                    result
+                                        .extracted_info
+                                        ?.name ||
+                                    studentInfo.name ||
+                                    file.name,
+    
+                                regNo:
+                                    result
+                                        .extracted_info
+                                        ?.regNo ||
+                                    studentInfo.regNo,
+                            },
+    
+                            result,
+                        })
+                    );
+    
+                setHistorySaveState('saving');
+    
+                try {
+                    let cloudHistory =
+                        await fetchCloudHistory(token);
+    
+                    for (const record of records) {
+                        cloudHistory =
+                            await saveCloudHistory(
+                                token,
+                                record
+                            );
+                    }
+    
+                    setHistory(cloudHistory);
+                    writeLocalHistory(cloudHistory);
+    
+                    setHistorySaveState('saved');
+    
+                    alert(
+                        `Saved ${records.length} grading result${
+                            records.length === 1
+                                ? ''
+                                : 's'
+                        } to history!`
+                    );
+    
+                    setShowBatch(false);
+                }
+                catch (error) {
+                    console.error(
+                        'Batch history save failed:',
+                        error
+                    );
+    
+                    setHistorySaveState('error');
+    
+                    alert(
+                        'Some grading results could not be saved to the cloud. Please retry.'
+                    );
+                }
+            };
+    
+            const handlePrint = () => {
+                const paperImage =
+                    paperCanvasRef.current?.captureFullPaper();
+    
+                if (!paperImage) {
+                    alert(
+                        'No graded paper to print yet.'
+                    );
+                    return;
+                }
+    
+                const printWindow =
+                    window.open('', '_blank');
+    
+                if (!printWindow) {
+                    alert(
+                        'Please allow popups to print.'
+                    );
+                    return;
+                }
+    
+                printWindow.document.write(`
+                    <html>
+                      <head>
+                        <title>${studentInfo.courseCode || 'Graded Paper'} - ${studentInfo.name || ''}</title>
+                        <style>
+                          @page { margin: 0; }
+                          body {
+                            margin: 0;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                          }
+                          img {
+                            max-width: 100%;
+                            height: auto;
+                            display: block;
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <img
+                          src="${paperImage}"
+                          onload="window.focus(); window.print();"
+                        />
+                      </body>
+                    </html>
+                `);
+    
+                printWindow.document.close();
+            };
+    
+            /*
+             * Handle paper upload.
+             *
+             * Uploading a paper must not create a new session or course.
+             * It belongs to the currently selected workbook worksheet.
+             */
+            const handlePaperUpload = useCallback(
+                (
+                    base64: string,
+                    name: string
+                ) => {
+                    setStudentPaper({
+                        base64,
+                        name
+                    });
+    
+                    // Every newly uploaded paper starts in AI mode.
+                    setMarkingModeState('ai');
+    
+                    // Clear any result belonging to the previous paper.
+                    setResult(null);
+    
+                    setExaminerRemarks('');
+    
+                    // Reset manual marking tools.
+                    setActiveTool(null);
+                    setShowToolOptions(false);
+    
+                    if (autoHideTimerRef.current) {
+                        clearTimeout(
+                            autoHideTimerRef.current
                         );
-                }
-        
-                setHistory(cloudHistory);
-                writeLocalHistory(cloudHistory);
-        
-                setHistorySaveState('saved');
-        
-                alert(
-                    `Saved ${records.length} grading result${
-                        records.length === 1 ? '' : 's'
-                    } to history!`
-                );
-        
-                setShowBatch(false);
-            }
-            catch (error) {
-                console.error(
-                    'Batch history save failed:',
-                    error
-                );
-        
-                setHistorySaveState('error');
-        
-                alert(
-                    'Some grading results could not be saved to the cloud. Please retry.'
-                );
-            }
-        };
-        
-        const handlePrint = () => {
-            const paperImage =
-                paperCanvasRef.current?.captureFullPaper();
-        
-            if (!paperImage) {
-                alert(
-                    'No graded paper to print yet.'
-                );
-                return;
-            }
-        
-            const printWindow =
-                window.open('', '_blank');
-        
-            if (!printWindow) {
-                alert(
-                    'Please allow popups to print.'
-                );
-                return;
-            }
-        
-            printWindow.document.write(`
-                <html>
-                  <head>
-                    <title>${studentInfo.courseCode || 'Graded Paper'} - ${studentInfo.name || ''}</title>
-                    <style>
-                      @page { margin: 0; }
-                      body {
-                        margin: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                      }
-                      img {
-                        max-width: 100%;
-                        height: auto;
-                        display: block;
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <img
-                      src="${paperImage}"
-                      onload="window.focus(); window.print();"
-                    />
-                  </body>
-                </html>
-            `);
-        
-            printWindow.document.close();
-        };
-
-    // Handle paper upload.
-    //
-    // IMPORTANT:
-    // Uploading a paper must NOT automatically select Manual Marking.
-    // The user must explicitly choose a grading method through the
-    // "Choose Grading Method" flow.
-    //
-    // This also prevents the paper from appearing as already marked.
-    const handlePaperUpload = useCallback(
-        (base64: string, name: string) => {
-            setStudentPaper({
-                base64,
-                name
-            });
     
-            // A newly uploaded paper has no grading method selected yet.
-            // The user will choose AI or Manual when they click Grade.
-            setMarkingModeState('ai')
+                        autoHideTimerRef.current = null;
+                    }
     
-            // Clear any previous result belonging to another paper.
-            setResult(null);
+                    // Reset canvas view.
+                    setZoom(1);
+                    setClearCount(
+                        c => c + 1
+                    );
     
-            // Clear previous examiner remarks.
-            setExaminerRemarks('');
+                    setIsMaximized(false);
+                    setIsAutoMode(false);
     
-            // Reset marking tools for the new paper.
-            setActiveTool(null);
-            setShowToolOptions(false);
-    
-            // Reset canvas view.
-            setZoom(1);
-            setClearCount(c => c + 1);
-    
-            // Make sure the grading view is active.
-            setActiveView('grade');
-        },
-        []
-    );
-    
-    // Filter sessions based on search term.
-    const filteredSessions = sessions.filter(session =>
-        searchTerm === '' ||
-        session.courseCode
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-        session.courseName
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-        session.program
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase())
-    );
-    
-    // Handle search term changes from TopBar.
-    const handleSearchTermChange = (term: string) => {
-        setSearchTerm(term);
-    };
-    
-    return (
-        <div className="flex flex-col bg-bg-dark h-screen overflow-hidden text-ink border-4 border-gray-900 shadow-2xl">
-    
-            <TopBar
-                sessions={sessions}
-                activeSession={semesterCourse}
-                onSelectSession={(session) => {
-                    setSemesterCourse(session);
-                
-                    setStudentInfo(prev => ({
-                        ...prev,
-                        courseCode: session.courseCode || prev.courseCode,
-                        year: session.year || prev.year,
-                        semester: session.semester || prev.semester,
-                    }));
-                
                     setActiveView('grade');
-                }}
-                onLoadSessionFromFile={() => setShowOldSessionModal(true)}
-                onNew={handleNew}
-                onSave={handleSave}
-                onPrint={handlePrint}
-                onClearResult={() => setResult(null)}
-                onRefresh={() => setShowRefresh(true)}
-                onSettings={() => setShowSettings(true)}
-                onBatch={() => {
-                    if (!user) {
-                        setShowAuth(true);
-                        return;
-                    }
-            
-                    setShowBatch(true);
-                }}
-                hasResult={!!result}
-                studentInfo={studentInfo}
-                onStudentInfoUpdate={(updates) =>
-                    setStudentInfo(prev => ({
-                        ...prev,
-                        ...updates
-                    }))
-                }
-                history={history}
-                onShowOldSessions={() =>
-                    setShowOldSessionModal(true)
-                }
-                onSearchTermChange={handleSearchTermChange}
-                onNewCourse={() =>
-                    setShowNewCourseModal(true)
-                }
-                onNewSession={() =>
-                    setShowNewSessionModal(true)
-                }
-                onNewPaper={handleNewPaper}
-                onToggleYaza={() =>
-                    setShowYaza(v => !v)
-                }
-                isYazaOpen={showYaza}
-                isLoggedIn={!!user}
-                onLogin={() =>
-                    setShowAuth(true)
-                }
-                onLogout={handleLogout}
-                onViewChange={setActiveView}
-                onProfile={() => {
-                    if (!user) {
-                        setShowAuth(true);
-                    } else {
-                        setShowProfile(true);
-                    }
-                }}
-                onLoadRecord={handleLoadRecord}
-            />
-            {user && activeView === 'dashboard' && (
-                <div className="px-4 py-2 border-b">
-                    
-                </div>
-            )}
+                },
+                []
+            );
+    
+            /*
+             * Courses are workbook worksheets.
+             *
+             * Do not derive the course list from the legacy sessions array.
+             * The workbook is the source of truth.
+             */
+            const workbookCourses =
+                workbook?.sheets || [];
+    
+            const filteredCourses =
+                workbookCourses.filter(sheet =>
+                    searchTerm === '' ||
+                    sheet.courseCode
+                        .toLowerCase()
+                        .includes(
+                            searchTerm.toLowerCase()
+                        ) ||
+                    sheet.courseName
+                        ?.toLowerCase()
+                        .includes(
+                            searchTerm.toLowerCase()
+                        )
+                );
+    
+            // Handle search term changes from TopBar.
+            const handleSearchTermChange = (
+                term: string
+            ) => {
+                setSearchTerm(term);
+            };
+    
+            return (
+                <div className="flex flex-col bg-bg-dark h-screen overflow-hidden text-ink border-4 border-gray-900 shadow-2xl">
+    
+                    <TopBar
+                        sessions={sessions}
+                        activeSession={semesterCourse}
+                        onSelectSession={(
+                            session
+                        ) => {
+                            setSemesterCourse(
+                                session
+                            );
+    
+                            setStudentInfo(
+                                prev => ({
+                                    ...prev,
+                                    courseCode:
+                                        session.courseCode ||
+                                        prev.courseCode,
+                                    year:
+                                        session.year ||
+                                        prev.year,
+                                    semester:
+                                        session.semester ||
+                                        prev.semester,
+                                })
+                            );
+    
+                            setActiveView(
+                                'grade'
+                            );
+                        }}
+                        onLoadSessionFromFile={() =>
+                            setShowOldSessionModal(
+                                true
+                            )
+                        }
+                        onNew={handleNew}
+                        onSave={handleSave}
+                        onPrint={handlePrint}
+                        onClearResult={() =>
+                            setResult(null)
+                        }
+                        onRefresh={() =>
+                            setShowRefresh(true)
+                        }
+                        onSettings={() =>
+                            setShowSettings(true)
+                        }
+                        onBatch={() => {
+                            if (!user) {
+                                setShowAuth(
+                                    true
+                                );
+                                return;
+                            }
+    
+                            setShowBatch(
+                                true
+                            );
+                        }}
+                        hasResult={!!result}
+                        studentInfo={
+                            studentInfo
+                        }
+                        onStudentInfoUpdate={(
+                            updates
+                        ) =>
+                            setStudentInfo(
+                                prev => ({
+                                    ...prev,
+                                    ...updates
+                                })
+                            )
+                        }
+                        history={history}
+                        onShowOldSessions={() =>
+                            setShowOldSessionModal(
+                                true
+                            )
+                        }
+                        onSearchTermChange={
+                            handleSearchTermChange
+                        }
+                        onNewCourse={() =>
+                            setShowNewCourseModal(
+                                true
+                            )
+                        }
+                        onNewSession={() =>
+                            setShowNewSessionModal(
+                                true
+                            )
+                        }
+                        onNewPaper={
+                            handleNewPaper
+                        }
+                        onToggleYaza={() =>
+                            setShowYaza(
+                                v => !v
+                            )
+                        }
+                        isYazaOpen={
+                            showYaza
+                        }
+                        isLoggedIn={
+                            !!user
+                        }
+                        onLogin={() =>
+                            setShowAuth(
+                                true
+                            )
+                        }
+                        onLogout={
+                            handleLogout
+                        }
+                        onViewChange={
+                            setActiveView
+                        }
+                        onProfile={() => {
+                            if (!user) {
+                                setShowAuth(
+                                    true
+                                );
+                            }
+                            else {
+                                setShowProfile(
+                                    true
+                                );
+                            }
+                        }}
+                        onLoadRecord={
+                            handleLoadRecord
+                        }
+                    />
+    
+                    {user &&
+                        activeView ===
+                            'dashboard' && (
+                        <div className="px-4 py-2 border-b">
+                        </div>
+                    )}
     
             <div className="flex-1 flex min-w-0 overflow-hidden">
     
