@@ -1,0 +1,73 @@
+name: Finish workbook app wiring
+
+on:
+  push:
+    branches: [refactor/workbook-session-model-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  wire-app:
+    if: "!contains(github.event.head_commit.message, '[workbook-wired]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/workbook-session-model-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch App workbook flow
+        run: node <<'NODE'
+const fs = require('fs');
+const path = 'src/App.tsx';
+let s = fs.readFileSync(path, 'utf8');
+
+const addImport = (needle, text) => {
+  if (!s.includes(text.trim())) s = s.replace(needle, needle + '\n' + text);
+};
+
+addImport("import { writeFileToFolder } from './lib/fileStorage';", "import type { RedPenWorkbook } from './types/workbook';\nimport { loadWorkbookFromExcelFile } from './lib/exportUtils';");
+
+const stateNeedle = "    const [sessions, setSessions] =\n        useState<SemesterCourse[]>([]);";
+if (s.includes(stateNeedle) && !s.includes('pendingWorkbookImport')) {
+  s = s.replace(stateNeedle, stateNeedle + "\n\n    // A workbook may contain many course worksheets. Imported workbooks stay pending until the user explicitly chooses a course.\n    const [pendingWorkbookImport, setPendingWorkbookImport] = useState<RedPenWorkbook | null>(null);");
+}
+
+const oldLoader = `const {\n                    session: importedSession,\n                    history: importedRecords,\n                } = await loadSessionFromExcelFile(file);`;
+const newLoader = `const {\n                    workbook: importedWorkbook,\n                    history: importedRecords,\n                } = await loadWorkbookFromExcelFile(file);`;
+if (s.includes(oldLoader)) s = s.replace(oldLoader, newLoader);
+
+const oldRestoreStart = `                /*\n                 * Restore the session contained in the workbook.\n                 */\n                if (importedSession) {`;
+const oldRestoreEnd = `                setShowOldSessionModal(false);`;
+const start = s.indexOf(oldRestoreStart);
+const end = start >= 0 ? s.indexOf(oldRestoreEnd, start) : -1;
+if (start >= 0 && end > start) {
+  const replacement = `                /*\n                 * Do not silently choose the first worksheet. The workbook picker is shown and the user chooses the course to start with.\n                 */\n                if (importedWorkbook && importedWorkbook.sheets.length > 0) {\n                    setPendingWorkbookImport(importedWorkbook);\n                    localStorage.setItem('redpen_pending_workbook_name', importedWorkbook.name);\n                }\n\n`;
+  s = s.slice(0, start) + replacement + s.slice(end);
+}
+
+// Add an imperative course picker effect. It avoids changing the existing dashboard JSX while preserving the app's current visual shell.
+const effectMarker = `    /* WORKBOOK_COURSE_PICKER_EFFECT */`;
+if (!s.includes(effectMarker)) {
+  const insertAt = s.indexOf("    const handleSaveApiKeys = useCallback(");
+  if (insertAt >= 0) {
+    const effect = `    /* WORKBOOK_COURSE_PICKER_EFFECT */\n    useEffect(() => {\n        if (!pendingWorkbookImport || pendingWorkbookImport.sheets.length === 0) return;\n\n        const overlay = document.createElement('div');\n        overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.78);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;font-family:inherit';\n        const panel = document.createElement('div');\n        panel.style.cssText = 'width:min(520px,100%);background:#030712;border:1px solid #1f2937;border-radius:18px;box-shadow:0 25px 80px rgba(0,0,0,.55);padding:24px;color:white';\n        panel.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:#6b7280">Workbook loaded</div><h2 style="font-size:20px;font-weight:900;margin:6px 0 8px">Choose a course to start</h2><p style="font-size:12px;color:#9ca3af;margin:0 0 18px">'+pendingWorkbookImport.name.replace(/</g,'&lt;')+' contains '+pendingWorkbookImport.sheets.length+' worksheet(s).</p>';\n        const list = document.createElement('div');\n        list.style.cssText = 'display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto';\n        pendingWorkbookImport.sheets.forEach((sheet, index) => {\n            const button = document.createElement('button');\n            button.type = 'button';\n            button.style.cssText = 'display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px;border:1px solid #1f2937;border-radius:12px;background:#111827;color:#fff;cursor:pointer';\n            button.innerHTML = '<span style="width:28px;height:28px;border-radius:8px;background:#030712;display:grid;place-items:center;font-size:10px;font-weight:900;color:#6b7280">'+(index+1)+'</span><span style="min-width:0"><strong style="display:block;font-size:12px">'+(sheet.course.courseCode || sheet.name).replace(/</g,'&lt;')+'</strong><small style="display:block;color:#6b7280;font-size:10px;margin-top:2px">'+(sheet.course.courseName || '').replace(/</g,'&lt;')+'</small></span>';\n            button.onclick = () => {\n                const selected = sheet.course;\n                setPendingWorkbookImport(null);\n                localStorage.setItem('yaza_active_session_id', selected.id || sessionIdentityKey(selected));\n                setSemesterCourse(normalizeSession(selected));\n                setActiveSessionId(selected.id || sessionIdentityKey(selected));\n                setStudentInfo(prev => ({ ...prev, courseCode: selected.courseCode || prev.courseCode, program: selected.program || prev.program, year: selected.year || prev.year, semester: selected.semester || prev.semester, academicYear: selected.academicYear || prev.academicYear }));\n                setResult(null);\n                setStudentPaper(null);\n                setMarkingModeState('ai');\n                setActiveView('grade');\n                setShowOldSessionModal(false);\n            };\n            list.appendChild(button);\n        });\n        panel.appendChild(list);\n        overlay.appendChild(panel);\n        document.body.appendChild(overlay);\n        return () => overlay.remove();\n    }, [pendingWorkbookImport]);\n\n`;
+    s = s.slice(0, insertAt) + effect + s.slice(insertAt);
+  }
+}
+
+fs.writeFileSync(path, s);
+NODE
+      - name: Typecheck
+        run: npm ci --ignore-scripts && npm run lint
+      - name: Commit patched App
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/finish-workbook-app-migration.yml
+          git add src/App.tsx .github/workflows/finish-workbook-app-migration.yml
+          git commit -m 'feat: wire workbook import and course selection [workbook-wired]' || exit 0
+          git push origin refactor/workbook-session-model-v2
