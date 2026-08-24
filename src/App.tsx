@@ -4012,31 +4012,60 @@ export default function App() {
                     <TopBar
                         sessions={sessions}
                         activeSession={semesterCourse}
-                        onSelectSession={(
-                            session
-                        ) => {
+                        onSelectSession={async (session) => {
+                            /*
+                             * Session switching is a workbook operation.
+                             *
+                             * persistSession() updates the workbook's activeSheetId,
+                             * saves locally immediately, and syncs to the cloud when
+                             * authenticated.
+                             */
+                            const savedSession =
+                                await persistSession(session);
+                        
+                            const activeSession =
+                                savedSession || session;
+                        
                             setSemesterCourse(
-                                session
+                                activeSession
                             );
-    
-                            setStudentInfo(
-                                prev => ({
-                                    ...prev,
-                                    courseCode:
-                                        session.courseCode ||
-                                        prev.courseCode,
-                                    year:
-                                        session.year ||
-                                        prev.year,
-                                    semester:
-                                        session.semester ||
-                                        prev.semester,
-                                })
+                        
+                            setActiveSessionId(
+                                activeSession.id ||
+                                sessionIdentityKey(activeSession)
                             );
-    
-                            setActiveView(
-                                'grade'
-                            );
+                        
+                            setStudentInfo(prev => ({
+                                ...prev,
+                        
+                                courseCode:
+                                    activeSession.courseCode ||
+                                    prev.courseCode,
+                        
+                                year:
+                                    activeSession.year ||
+                                    prev.year,
+                        
+                                semester:
+                                    activeSession.semester ||
+                                    prev.semester,
+                        
+                                program:
+                                    activeSession.program ||
+                                    prev.program,
+                            }));
+                        
+                            /*
+                             * Switching courses must not carry the previous
+                             * student's grading result into the new session.
+                             */
+                            setResult(null);
+                            setExaminerRemarks('');
+                            setHasUnsavedResult(false);
+                            setPendingHistoryRecord(null);
+                            setHistorySaveState('idle');
+                        
+                            setActiveView('grade');
                         }}
                         onLoadSessionFromFile={() =>
                             setShowOldSessionModal(
@@ -4150,7 +4179,7 @@ export default function App() {
                     )}
     
             <div className="flex-1 flex min-w-0 overflow-hidden">
-    
+            
                 <Sidebar
                     activeView={activeView}
                     onViewChange={setActiveView}
@@ -4170,11 +4199,11 @@ export default function App() {
                         setIsAutoMode(v => !v)
                     }
                 />
-    
+            
                 <main className="flex-1 flex overflow-hidden">
-    
+            
                     {activeView === 'dashboard' ? (
-    
+            
                         <PostsPage
                             history={history}
                             onGrade={() => {
@@ -4182,13 +4211,13 @@ export default function App() {
                                     setShowAuth(true);
                                     return;
                                 }
-    
+            
                                 setActiveView('grade');
                             }}
                         />
-    
+            
                     ) : activeView === 'history' ? (
-    
+            
                         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
                             <HistoryPanel
                                 history={history}
@@ -4199,9 +4228,9 @@ export default function App() {
                                 onSessionsChanged={setSessions}
                             />
                         </div>
-    
+            
                     ) : activeView === 'remark' ? (
-    
+            
                         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
                             <RemarkPanel
                                 remarks={examinerRemarks}
@@ -4210,9 +4239,9 @@ export default function App() {
                                 studentName={studentInfo.name}
                             />
                         </div>
-    
+            
                     ) : (
-    
+            
                         <>
                             <div
                                 className={`${
@@ -4221,9 +4250,10 @@ export default function App() {
                                         : 'flex-[3] p-4'
                                 } flex flex-col gap-4 overflow-hidden`}
                             >
-    
+            
                                 {semesterCourse && !isMaximized && (
                                     <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
+            
                                         <CloudSaveStatus
                                             state={sessionSaveState}
                                             onRetry={() => {
@@ -4233,9 +4263,9 @@ export default function App() {
                                             }}
                                             label="Session"
                                         />
-    
+            
                                         <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
-
+            
                                         <span className="text-[10px] font-black text-accent-blue uppercase tracking-wider">
                                             Session: {
                                                 semesterCourse.customName ||
@@ -4244,26 +4274,133 @@ export default function App() {
                                                 'Session'
                                             }
                                         </span>
-
+            
                                         <span className="text-[10px] text-gray-500">
                                             • Course: {semesterCourse.courseCode}
                                         </span>
-
+            
+                                        {sessionSaveState === 'saving' && (
+                                            <span className="text-[9px] text-gray-500">
+                                                Saving…
+                                            </span>
+                                        )}
+            
                                         <button
-                                            onClick={() =>
-                                                setSemesterCourse(null)
-                                            }
+                                            onClick={async () => {
+                                                /*
+                                                 * Clearing the active session must NOT
+                                                 * delete the workbook or any worksheets.
+                                                 *
+                                                 * We only remove the active worksheet
+                                                 * selection.
+                                                 */
+                                                const currentWorkbook =
+                                                    workbook;
+            
+                                                if (!currentWorkbook) {
+                                                    setSemesterCourse(null);
+                                                    setActiveSessionId(null);
+            
+                                                    localStorage.removeItem(
+                                                        'yaza_active_session_id'
+                                                    );
+            
+                                                    return;
+                                                }
+            
+                                                const clearedWorkbook: RedPenWorkbook = {
+                                                    ...currentWorkbook,
+                                                    activeSheetId: null,
+                                                    updatedAt:
+                                                        new Date().toISOString(),
+                                                };
+            
+                                                const locallySaved =
+                                                    writeLocalWorkbook(
+                                                        clearedWorkbook
+                                                    );
+            
+                                                setWorkbook(
+                                                    locallySaved
+                                                );
+            
+                                                setSemesterCourse(
+                                                    null
+                                                );
+            
+                                                setActiveSessionId(
+                                                    null
+                                                );
+            
+                                                localStorage.removeItem(
+                                                    'yaza_active_session_id'
+                                                );
+            
+                                                /*
+                                                 * Keep cloud state in sync when logged in.
+                                                 * A cloud failure must not destroy the
+                                                 * locally saved workbook.
+                                                 */
+                                                if (!token) {
+                                                    setSessionSaveState(
+                                                        'saved'
+                                                    );
+                                                    return;
+                                                }
+            
+                                                setSessionSaveState(
+                                                    'saving'
+                                                );
+            
+                                                try {
+                                                    const response =
+                                                        await saveCloudWorkbook(
+                                                            token,
+                                                            locallySaved
+                                                        );
+            
+                                                    const savedWorkbook =
+                                                        response.workbook;
+            
+                                                    setWorkbook(
+                                                        savedWorkbook
+                                                    );
+            
+                                                    setSessions(
+                                                        savedWorkbook.sheets.map(
+                                                            sheet =>
+                                                                normalizeSession(
+                                                                    sheet.course
+                                                                )
+                                                        )
+                                                    );
+            
+                                                    setSessionSaveState(
+                                                        'saved'
+                                                    );
+                                                }
+                                                catch (error) {
+                                                    console.error(
+                                                        'Failed to clear active session:',
+                                                        error
+                                                    );
+            
+                                                    setSessionSaveState(
+                                                        'error'
+                                                    );
+                                                }
+                                            }}
                                             className="ml-auto text-[9px] text-gray-600 hover:text-gray-400 uppercase font-bold tracking-wider transition-colors"
                                         >
                                             Clear
                                         </button>
-
+            
                                     </div>
                                 )}
-
+            
                                 {!isMaximized && (
                                     <div className="flex gap-4 min-h-[180px]">
-
+            
                                         <div className="w-[35%] shrink-0">
                                             <UploadZone
                                                 ref={schemeRef}
@@ -4284,42 +4421,65 @@ export default function App() {
                                                 }
                                             />
                                         </div>
-
+            
                                         <div className="flex-1">
                                             <StudentForm
                                                 info={studentInfo}
                                                 onChange={(nextInfo) => {
                                                     const sessionChanged =
-                                                        nextInfo.courseCode !== studentInfo.courseCode ||
-                                                        nextInfo.year !== studentInfo.year ||
-                                                        nextInfo.semester !== studentInfo.semester ||
-                                                        nextInfo.academicYear !== studentInfo.academicYear;
-                                            
-                                                    if (sessionChanged && hasUnsavedResult) {
-                                                        // StudentForm already presents its confirmation
-                                                        // dialog for course/semester/workbook changes.
-                                                        // Once that dialog confirms, this callback clears
-                                                        // the dirty state.
-                                                        setHasUnsavedResult(false);
+                                                        nextInfo.courseCode !==
+                                                            studentInfo.courseCode ||
+                                                        nextInfo.year !==
+                                                            studentInfo.year ||
+                                                        nextInfo.semester !==
+                                                            studentInfo.semester ||
+                                                        nextInfo.academicYear !==
+                                                            studentInfo.academicYear;
+            
+                                                    if (
+                                                        sessionChanged &&
+                                                        hasUnsavedResult
+                                                    ) {
+                                                        /*
+                                                         * StudentForm owns the
+                                                         * confirmation flow for
+                                                         * course/semester/workbook
+                                                         * changes.
+                                                         *
+                                                         * Once confirmed, the current
+                                                         * result is considered detached
+                                                         * from the new session.
+                                                         */
+                                                        setHasUnsavedResult(
+                                                            false
+                                                        );
                                                     }
-                                            
-                                                    setStudentInfo(nextInfo);
+            
+                                                    setStudentInfo(
+                                                        nextInfo
+                                                    );
                                                 }}
                                                 courses={courses}
-                                                hasUnsavedResult={hasUnsavedResult}
-                                                onNewCourse={() => setShowNewCourseModal(true)}
+                                                hasUnsavedResult={
+                                                    hasUnsavedResult
+                                                }
+                                                onNewCourse={() =>
+                                                    setShowNewCourseModal(
+                                                        true
+                                                    )
+                                                }
                                             />
                                         </div>
-
+            
                                     </div>
                                 )}
-
+            
                                 <div className="flex-1 flex flex-col min-h-0 bg-card rounded-3xl border border-gray-800 shadow-xl relative overflow-hidden">
-
+            
                                     <div className="h-10 border-b border-gray-800/50 flex items-center justify-between px-4 bg-sidebar/20">
-
+            
                                         <div className="flex gap-0.5">
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4335,12 +4495,12 @@ export default function App() {
                                                 }`}
                                             >
                                                 <Hand size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Pan
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4356,12 +4516,12 @@ export default function App() {
                                                 }`}
                                             >
                                                 <PenIcon size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Pen
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4377,12 +4537,12 @@ export default function App() {
                                                 }`}
                                             >
                                                 <Type size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Text
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4398,12 +4558,12 @@ export default function App() {
                                                 }`}
                                             >
                                                 <Square size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Shape
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4419,14 +4579,14 @@ export default function App() {
                                                 }`}
                                             >
                                                 <Eraser size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Clear (click to erase)
                                                 </span>
                                             </button>
-
+            
                                             <div className="w-px h-5 bg-gray-800/50 mx-1 self-center" />
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4442,12 +4602,12 @@ export default function App() {
                                                 }`}
                                             >
                                                 <Check size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Right Mark
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     setActiveTool(
@@ -4463,14 +4623,14 @@ export default function App() {
                                                 }`}
                                             >
                                                 <X size={14} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Wrong Mark
                                                 </span>
                                             </button>
-
+            
                                             <div className="w-px h-5 bg-gray-800/50 mx-1 self-center" />
-
+            
                                             <button
                                                 onClick={() =>
                                                     paperCanvasRef.current?.undo()
@@ -4478,12 +4638,12 @@ export default function App() {
                                                 className="relative w-8 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                             >
                                                 <Undo2 size={13} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Undo
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     paperCanvasRef.current?.redo()
@@ -4491,12 +4651,12 @@ export default function App() {
                                                 className="relative w-8 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                             >
                                                 <Redo2 size={13} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Redo
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
                                                     paperCanvasRef.current?.restart()
@@ -4504,21 +4664,21 @@ export default function App() {
                                                 className="relative w-8 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                             >
                                                 <RotateCcw size={13} />
-
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     Restart
                                                 </span>
                                             </button>
-
+            
                                         </div>
-
+            
                                         {studentPaper && (
                                             <div className="flex items-center gap-1 border-x border-gray-800/50 px-2 mx-1">
-
+            
                                                 <span className="text-[9px] text-gray-500 font-mono mr-1 w-10 text-center">
                                                     {Math.round(zoom * 100)}%
                                                 </span>
-
+            
                                                 <button
                                                     onClick={() =>
                                                         setZoom(z =>
@@ -4531,12 +4691,12 @@ export default function App() {
                                                     className="relative w-7 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                                 >
                                                     <ZoomOut size={13} />
-
+            
                                                     <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                         Zoom Out
                                                     </span>
                                                 </button>
-
+            
                                                 <button
                                                     onClick={() =>
                                                         setZoom(z =>
@@ -4549,43 +4709,45 @@ export default function App() {
                                                     className="relative w-7 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                                 >
                                                     <ZoomIn size={13} />
-
-                                                    <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
+            
+                                                    <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-20">
                                                         Zoom In
                                                     </span>
                                                 </button>
-
+            
                                                 <button
-                                                    onClick={() => setZoom(1)}
+                                                    onClick={() =>
+                                                        setZoom(1)
+                                                    }
                                                     className="relative w-7 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-gray-800 hover:text-gray-300"
                                                 >
                                                     <span className="text-[10px] font-bold">
                                                         1:1
                                                     </span>
-
-                                                    <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
+            
+                                                    <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-20">
                                                         Fit to width
                                                     </span>
                                                 </button>
-
+            
                                             </div>
                                         )}
-
+            
                                         {!markingScheme && studentPaper && (
                                             <div className="flex items-center gap-1.5 px-2 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                                                 <AlertTriangle
                                                     size={10}
                                                     className="text-yellow-500"
                                                 />
-
+            
                                                 <span className="text-[9px] font-bold text-yellow-500/80">
                                                     No scheme — AI uses general criteria
                                                 </span>
                                             </div>
                                         )}
-
+            
                                         <div className="flex gap-0.5">
-
+            
                                             {studentPaper && (
                                                 <button
                                                     onClick={() =>
@@ -4594,22 +4756,26 @@ export default function App() {
                                                     className="relative w-8 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-accent-blue/20 hover:text-accent-blue"
                                                 >
                                                     <Upload size={14} />
-
+            
                                                     <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                         Change
                                                     </span>
                                                 </button>
                                             )}
-
-                                            {/* Grading method selector */}
+            
                                             <button
                                                 onClick={() => {
-                                                    if (!studentPaper || isAutoMode) {
+                                                    if (
+                                                        !studentPaper ||
+                                                        isAutoMode
+                                                    ) {
                                                         return;
                                                     }
-                                            
+            
                                                     handleMarkingModeChange(
-                                                        markingMode === 'ai' ? 'self' : 'ai'
+                                                        markingMode === 'ai'
+                                                            ? 'self'
+                                                            : 'ai'
                                                     );
                                                 }}
                                                 className={`relative w-8 h-7 flex items-center justify-center rounded transition-all group ${
@@ -4620,23 +4786,20 @@ export default function App() {
                                                         : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
                                                 }`}
                                             >
-                                                {markingMode === 'self' ? (
-                                                    <FileCheck size={14} />
-                                                ) : (
-                                                    <FileCheck size={14} />
-                                                )}
-
+                                                <FileCheck size={14} />
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     {markingMode === 'self'
                                                         ? 'Manual Grading'
-                                                        : 'AI Grading'
-                                                    }
+                                                        : 'AI Grading'}
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
-                                                    setIsMaximized(!isMaximized)
+                                                    setIsMaximized(
+                                                        !isMaximized
+                                                    )
                                                 }
                                                 className={`relative w-8 h-7 flex items-center justify-center rounded transition-all group ${
                                                     isMaximized
@@ -4644,22 +4807,24 @@ export default function App() {
                                                         : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
                                                 }`}
                                             >
-                                                {isMaximized
-                                                    ? <Minimize2 size={14} />
-                                                    : <Maximize2 size={14} />
-                                                }
-
+                                                {isMaximized ? (
+                                                    <Minimize2 size={14} />
+                                                ) : (
+                                                    <Maximize2 size={14} />
+                                                )}
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     {isMaximized
                                                         ? 'Minimize'
-                                                        : 'Maximize'
-                                                    }
+                                                        : 'Maximize'}
                                                 </span>
                                             </button>
-
+            
                                             <button
                                                 onClick={() =>
-                                                    setShowToolOptions(!showToolOptions)
+                                                    setShowToolOptions(
+                                                        !showToolOptions
+                                                    )
                                                 }
                                                 className={`relative w-8 h-7 flex items-center justify-center rounded transition-all group ${
                                                     showToolOptions
@@ -4667,22 +4832,22 @@ export default function App() {
                                                         : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
                                                 }`}
                                             >
-                                                {showToolOptions
-                                                    ? <ChevronLeft size={14} />
-                                                    : <ChevronRight size={14} />
-                                                }
-
+                                                {showToolOptions ? (
+                                                    <ChevronLeft size={14} />
+                                                ) : (
+                                                    <ChevronRight size={14} />
+                                                )}
+            
                                                 <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
                                                     {showToolOptions
                                                         ? 'Hide Options'
-                                                        : 'Show Options'
-                                                    }
+                                                        : 'Show Options'}
                                                 </span>
                                             </button>
-
+            
                                         </div>
                                     </div>
-
+            
                                     {showToolOptions &&
                                         activeTool &&
                                         (
@@ -4694,7 +4859,7 @@ export default function App() {
                                             activeTool === 'mark-wrong'
                                         ) && (
                                             <div className="absolute top-10 left-0 right-0 z-10 px-4 py-3 bg-card border-b border-gray-800/50 bg-sidebar/10 transition-all">
-
+            
                                                 <ToolOptionsBar
                                                     activeTool={activeTool}
                                                     penColor={penColor}
@@ -4705,78 +4870,162 @@ export default function App() {
                                                     textColor={textColor}
                                                     textSize={textSize}
                                                     textFont={textFont}
-                                                    markingMode={markingModeSetting}
+                                                    markingMode={
+                                                        markingModeSetting
+                                                    }
                                                     markSize={markSize}
-                                                    markThickness={markThickness}
-                                                    onPenColorChange={setPenColor}
-                                                    onPenSizeChange={setPenSize}
-                                                    onShapeColorChange={setShapeColor}
-                                                    onShapeSizeChange={setShapeSize}
-                                                    onShapeTypeChange={setShapeType}
-                                                    onTextColorChange={setTextColor}
-                                                    onTextSizeChange={setTextSize}
-                                                    onTextFontChange={setTextFont}
-                                                    onMarkingModeChange={setMarkingModeSetting}
-                                                    onMarkSizeChange={setMarkSize}
-                                                    onMarkThicknessChange={setMarkThickness}
-                                                    onInteraction={handleToolOptionInteraction}
+                                                    markThickness={
+                                                        markThickness
+                                                    }
+                                                    onPenColorChange={
+                                                        setPenColor
+                                                    }
+                                                    onPenSizeChange={
+                                                        setPenSize
+                                                    }
+                                                    onShapeColorChange={
+                                                        setShapeColor
+                                                    }
+                                                    onShapeSizeChange={
+                                                        setShapeSize
+                                                    }
+                                                    onShapeTypeChange={
+                                                        setShapeType
+                                                    }
+                                                    onTextColorChange={
+                                                        setTextColor
+                                                    }
+                                                    onTextSizeChange={
+                                                        setTextSize
+                                                    }
+                                                    onTextFontChange={
+                                                        setTextFont
+                                                    }
+                                                    onMarkingModeChange={
+                                                        setMarkingModeSetting
+                                                    }
+                                                    onMarkSizeChange={
+                                                        setMarkSize
+                                                    }
+                                                    onMarkThicknessChange={
+                                                        setMarkThickness
+                                                    }
+                                                    onInteraction={
+                                                        handleToolOptionInteraction
+                                                    }
                                                 />
-
+            
                                             </div>
                                         )}
-
+            
                                     <div className="flex-1 p-4 flex flex-col transition-all overflow-hidden">
-
+            
                                         {studentPaper ? (
+            
                                             <PaperCanvas
                                                 ref={paperCanvasRef}
-                                                paperBase64={studentPaper.base64}
-                                                activeTool={activeTool}
-                                                clearCount={clearCount}
+                                                paperBase64={
+                                                    studentPaper.base64
+                                                }
+                                                activeTool={
+                                                    activeTool
+                                                }
+                                                clearCount={
+                                                    clearCount
+                                                }
                                                 showOverlay={
                                                     markingMode === 'ai' ||
                                                     markingMode === 'self'
                                                 }
-                                                markingMode={markingMode}
+                                                markingMode={
+                                                    markingMode
+                                                }
                                                 zoom={zoom}
-                                                onZoomChange={setZoom}
-                                                isMaximized={isMaximized}
-                                                penColor={penColor}
-                                                penSize={penSize}
-                                                shapeColor={shapeColor}
-                                                shapeSize={shapeSize}
-                                                shapeType={shapeType}
-                                                textColor={textColor}
-                                                textSize={textSize}
-                                                textFont={textFont}
-                                                markingModeSetting={markingModeSetting}
-                                                markSize={markSize}
-                                                markThickness={markThickness}
+                                                onZoomChange={
+                                                    setZoom
+                                                }
+                                                isMaximized={
+                                                    isMaximized
+                                                }
+                                                penColor={
+                                                    penColor
+                                                }
+                                                penSize={
+                                                    penSize
+                                                }
+                                                shapeColor={
+                                                    shapeColor
+                                                }
+                                                shapeSize={
+                                                    shapeSize
+                                                }
+                                                shapeType={
+                                                    shapeType
+                                                }
+                                                textColor={
+                                                    textColor
+                                                }
+                                                textSize={
+                                                    textSize
+                                                }
+                                                textFont={
+                                                    textFont
+                                                }
+                                                markingModeSetting={
+                                                    markingModeSetting
+                                                }
+                                                markSize={
+                                                    markSize
+                                                }
+                                                markThickness={
+                                                    markThickness
+                                                }
                                             />
+            
                                         ) : (
+            
                                             <UploadZone
                                                 ref={paperRef}
                                                 label="Student Answer Paper"
-                                                hasFile={!!studentPaper}
-                                                onUpload={handlePaperUpload}
-                                                fileName={undefined}
+                                                hasFile={
+                                                    !!studentPaper
+                                                }
+                                                onUpload={
+                                                    handlePaperUpload
+                                                }
+                                                fileName={
+                                                    undefined
+                                                }
                                                 description="Large Surface for Student Paper Upload"
                                                 variant="large"
                                                 onZoneClick={() =>
-                                                    openUploadModal('paper')
+                                                    openUploadModal(
+                                                        'paper'
+                                                    )
                                                 }
                                             />
+            
                                         )}
-
+            
                                     </div>
-
+            
                                     <div className="absolute bottom-6 right-6 flex flex-col gap-2 items-end">
-
+            
                                         <motion.button
-                                            whileHover={{ scale: 1.1, rotate: 5 }}
-                                            whileTap={{ scale: 0.9 }}
-                                            onClick={handleGrade}
-                                            disabled={loading || !studentPaper}
+                                            whileHover={{
+                                                scale: 1.1,
+                                                rotate: 5
+                                            }}
+                                            whileTap={{
+                                                scale: 0.9
+                                            }}
+                                            onClick={
+                                                handleGrade
+                                            }
+                                            disabled={
+                                                loading ||
+                                                !studentPaper
+                                            }
                                             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl text-white disabled:grayscale disabled:opacity-50 transition-colors ${
                                                 !markingScheme &&
                                                 studentPaper &&
@@ -4794,12 +5043,12 @@ export default function App() {
                                                 />
                                             )}
                                         </motion.button>
-
+            
                                     </div>
-
+            
                                 </div>
                             </div>
-
+            
                             <div
                                 className={`${
                                     isMaximized
@@ -4808,21 +5057,35 @@ export default function App() {
                                 } p-4 shrink-0 overflow-hidden`}
                             >
                                 <div className="flex items-center justify-end px-2 pb-1">
+            
                                     <CloudSaveStatus
-                                        state={historySaveState}
-                                        onRetry={retryHistorySave}
+                                        state={
+                                            historySaveState
+                                        }
+                                        onRetry={
+                                            retryHistorySave
+                                        }
                                         label="Result"
                                     />
+            
                                 </div>
+            
                                 <ResultsPanel
                                     result={result}
                                     loading={loading}
                                     onPrint={handlePrint}
                                     onSave={handleSave}
                                     isSaving={isSaving}
-                                    onResultChange={(nextResult) => {
-                                        setResult(nextResult);
-                                        setHasUnsavedResult(true);
+                                    onResultChange={(
+                                        nextResult
+                                    ) => {
+                                        setResult(
+                                            nextResult
+                                        );
+            
+                                        setHasUnsavedResult(
+                                            true
+                                        );
                                     }}
                                 />
                             </div>
