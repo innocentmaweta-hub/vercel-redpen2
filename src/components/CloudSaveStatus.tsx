@@ -9,55 +9,15 @@ interface Props {
   label?: string;
 }
 
-export const CloudSaveStatus = ({ state, onRetry, label = 'Session' }: Props) => {
+export const CloudSaveStatus = ({ state, onRetry, label = 'Workbook' }: Props) => {
   const [dismissed, setDismissed] = useState(false);
 
-  // A new save state should make the status visible again.
-  useEffect(() => {
-    setDismissed(false);
-  }, [state]);
-
+  useEffect(() => setDismissed(false), [state]);
   if (state === 'idle' || dismissed) return null;
 
-  if (state === 'saving') {
-    return (
-      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-blue/10 border border-accent-blue/20 text-[9px] font-bold text-accent-blue">
-        <Loader2 size={11} className="animate-spin" />
-        Saving…
-      </div>
-    );
-  }
+  if (state === 'saving') return <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-blue/10 border border-accent-blue/20 text-[9px] font-bold text-accent-blue"><Loader2 size={11} className="animate-spin" />Saving…</div>;
 
-  if (state === 'saved') {
-    return (
-      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-green/10 border border-accent-green/20 text-[9px] font-bold text-accent-green">
-        <Check size={11} />
-        Saved
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          aria-label={`Clear ${label.toLowerCase()} saved status`}
-          title="Clear"
-          className="ml-0.5 inline-flex items-center justify-center rounded p-0.5 text-accent-green/70 hover:bg-accent-green/20 hover:text-accent-green transition-colors"
-        >
-          <X size={10} />
-        </button>
-      </div>
-    );
-  }
+  if (state === 'saved') return <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-green/10 border border-accent-green/20 text-[9px] font-bold text-accent-green"><Check size={11} />Saved<button type="button" onClick={() => setDismissed(true)} aria-label={`Clear ${label.toLowerCase()} saved status`} title="Clear" className="ml-0.5 inline-flex items-center justify-center rounded p-0.5 text-accent-green/70 hover:bg-accent-green/20 hover:text-accent-green"><X size={10} /></button></div>;
 
-  return (
-    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-[9px] font-bold text-red-400">
-      <CloudOff size={11} />
-      {label} failed
-      <button
-        type="button"
-        onClick={onRetry}
-        className="ml-0.5 inline-flex items-center gap-1 hover:text-white underline"
-      >
-        <RotateCcw size={9} />
-        Retry
-      </button>
-    </div>
-  );
+  return <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-[9px] font-bold text-red-400"><CloudOff size={11} />{label} failed<button type="button" onClick={onRetry} className="ml-0.5 inline-flex items-center gap-1 hover:text-white underline"><RotateCcw size={9} />Retry</button></div>;
 };
