@@ -97,7 +97,10 @@ import {
 
 import { writeFileToFolder } from './lib/fileStorage';
 
-import type { RedPenWorkbook } from './types/workbook';
+import type {
+    RedPenWorkbook,
+    RedPenWorksheet
+} from './types/workbook';
 
 import {
     createWorkbook,
@@ -668,6 +671,10 @@ export default function App() {
             worksheet.id
         );
 
+        syncStudentInfoFromWorksheet(
+            activeWorksheet || worksheet
+        );
+
         localStorage.setItem(
             'yaza_active_session_id',
             activeWorksheet?.id ||
@@ -746,6 +753,10 @@ export default function App() {
 
                 setActiveSessionId(
                     cloudActiveWorksheet.id
+                );
+
+                syncStudentInfoFromWorksheet(
+                    cloudActiveWorksheet
                 );
 
                 localStorage.setItem(
