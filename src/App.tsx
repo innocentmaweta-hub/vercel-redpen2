@@ -67,6 +67,7 @@ import {
     Eraser,
     Upload,
     FileCheck,
+    Trash2,
     FileX,
     Maximize2,
     Minimize2,
@@ -97,7 +98,10 @@ import {
 
 import { writeFileToFolder } from './lib/fileStorage';
 
-import type { RedPenWorkbook } from './types/workbook';
+import type {
+    RedPenWorkbook,
+    RedPenWorksheet
+} from './types/workbook';
 
 import {
     createWorkbook,
@@ -121,6 +125,25 @@ export default function App() {
         courseCode: '',
         examDate: ''
     });
+    const syncStudentInfoFromWorksheet = (
+        worksheet: RedPenWorksheet | null
+    ) => {
+        if (!worksheet) return;
+    
+        setStudentInfo(prev => ({
+            ...prev,
+    
+            // Course/session metadata
+            courseCode: worksheet.course?.courseCode || '',
+            year: worksheet.course?.year || '',
+            semester: worksheet.course?.semester || '',
+            academicYear: worksheet.course?.academicYear || '',
+    
+            // Program of Study is NOT the course name.
+            // Keep the user's actual program value.
+            program: worksheet.course?.program || prev.program,
+        }));
+    };
 
     const [markingScheme, setMarkingScheme] = useState<{
         base64: string;
@@ -656,6 +679,10 @@ export default function App() {
             worksheet.id
         );
 
+        syncStudentInfoFromWorksheet(
+            activeWorksheet || worksheet
+        );
+
         localStorage.setItem(
             'yaza_active_session_id',
             activeWorksheet?.id ||
@@ -734,6 +761,10 @@ export default function App() {
 
                 setActiveSessionId(
                     cloudActiveWorksheet.id
+                );
+
+                syncStudentInfoFromWorksheet(
+                    cloudActiveWorksheet
                 );
 
                 localStorage.setItem(
@@ -1456,6 +1487,13 @@ export default function App() {
     
     const paperCanvasRef =
         useRef<PaperCanvasHandle>(null);
+    const handleClearStudentPaper = () => {
+        // Clear all canvas annotations/drawings.
+        paperCanvasRef.current?.clear();
+    
+        // Remove only the uploaded student paper.
+        setStudentPaper(null);
+    };
     
     const openUploadModal = (
         type: 'scheme' | 'paper'
@@ -1932,23 +1970,33 @@ export default function App() {
                     ) ===
                     sessionIdentityKey(session)
             );
-    
+        
         if (!worksheet) {
             return;
         }
-    
+        
         const updatedWorkbook =
             setActiveWorksheet(
                 workbook,
                 worksheet.id
             );
-    
+        
         const savedWorkbook =
             writeLocalWorkbook(
                 updatedWorkbook
             );
-    
+        
         setWorkbook(savedWorkbook);
+        
+        // Sync the Identity Panel with the newly active session
+        setStudentInfo(prev => ({
+            ...prev,
+            courseCode: worksheet.course?.courseCode || '',
+            program: worksheet.course?.courseName || '',
+            year: worksheet.course?.yearOfStudy || '',
+            semester: worksheet.course?.semester || '',
+            academicYear: worksheet.course?.academicYear || '',
+        }));
     
         setSemesterCourse(
             normalizeSession(
@@ -4233,6 +4281,16 @@ export default function App() {
                                 activeSession.id ||
                                 sessionIdentityKey(activeSession)
                             );
+
+                            // Sync Identity Panel with the newly created session
+                            setStudentInfo(prev => ({
+                                ...prev,
+                                courseCode: activeSession.courseCode || '',
+                                program: activeSession.program || prev.program,
+                                year: activeSession.year || '',
+                                semester: activeSession.semester || '',
+                                academicYear: activeSession.academicYear || '',
+                            }));
                         
                             setStudentInfo(prev => ({
                                 ...prev,
@@ -4949,15 +5007,13 @@ export default function App() {
             
                                             {studentPaper && (
                                                 <button
-                                                    onClick={() =>
-                                                        openUploadModal('paper')
-                                                    }
+                                                    onClick={handleClearStudentPaper}
                                                     className="relative w-8 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-accent-blue/20 hover:text-accent-blue"
                                                 >
-                                                    <Upload size={14} />
+                                                    <Trash2 size={14} />
             
                                                     <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
-                                                        Change
+                                                        Clear
                                                     </span>
                                                 </button>
                                             )}
