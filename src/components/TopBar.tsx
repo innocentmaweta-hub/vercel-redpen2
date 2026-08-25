@@ -49,9 +49,7 @@ function sessionTitle(session: SemesterCourse): string {
 }
 
 function sessionMeta(session: SemesterCourse): string {
-  return [session.courseCode, session.courseName, session.year, session.semester, session.academicYear]
-    .filter(Boolean)
-    .join(' · ');
+  return [session.courseCode, session.courseName, session.year, session.semester, session.academicYear].filter(Boolean).join(' · ');
 }
 
 function courseTitle(session: SemesterCourse): string {
@@ -60,123 +58,38 @@ function courseTitle(session: SemesterCourse): string {
 
 const Dropdown = ({ x, items, onClose, wide = false }: { x: number; items: DropdownItem[]; onClose: () => void; wide?: boolean }) => {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
     const timerId = setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    return () => {
-      clearTimeout(timerId);
-      document.removeEventListener('mousedown', handler);
-    };
+    return () => { clearTimeout(timerId); document.removeEventListener('mousedown', handler); };
   }, [onClose]);
-
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: -6, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -6, scale: 0.97 }}
-      transition={{ duration: 0.13 }}
-      style={{ position: 'fixed', top: 40, left: x, zIndex: 9999, minWidth: wide ? 280 : 220, maxWidth: wide ? 360 : undefined }}
-      className="bg-gray-950 border border-gray-800 rounded-xl shadow-2xl py-1 overflow-hidden"
-    >
-      {items.map((item, i) =>
-        item.divider ? (
-          <div key={i} className="my-1 border-t border-gray-800/70" />
-        ) : (
-          <button
-            key={i}
-            onClick={() => {
-              if (!item.disabled && item.action) {
-                item.action();
-                onClose();
-              }
-            }}
-            disabled={item.disabled}
-            className={`w-full text-left px-4 py-1.5 text-[11px] font-medium flex items-center justify-between transition-colors ${item.disabled
-              ? 'text-gray-700 cursor-not-allowed'
-              : item.active
-                ? 'text-accent-blue bg-accent-blue/10'
-                : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              }`}
-          >
-            <span className="truncate">{item.label}</span>
-            {item.active && <Check size={13} className="text-accent-blue shrink-0 ml-2" />}
-          </button>
-        )
-      )}
+    <motion.div ref={ref} initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.13 }} style={{ position: 'fixed', top: 40, left: x, zIndex: 9999, minWidth: wide ? 280 : 220, maxWidth: wide ? 360 : undefined }} className="bg-gray-950 border border-gray-800 rounded-xl shadow-2xl py-1 overflow-hidden">
+      {items.map((item, i) => item.divider ? <div key={i} className="my-1 border-t border-gray-800/70" /> : (
+        <button key={i} onClick={() => { if (!item.disabled && item.action) { item.action(); onClose(); } }} disabled={item.disabled} className={`w-full text-left px-4 py-1.5 text-[11px] font-medium flex items-center justify-between transition-colors ${item.disabled ? 'text-gray-700 cursor-not-allowed' : item.active ? 'text-accent-blue bg-accent-blue/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}>
+          <span className="truncate">{item.label}</span>{item.active && <Check size={13} className="text-accent-blue shrink-0 ml-2" />}
+        </button>
+      ))}
     </motion.div>
   );
 };
 
-interface SearchAction {
-  label: string;
-  icon: any;
-  action: () => void;
-}
+interface SearchAction { label: string; icon: any; action: () => void; }
 
-const SearchDropdown = ({ query, actions, historyResults, onSelectAction, onSelectHistory, onClose }: {
-  query: string;
-  actions: SearchAction[];
-  historyResults: HistoryRecord[];
-  onSelectAction: (action: SearchAction) => void;
-  onSelectHistory: (record: HistoryRecord) => void;
-  onClose: () => void;
-}) => {
+const SearchDropdown = ({ query, actions, historyResults, onSelectAction, onSelectHistory, onClose }: { query: string; actions: SearchAction[]; historyResults: HistoryRecord[]; onSelectAction: (action: SearchAction) => void; onSelectHistory: (record: HistoryRecord) => void; onClose: () => void; }) => {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
     const timerId = setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    return () => {
-      clearTimeout(timerId);
-      document.removeEventListener('mousedown', handler);
-    };
+    return () => { clearTimeout(timerId); document.removeEventListener('mousedown', handler); };
   }, [onClose]);
-
   const hasResults = actions.length > 0 || historyResults.length > 0;
-
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: -6, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -6, scale: 0.97 }}
-      transition={{ duration: 0.13 }}
-      className="absolute top-full left-0 right-0 mt-1 z-[9999] bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden max-h-[400px] overflow-y-auto"
-    >
-      {!hasResults ? (
-        <div className="px-4 py-6 text-center text-[11px] text-gray-600">No matches for "{query}"</div>
-      ) : (
-        <>
-          {actions.length > 0 && (
-            <div className="py-1.5">
-              <p className="px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600">Actions</p>
-              {actions.map((a, i) => (
-                <button key={i} onClick={() => onSelectAction(a)} className="w-full text-left px-4 py-1.5 text-[11px] font-medium flex items-center gap-2.5 text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
-                  <a.icon size={13} className="text-gray-500 shrink-0" />
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {historyResults.length > 0 && (
-            <div className="py-1.5 border-t border-gray-800/70">
-              <p className="px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600">History</p>
-              {historyResults.map((r) => (
-                <button key={r.id} onClick={() => onSelectHistory(r)} className="w-full text-left px-4 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
-                  <span className="text-[11px] font-medium truncate">{r.studentInfo?.name || 'Unnamed'}</span>
-                  <span className="text-[9px] text-gray-600 shrink-0 ml-2">{r.studentInfo?.courseCode || ''}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+    <motion.div ref={ref} initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.13 }} className="absolute top-full left-0 right-0 mt-1 z-[9999] bg-gray-950 border border-gray-800 rounded-xl shadow-2xl overflow-hidden max-h-[400px] overflow-y-auto">
+      {!hasResults ? <div className="px-4 py-6 text-center text-[11px] text-gray-600">No matches for "{query}"</div> : <>
+        {actions.length > 0 && <div className="py-1.5"><p className="px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600">Actions</p>{actions.map((a, i) => <button key={i} onClick={() => onSelectAction(a)} className="w-full text-left px-4 py-1.5 text-[11px] font-medium flex items-center gap-2.5 text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><a.icon size={13} className="text-gray-500 shrink-0" />{a.label}</button>)}</div>}
+        {historyResults.length > 0 && <div className="py-1.5 border-t border-gray-800/70"><p className="px-4 pb-1 text-[9px] font-black uppercase tracking-widest text-gray-600">History</p>{historyResults.map((r) => <button key={r.id} onClick={() => onSelectHistory(r)} className="w-full text-left px-4 py-1.5 flex items-center justify-between text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><span className="text-[11px] font-medium truncate">{r.studentInfo?.name || 'Unnamed'}</span><span className="text-[9px] text-gray-600 shrink-0 ml-2">{r.studentInfo?.courseCode || ''}</span></button>)}</div>}
+      </>}
     </motion.div>
   );
 };
@@ -184,267 +97,80 @@ const SearchDropdown = ({ query, actions, historyResults, onSelectAction, onSele
 const SettingsDropdown = ({ onClose }: { onClose: () => void }) => {
   const [status, setStatus] = useState<{ provider: string; model: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => setStatus({ provider: 'unknown', model: 'unknown' }));
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handler);
-    };
-  }, [onClose]);
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: -6, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -6, scale: 0.97 }}
-      transition={{ duration: 0.13 }}
-      style={{ position: 'fixed', top: 40, right: 120, zIndex: 9999, minWidth: 230 }}
-      className="bg-gray-950 border border-gray-800 rounded-xl shadow-2xl p-4"
-    >
-      <p className="text-[9px] uppercase font-black tracking-widest text-gray-600 mb-3">AI Provider</p>
-      {status ? (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between"><span className="text-[10px] text-gray-500 font-medium">Provider</span><span className="text-[10px] font-bold text-accent-green uppercase tracking-wider">{status.provider}</span></div>
-          <div className="flex items-center justify-between"><span className="text-[10px] text-gray-500 font-medium">Model</span><span className="text-[10px] font-bold text-gray-300 font-mono">{status.model}</span></div>
-        </div>
-      ) : <p className="text-[10px] text-gray-600">Loading…</p>}
-      <div className="mt-3 pt-3 border-t border-gray-800">
-        <p className="text-[9px] text-gray-700 leading-relaxed">Switch providers by editing <span className="text-gray-500 font-mono">.env</span> and restarting.</p>
-      </div>
-    </motion.div>
-  );
+  useEffect(() => { fetch('/api/status').then(r => r.json()).then(setStatus).catch(() => setStatus({ provider: 'unknown', model: 'unknown' })); }, []);
+  useEffect(() => { const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); }; const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0); return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); }; }, [onClose]);
+  return <motion.div ref={ref} initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }} transition={{ duration: 0.13 }} style={{ position: 'fixed', top: 40, right: 120, zIndex: 9999, minWidth: 230 }} className="bg-gray-950 border border-gray-800 rounded-xl shadow-2xl p-4"><p className="text-[9px] uppercase font-black tracking-widest text-gray-600 mb-3">AI Provider</p>{status ? <div className="space-y-2"><div className="flex items-center justify-between"><span className="text-[10px] text-gray-500 font-medium">Provider</span><span className="text-[10px] font-bold text-accent-green uppercase tracking-wider">{status.provider}</span></div><div className="flex items-center justify-between"><span className="text-[10px] text-gray-500 font-medium">Model</span><span className="text-[10px] font-bold text-gray-300 font-mono">{status.model}</span></div></div> : <p className="text-[10px] text-gray-600">Loading…</p>}<div className="mt-3 pt-3 border-t border-gray-800"><p className="text-[9px] text-gray-700 leading-relaxed">Switch providers by editing <span className="text-gray-500 font-mono">.env</span> and restarting.</p></div></motion.div>;
 };
 
-export const TopBar = ({
-  sessions, activeSession, onSelectSession, onLoadSessionFromFile,
-  onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint,
-  onClearResult, onRefresh, onSettings, onBatch, hasResult, studentInfo,
-  onStudentInfoUpdate, history, onShowOldSessions, onSearchTermChange,
-  isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen,
-  onViewChange, onProfile, onLoadRecord
-}: TopBarProps) => {
+export const TopBar = ({ sessions, activeSession, onSelectSession, onLoadSessionFromFile, onNew, onNewCourse, onNewSession, onNewPaper, onSave, onPrint, onClearResult, onRefresh, onSettings, onBatch, hasResult, studentInfo, onStudentInfoUpdate, history, onShowOldSessions, onSearchTermChange, isLoggedIn, onLogin, onLogout, onToggleYaza, isYazaOpen, onViewChange, onProfile, onLoadRecord }: TopBarProps) => {
   const [activeMenu, setActiveMenu] = useState<{ name: string; x: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-
-  useEffect(() => {
-    const handler = () => onShowOldSessions();
-    window.addEventListener('redpen:open-load-session', handler);
-    return () => window.removeEventListener('redpen:open-load-session', handler);
-  }, [onShowOldSessions]);
-
-  useEffect(() => {
-    const handler = () => onBatch();
-    window.addEventListener('redpen:open-batch', handler);
-    return () => window.removeEventListener('redpen:open-batch', handler);
-  }, [onBatch]);
-
-  useEffect(() => {
-    document.documentElement.dataset.redpenSessionActive = activeSession ? 'true' : 'false';
-    return () => {
-      delete document.documentElement.dataset.redpenSessionActive;
-    };
-  }, [activeSession]);
-
-  const handleMenuClick = (name: string, e: React.MouseEvent<HTMLButtonElement>) => {
-    if (activeMenu?.name === name) { setActiveMenu(null); return; }
-    setShowSettings(false);
-    const rect = e.currentTarget.getBoundingClientRect();
-    setActiveMenu({ name, x: rect.left });
-  };
-
+  useEffect(() => { const handler = () => onShowOldSessions(); window.addEventListener('redpen:open-load-session', handler); return () => window.removeEventListener('redpen:open-load-session', handler); }, [onShowOldSessions]);
+  useEffect(() => { const handler = () => onBatch(); window.addEventListener('redpen:open-batch', handler); return () => window.removeEventListener('redpen:open-batch', handler); }, [onBatch]);
+  useEffect(() => { document.documentElement.dataset.redpenSessionActive = activeSession ? 'true' : 'false'; return () => { delete document.documentElement.dataset.redpenSessionActive; }; }, [activeSession]);
+  const handleMenuClick = (name: string, e: React.MouseEvent<HTMLButtonElement>) => { if (activeMenu?.name === name) { setActiveMenu(null); return; } setShowSettings(false); const rect = e.currentTarget.getBoundingClientRect(); setActiveMenu({ name, x: rect.left }); };
   const closeMenu = useCallback(() => setActiveMenu(null), []);
-
   const allActions: SearchAction[] = [
-    { label: 'Dashboard', icon: LayoutGrid, action: () => onViewChange('dashboard') },
-    { label: 'Grade', icon: Zap, action: () => onViewChange('grade') },
-    { label: 'Remark', icon: PenLine, action: () => onViewChange('remark') },
-    { label: 'History', icon: HistoryIcon, action: () => onViewChange('history') },
-    { label: 'Profile', icon: User, action: onProfile },
-    { label: 'Save Results', icon: Save, action: onSave },
-    { label: 'Print Report', icon: Printer, action: onPrint },
-    { label: 'Settings', icon: SlidersHorizontal, action: onSettings },
-    { label: 'Batch Grading', icon: Layers, action: onBatch },
-    { label: 'Help', icon: HelpCircle, action: () => window.dispatchEvent(new Event('redpen:open-help')) },
-    { label: 'Refresh', icon: RotateCw, action: onRefresh },
-    { label: 'New Session', icon: BookOpen, action: onNewSession },
-    { label: 'New Course', icon: Plus, action: onNewCourse },
-    { label: 'New Paper', icon: FolderOpen, action: onNewPaper },
-    { label: 'Yaza AI', icon: Bot, action: onToggleYaza },
-    { label: isLoggedIn ? 'Logout' : 'Login', icon: isLoggedIn ? LogOut : LogIn, action: isLoggedIn ? onLogout : onLogin },
+    { label: 'Dashboard', icon: LayoutGrid, action: () => onViewChange('dashboard') }, { label: 'Grade', icon: Zap, action: () => onViewChange('grade') }, { label: 'Remark', icon: PenLine, action: () => onViewChange('remark') }, { label: 'History', icon: HistoryIcon, action: () => onViewChange('history') }, { label: 'Profile', icon: User, action: onProfile }, { label: 'Save Results', icon: Save, action: onSave }, { label: 'Print Report', icon: Printer, action: onPrint }, { label: 'Settings', icon: SlidersHorizontal, action: onSettings }, { label: 'Batch Grading', icon: Layers, action: onBatch }, { label: 'Help', icon: HelpCircle, action: () => window.dispatchEvent(new Event('redpen:open-help')) }, { label: 'Refresh', icon: RotateCw, action: onRefresh }, { label: 'New Session', icon: BookOpen, action: onNewSession }, { label: 'New Course', icon: Plus, action: onNewCourse }, { label: 'New Paper', icon: FolderOpen, action: onNewPaper }, { label: 'Yaza AI', icon: Bot, action: onToggleYaza }, { label: isLoggedIn ? 'Logout' : 'Login', icon: isLoggedIn ? LogOut : LogIn, action: isLoggedIn ? onLogout : onLogin },
   ];
-
-  const matchedActions = searchQuery.trim()
-    ? allActions.filter(a => a.label.toLowerCase().includes(searchQuery.trim().toLowerCase())).slice(0, 6)
-    : [];
-
-  const matchedHistory = searchQuery.trim()
-    ? history.filter(r => {
-        const q = searchQuery.trim().toLowerCase();
-        return r.studentInfo?.name?.toLowerCase().includes(q) || r.studentInfo?.regNo?.toLowerCase().includes(q) || r.studentInfo?.courseCode?.toLowerCase().includes(q);
-      }).slice(0, 6)
-    : [];
-
-  const handleSelectSearchAction = (a: SearchAction) => {
-    a.action();
-    setSearchQuery('');
-    setShowSearchResults(false);
-  };
-
-  const handleSelectSearchHistory = (r: HistoryRecord) => {
-    onLoadRecord(r);
-    onViewChange('grade');
-    setSearchQuery('');
-    setShowSearchResults(false);
-  };
-
-  // Session is the primary workbook/session switcher.
-  const sessionItems: DropdownItem[] = sessions.map(session => ({
-    label: `${sessionTitle(session)}${sessionMeta(session) ? ` · ${sessionMeta(session)}` : ''}`,
-    action: () => onSelectSession(session),
-    active: activeSession ? sessionIdentityKey(activeSession) === sessionIdentityKey(session) : false,
-  }));
-
+  const matchedActions = searchQuery.trim() ? allActions.filter(a => a.label.toLowerCase().includes(searchQuery.trim().toLowerCase())).slice(0, 6) : [];
+  const matchedHistory = searchQuery.trim() ? history.filter(r => { const q = searchQuery.trim().toLowerCase(); return r.studentInfo?.name?.toLowerCase().includes(q) || r.studentInfo?.regNo?.toLowerCase().includes(q) || r.studentInfo?.courseCode?.toLowerCase().includes(q); }).slice(0, 6) : [];
+  const handleSelectSearchAction = (a: SearchAction) => { a.action(); setSearchQuery(''); setShowSearchResults(false); };
+  const handleSelectSearchHistory = (r: HistoryRecord) => { onLoadRecord(r); onViewChange('grade'); setSearchQuery(''); setShowSearchResults(false); };
+  const sessionItems: DropdownItem[] = sessions.map(session => ({ label: `${sessionTitle(session)}${sessionMeta(session) ? ` · ${sessionMeta(session)}` : ''}`, action: () => onSelectSession(session), active: activeSession ? sessionIdentityKey(activeSession) === sessionIdentityKey(session) : false }));
   const sessionMenuItems: DropdownItem[] = [
     { label: 'Current Session', disabled: true },
-    ...(activeSession ? [{
-      label: `${sessionTitle(activeSession)}${sessionMeta(activeSession) ? ` · ${sessionMeta(activeSession)}` : ''}`,
-      disabled: true,
-      active: true,
-    }] : [{ label: 'No session selected', disabled: true }]),
-    { divider: true },
-    { label: 'Switch Session', disabled: true },
-    ...(sessionItems.length > 0 ? sessionItems : [{ label: 'No saved sessions yet', disabled: true }]),
-    { divider: true },
-    { label: 'New Session', action: onNewSession },
-    { label: 'Load Session from File', action: onLoadSessionFromFile },
+    ...(activeSession ? [{ label: `${sessionTitle(activeSession)}${sessionMeta(activeSession) ? ` · ${sessionMeta(activeSession)}` : ''}`, disabled: true, active: true }] : [{ label: 'No session selected', disabled: true }]),
+    { divider: true }, { label: 'Switch Session', disabled: true }, ...(sessionItems.length > 0 ? sessionItems : [{ label: 'No saved sessions yet', disabled: true }]), { divider: true }, { label: 'New Session', action: onNewSession }, { label: 'Load Session from File', action: onLoadSessionFromFile },
   ];
-
-  // Course intentionally mirrors the Session menu: it is a context switcher,
-  // not a direct studentInfo.courseCode field editor.
-  const uniqueCourseItems = Array.from(new Map(
-    sessions.map(session => [session.courseCode || session.customName || 'Unnamed course', session])
-  ).values()).map(session => ({
-    label: `${courseTitle(session)}${session.courseName ? ` · ${session.courseName}` : ''}`,
-    action: () => onSelectSession(session),
-    active: activeSession
-      ? sessionIdentityKey(activeSession) === sessionIdentityKey(session)
-      : false,
-  }));
-
+  const uniqueCourseItems = Array.from(new Map(sessions.map(session => [session.courseCode || session.customName || 'Unnamed course', session])).values()).map(session => ({ label: `${courseTitle(session)}${session.courseName ? ` · ${session.courseName}` : ''}`, action: () => onSelectSession(session), active: activeSession ? sessionIdentityKey(activeSession) === sessionIdentityKey(session) : false }));
   const courseMenuItems: DropdownItem[] = [
     { label: 'Current Course', disabled: true },
-    ...(activeSession ? [{
-      label: `${courseTitle(activeSession)}${activeSession.courseName ? ` · ${activeSession.courseName}` : ''}`,
-      disabled: true,
-      active: true,
-    }] : [{ label: 'No course selected', disabled: true }]),
-    { divider: true },
-    { label: 'Switch Course', disabled: true },
-    ...(uniqueCourseItems.length > 0 ? uniqueCourseItems : [{ label: 'No courses available yet', disabled: true }]),
-    { divider: true },
-    { label: 'New Course', action: onNewCourse },
+    ...(activeSession ? [{ label: `${courseTitle(activeSession)}${activeSession.courseName ? ` · ${activeSession.courseName}` : ''}`, disabled: true, active: true }] : [{ label: 'No course selected', disabled: true }]),
+    { divider: true }, { label: 'Switch Course', disabled: true }, ...(uniqueCourseItems.length > 0 ? uniqueCourseItems : [{ label: 'No courses available yet', disabled: true }]), { divider: true }, { label: 'New Course', action: onNewCourse },
   ];
 
+  // Student is deliberately a small context menu: it never changes Session or Course.
   const studentMenuItems: DropdownItem[] = [
-    { label: 'Student', disabled: true },
-    { label: studentInfo.name || 'No student selected', disabled: true },
+    { label: 'Current Student', disabled: true },
+    { label: studentInfo.name || 'No student entered', disabled: true },
     ...(studentInfo.regNo ? [{ label: `Reg: ${studentInfo.regNo}`, disabled: true }] : []),
-    ...(studentInfo.program ? [{ label: studentInfo.program, disabled: true }] : []),
-    ...(studentInfo.year || studentInfo.semester ? [{ label: [studentInfo.year, studentInfo.semester].filter(Boolean).join(' · '), disabled: true }] : []),
     { divider: true },
-    { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
+    { label: 'Switch Student', action: () => onViewChange('history') },
+    { label: 'New Student', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', examDate: '' }) },
   ];
-
   const menus: Record<string, DropdownItem[]> = {
-    File: [
-      { label: 'Save Results', action: onSave, disabled: !hasResult },
-      { divider: true },
-      { label: 'Save As...', action: onSave, disabled: !hasResult },
-      { label: 'Print Report', action: onPrint, disabled: !hasResult },
-    ],
-    Edit: [
-      { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
-      { label: 'Clear Results', action: onClearResult, disabled: !hasResult },
-      { divider: true },
-      { label: 'Reset All', action: onNew },
-    ],
+    File: [{ label: 'Save Results', action: onSave, disabled: !hasResult }, { divider: true }, { label: 'Save As...', action: onSave, disabled: !hasResult }, { label: 'Print Report', action: onPrint, disabled: !hasResult }],
+    Edit: [{ label: 'Clear Results', action: onClearResult, disabled: !hasResult }, { divider: true }, { label: 'Reset All', action: onNew }],
     Session: sessionMenuItems,
     Course: courseMenuItems,
     Placeholder: [{ label: 'Placeholder', disabled: true }],
     Student: studentMenuItems,
   };
-
   const menuNames = ['File', 'Edit', 'Session', 'Course', 'Placeholder', 'Student'];
-
   return (
     <div className="h-10 bg-sidebar border-b border-gray-800 flex items-center px-4 gap-4 select-none">
       <div className="flex items-center gap-1.5 shrink-0" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <img src={logo} alt="Logo" className="w-18 h-8 object-contain" />
         <div className="flex gap-0.5 text-[11px] font-medium text-gray-400 ml-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          {menuNames.map(name => (
-            <button key={name} onClick={(e) => handleMenuClick(name, e)} className={`px-2 py-1 rounded transition-colors ${activeMenu?.name === name ? 'text-white bg-white/10' : 'hover:text-white hover:bg-white/5'}`}>
-              {name}
-            </button>
-          ))}
+          {menuNames.map(name => <button key={name} onClick={(e) => handleMenuClick(name, e)} className={`px-2 py-1 rounded transition-colors ${activeMenu?.name === name ? 'text-white bg-white/10' : 'hover:text-white hover:bg-white/5'}`}>{name}</button>)}
         </div>
       </div>
-
-      <div className="flex-1 flex justify-center">
-        <div className="relative w-full max-w-lg" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <Search className="absolute left-3 top-1.5 text-gray-500" size={12} />
-          <input
-            type="text"
-            placeholder="Search actions, students, or courses"
-            value={searchQuery}
-            onChange={(e) => {
-              const value = e.target.value;
-              setSearchQuery(value);
-              onSearchTermChange(value);
-              setShowSearchResults(value.trim().length > 0);
-            }}
-            onFocus={() => { if (searchQuery.trim()) setShowSearchResults(true); }}
-            className="w-full bg-[#252526] border border-[#3e3e42] rounded-md py-1 pl-9 pr-3 text-[11px] focus:border-accent-blue focus:outline-none transition-all text-ink"
-          />
-          <AnimatePresence>
-            {showSearchResults && <SearchDropdown query={searchQuery} actions={matchedActions} historyResults={matchedHistory} onSelectAction={handleSelectSearchAction} onSelectHistory={handleSelectSearchHistory} onClose={() => setShowSearchResults(false)} />}
-          </AnimatePresence>
-        </div>
-      </div>
-
+      <div className="flex-1 flex justify-center"><div className="relative w-full max-w-lg" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <Search className="absolute left-3 top-1.5 text-gray-500" size={12} />
+        <input type="text" placeholder="Search actions, students, or courses" value={searchQuery} onChange={(e) => { const value = e.target.value; setSearchQuery(value); onSearchTermChange(value); setShowSearchResults(value.trim().length > 0); }} onFocus={() => { if (searchQuery.trim()) setShowSearchResults(true); }} className="w-full bg-[#252526] border border-[#3e3e42] rounded-md py-1 pl-9 pr-3 text-[11px] focus:border-accent-blue focus:outline-none transition-all text-ink" />
+        <AnimatePresence>{showSearchResults && <SearchDropdown query={searchQuery} actions={matchedActions} historyResults={matchedHistory} onSelectAction={handleSelectSearchAction} onSelectHistory={handleSelectSearchHistory} onClose={() => setShowSearchResults(false)} />}</AnimatePresence>
+      </div></div>
       <div className="flex items-center gap-2 shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <button onClick={isLoggedIn ? onLogout : onLogin} className="px-3 py-1 bg-gray-700 text-white text-[11px] font-bold rounded-md hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">
-          {isLoggedIn ? <LogOut size={12} /> : <LogIn size={12} />}
-          {isLoggedIn ? 'Logout' : 'Login'}
-        </button>
-        <button onClick={onToggleYaza} className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all duration-150 flex items-center gap-1.5 shadow-lg cursor-pointer ${isYazaOpen ? 'bg-accent-blue text-white scale-105 shadow-accent-blue/30' : 'bg-gray-700 text-white hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95'}`}>
-          <Bot size={12} /> Yaza AI
-        </button>
-        <button onClick={() => window.dispatchEvent(new Event('redpen:open-help'))} className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">
-          <HelpCircle size={12} /> Help
-        </button>
-        <button onClick={onRefresh} className="px-3 py-1 bg-yellow-600 text-white text-[11px] font-bold rounded-md hover:bg-yellow-500 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">
-          <RotateCw size={10} /> Refresh
-        </button>
-        <button onClick={onSettings} className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1 cursor-pointer">
-          <SlidersHorizontal size={10} /> Settings
-        </button>
+        <button onClick={isLoggedIn ? onLogout : onLogin} className="px-3 py-1 bg-gray-700 text-white text-[11px] font-bold rounded-md hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">{isLoggedIn ? <LogOut size={12} /> : <LogIn size={12} />}{isLoggedIn ? 'Logout' : 'Login'}</button>
+        <button onClick={onToggleYaza} className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all duration-150 flex items-center gap-1.5 shadow-lg cursor-pointer ${isYazaOpen ? 'bg-accent-blue text-white scale-105 shadow-accent-blue/30' : 'bg-gray-700 text-white hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95'}`}><Bot size={12} /> Yaza AI</button>
+        <button onClick={() => window.dispatchEvent(new Event('redpen:open-help'))} className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer"><HelpCircle size={12} /> Help</button>
+        <button onClick={onRefresh} className="px-3 py-1 bg-yellow-600 text-white text-[11px] font-bold rounded-md hover:bg-yellow-500 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer"><RotateCw size={10} /> Refresh</button>
+        <button onClick={onSettings} className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1 cursor-pointer"><SlidersHorizontal size={10} /> Settings</button>
       </div>
-
-      <AnimatePresence>
-        {activeMenu && <Dropdown key={activeMenu.name} x={activeMenu.x} items={menus[activeMenu.name]} onClose={closeMenu} wide={activeMenu.name === 'Session' || activeMenu.name === 'Course'} />}
-        {showSettings && <SettingsDropdown key="settings" onClose={() => setShowSettings(false)} />}
-      </AnimatePresence>
+      <AnimatePresence>{activeMenu && <Dropdown key={activeMenu.name} x={activeMenu.x} items={menus[activeMenu.name]} onClose={closeMenu} wide={activeMenu.name === 'Session' || activeMenu.name === 'Course'} />}{showSettings && <SettingsDropdown key="settings" onClose={() => setShowSettings(false)} />}</AnimatePresence>
     </div>
   );
 };
