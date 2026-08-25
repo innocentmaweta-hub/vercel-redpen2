@@ -747,9 +747,96 @@ export default function App() {
         token,
     ]);
 
+    /*
+     * Persist the complete workbook.
+     *
+     * Workbook-level operations use this function.
+     * Local storage is updated first, then the workbook is synced
+     * to the cloud when the user is authenticated.
+     */
+    const persistWorkbook = useCallback(
+        async (
+            nextWorkbook: RedPenWorkbook
+        ): Promise<RedPenWorkbook> => {
+            const savedLocalWorkbook =
+                writeLocalWorkbook(
+                    nextWorkbook
+                );
+    
+            setWorkbook(
+                savedLocalWorkbook
+            );
+    
+            setSessions(
+                savedLocalWorkbook.sheets.map(
+                    sheet =>
+                        normalizeSession(
+                            sheet.course
+                        )
+                )
+            );
+    
+            if (!token) {
+                setSessionSaveState('saved');
+    
+                return savedLocalWorkbook;
+            }
+    
+            setSessionSaveState('saving');
+    
+            try {
+                const cloudWorkbook =
+                    await saveCloudWorkbook(
+                        token,
+                        savedLocalWorkbook
+                    );
+    
+                const savedCloudWorkbook =
+                    writeLocalWorkbook(
+                        cloudWorkbook
+                    );
+    
+                setWorkbook(
+                    savedCloudWorkbook
+                );
+    
+                setSessions(
+                    savedCloudWorkbook.sheets.map(
+                        sheet =>
+                            normalizeSession(
+                                sheet.course
+                            )
+                    )
+                );
+    
+                setSessionSaveState('saved');
+    
+                return savedCloudWorkbook;
+            }
+            catch (error) {
+                console.error(
+                    'Failed to persist workbook:',
+                    error
+                );
+    
+                /*
+                 * The local workbook has already been saved.
+                 * Keep it available even when cloud sync fails.
+                 */
+                setSessionSaveState('error');
+    
+                return savedLocalWorkbook;
+            }
+        },
+        [
+            token,
+        ]
+    );
+    
     /**
      * Retry saving a grading-history record that previously failed.
      */
+    const retryHistorySave = useCallback(async () => {
     const retryHistorySave = useCallback(async () => {
         if (!pendingHistoryRecord || !token) {
             return;
