@@ -13,6 +13,8 @@ import { ActiveView, User as UserType } from '../types';
 interface SidebarProps {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
+  // Kept optional for App.tsx compatibility. Save is no longer rendered here.
+  onSave?: () => void;
   onHelp: () => void;
   hasResult: boolean;
   user: UserType | null;
@@ -127,8 +129,8 @@ export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, isA
         <SidebarItem
           icon={FileText}
           label="Results"
-          active={activeView === 'results'}
-          onClick={() => onViewChange('results')}
+          active={activeView === 'remark'}
+          onClick={() => onViewChange('remark')}
           onTooltip={setTooltip}
         />
         <div className="w-8 h-px bg-gray-800/50 my-1.5" />
