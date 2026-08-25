@@ -1486,6 +1486,13 @@ export default function App() {
     
     const paperCanvasRef =
         useRef<PaperCanvasHandle>(null);
+    const handleClearStudentPaper = () => {
+        // Clear all canvas annotations/drawings.
+        paperCanvasRef.current?.clear();
+    
+        // Remove only the uploaded student paper.
+        setStudentPaper(null);
+    };
     
     const openUploadModal = (
         type: 'scheme' | 'paper'
@@ -4999,15 +5006,13 @@ export default function App() {
             
                                             {studentPaper && (
                                                 <button
-                                                    onClick={() =>
-                                                        openUploadModal('paper')
-                                                    }
+                                                    onClick={handleClearStudentPaper}
                                                     className="relative w-8 h-7 flex items-center justify-center rounded transition-all group text-gray-500 hover:bg-accent-blue/20 hover:text-accent-blue"
                                                 >
                                                     <Upload size={14} />
             
                                                     <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] bg-gray-900 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none z-20">
-                                                        Change
+                                                        Clear
                                                     </span>
                                                 </button>
                                             )}
