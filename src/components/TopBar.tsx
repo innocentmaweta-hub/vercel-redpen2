@@ -132,6 +132,7 @@ export const TopBar = ({ sessions, activeSession, onSelectSession, onLoadSession
     { divider: true }, { label: 'Switch Course', disabled: true }, ...(uniqueCourseItems.length > 0 ? uniqueCourseItems : [{ label: 'No courses available yet', disabled: true }]), { divider: true }, { label: 'New Course', action: onNewCourse },
   ];
 
+  // Student context. New Student resets the complete student workspace (paper + result + details) but preserves course/reference.
   const studentMenuItems: DropdownItem[] = [
     { label: 'Current Student', disabled: true },
     { label: studentInfo.name || 'No student entered', disabled: true },
@@ -145,7 +146,11 @@ export const TopBar = ({ sessions, activeSession, onSelectSession, onLoadSession
           onShowOldSessions();
           return;
         }
-        onStudentInfoUpdate({ name: '', regNo: '', program: '', examDate: '' });
+
+        // onNewPaper clears the student paper, grading result, annotations and student identity fields,
+        // while deliberately preserving the active course and its reference/marking scheme.
+        onNewPaper();
+        onStudentInfoUpdate({ examDate: '' });
       },
     },
   ];
