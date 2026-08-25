@@ -4463,7 +4463,7 @@ export default function App() {
             
                 <Sidebar
                     activeView={activeView}
-                    onViewChange={setActiveView}
+                    onViewChange={handleViewChange}
                     onSave={handleSave}
                     onHelp={() => setShowHelp(true)}
                     hasResult={!!result}
