@@ -1887,6 +1887,11 @@ export default function App() {
      * - annotations
      */
     const handleNewPaper = () => {
+        if (!semesterCourse || !activeSessionId) {
+            setPendingGradeNavigation(true);
+            setShowOldSessionModal(true);
+            return;
+        }
         if (
             result ||
             studentPaper
