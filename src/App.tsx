@@ -121,6 +121,18 @@ export default function App() {
         courseCode: '',
         examDate: ''
     });
+    const syncStudentInfoFromWorksheet = (worksheet: RedPenWorksheet | null) => {
+      if (!worksheet) return;
+    
+      setStudentInfo(prev => ({
+        ...prev,
+        courseCode: worksheet.course?.courseCode || '',
+        program: worksheet.course?.courseName || '',
+        year: worksheet.course?.yearOfStudy || '',
+        semester: worksheet.course?.semester || '',
+        academicYear: worksheet.course?.academicYear || '',
+      }));
+    };
 
     const [markingScheme, setMarkingScheme] = useState<{
         base64: string;
@@ -1932,23 +1944,33 @@ export default function App() {
                     ) ===
                     sessionIdentityKey(session)
             );
-    
+        
         if (!worksheet) {
             return;
         }
-    
+        
         const updatedWorkbook =
             setActiveWorksheet(
                 workbook,
                 worksheet.id
             );
-    
+        
         const savedWorkbook =
             writeLocalWorkbook(
                 updatedWorkbook
             );
-    
+        
         setWorkbook(savedWorkbook);
+        
+        // Sync the Identity Panel with the newly active session
+        setStudentInfo(prev => ({
+            ...prev,
+            courseCode: worksheet.course?.courseCode || '',
+            program: worksheet.course?.courseName || '',
+            year: worksheet.course?.yearOfStudy || '',
+            semester: worksheet.course?.semester || '',
+            academicYear: worksheet.course?.academicYear || '',
+        }));
     
         setSemesterCourse(
             normalizeSession(
