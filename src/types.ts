@@ -50,7 +50,7 @@ export interface HistoryRecord {
     studentInfo: StudentInfo;
     result: GradingResult;
 }
-export type ActiveView = 'dashboard' | 'grade' | 'remark' | 'history';
+export type ActiveView = 'dashboard' | 'grade' | 'results' | 'remark' | 'history';
 export type SubscriptionTier = 'free' | 'personal' | 'corporate';
 export interface User {
     id: string;
