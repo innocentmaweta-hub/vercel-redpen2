@@ -837,7 +837,6 @@ export default function App() {
      * Retry saving a grading-history record that previously failed.
      */
     const retryHistorySave = useCallback(async () => {
-    const retryHistorySave = useCallback(async () => {
         if (!pendingHistoryRecord || !token) {
             return;
         }
