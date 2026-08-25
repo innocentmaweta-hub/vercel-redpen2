@@ -125,11 +125,6 @@ function validateResultForSave(result: GradingResult): string | null {
     return 'Every question must have a valid score before the result can be saved.';
   }
 
-  const recalculated = recalculateFromQuestions(result.questions);
-  if (!recalculated) {
-    return 'The question scores could not be used to calculate a valid result.';
-  }
-
   const total = parseScore(result.totalScore);
   const percentage = parsePercentage(result.percentage);
 
@@ -137,25 +132,7 @@ function validateResultForSave(result: GradingResult): string | null {
   if (percentage === null) return 'The percentage is incomplete or invalid.';
   if (!result.grade?.trim()) return 'The final grade is missing.';
 
-  const calculatedTotal = parseScore(recalculated.totalScore);
-  const calculatedPercentage = parsePercentage(recalculated.percentage);
-
-  if (
-    !calculatedTotal ||
-    Math.abs(total.score - calculatedTotal.score) > 0.001 ||
-    Math.abs(total.maximum - calculatedTotal.maximum) > 0.001
-  ) {
-    return 'The total score does not match the question scores.';
-  }
-
-  if (
-    calculatedPercentage === null ||
-    Math.abs(percentage - calculatedPercentage) > 0.01
-  ) {
-    return 'The percentage does not match the question scores.';
-  }
-
-  if (result.grade.trim().toUpperCase() !== recalculated.grade.toUpperCase()) {
+  if (result.grade.trim().toUpperCase() !== calculateGrade(percentage).toUpperCase()) {
     return 'The final grade does not match the percentage.';
   }
 
@@ -184,13 +161,6 @@ export const ResultsPanel = ({
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  /*
-   * IMPORTANT:
-   * Do not reset the editor whenever App.tsx sends the edited result back.
-   * App.tsx receives onResultChange immediately, so result changes during
-   * editing are expected. Only replace the local editor when we are NOT
-   * currently editing.
-   */
   useEffect(() => {
     if (!result) {
       setEditableResult(null);
@@ -229,9 +199,9 @@ export const ResultsPanel = ({
       ...(recalculated
         ? recalculated
         : {
-            totalScore: '',
-            percentage: '',
-            grade: '',
+            totalScore: currentResult.totalScore,
+            percentage: currentResult.percentage,
+            grade: currentResult.grade,
           }),
     });
   };
@@ -259,13 +229,32 @@ export const ResultsPanel = ({
     updateResult({ ...currentResult, feedback: value });
   };
 
+  const handleTotalChange = (value: string) => {
+    if (!currentResult) return;
+    updateResult({ ...currentResult, totalScore: value });
+  };
+
+  const handlePercentageChange = (value: string) => {
+    if (!currentResult) return;
+    const cleanValue = value.replace(/%/g, '');
+    const parsed = parsePercentage(cleanValue);
+
+    updateResult({
+      ...currentResult,
+      percentage: cleanValue,
+      ...(parsed !== null
+        ? { grade: calculateGrade(parsed) }
+        : {}),
+    });
+  };
+
+  const handleGradeChange = (value: string) => {
+    if (!currentResult) return;
+    updateResult({ ...currentResult, grade: value.toUpperCase() });
+  };
+
   const handleEditToggle = () => {
     if (isEditing) {
-      /*
-       * Done means "finish editing" — it must NOT perform save validation.
-       * An examiner may intentionally leave a question blank while editing.
-       * Save performs the complete validation instead.
-       */
       setIsEditing(false);
       return;
     }
@@ -376,8 +365,14 @@ export const ResultsPanel = ({
             <input
               type="text"
               value={currentResult.totalScore || ''}
-              readOnly
-              className="mt-1 text-lg font-bold text-ink bg-transparent w-full focus:outline-none cursor-default"
+              readOnly={!isEditing}
+              onChange={e => handleTotalChange(e.target.value)}
+              className={`mt-1 text-lg font-bold text-ink bg-transparent w-full focus:outline-none ${
+                isEditing
+                  ? 'cursor-text border-b border-gray-700 focus:border-accent-blue'
+                  : 'cursor-default'
+              }`}
+              aria-label="Total score"
             />
           </div>
 
@@ -386,8 +381,14 @@ export const ResultsPanel = ({
             <input
               type="text"
               value={currentResult.percentage ? `${currentResult.percentage}%` : ''}
-              readOnly
-              className="mt-1 text-lg font-bold text-ink bg-transparent w-full focus:outline-none cursor-default"
+              readOnly={!isEditing}
+              onChange={e => handlePercentageChange(e.target.value)}
+              className={`mt-1 text-lg font-bold text-ink bg-transparent w-full focus:outline-none ${
+                isEditing
+                  ? 'cursor-text border-b border-gray-700 focus:border-accent-blue'
+                  : 'cursor-default'
+              }`}
+              aria-label="Percentage"
             />
           </div>
 
@@ -396,15 +397,21 @@ export const ResultsPanel = ({
             <input
               type="text"
               value={currentResult.grade || ''}
-              readOnly
-              className="mt-1 text-lg font-bold text-accent-green bg-transparent w-full focus:outline-none cursor-default"
+              readOnly={!isEditing}
+              onChange={e => handleGradeChange(e.target.value)}
+              className={`mt-1 text-lg font-bold text-accent-green bg-transparent w-full focus:outline-none uppercase ${
+                isEditing
+                  ? 'cursor-text border-b border-gray-700 focus:border-accent-green'
+                  : 'cursor-default'
+              }`}
+              aria-label="Grade"
             />
           </div>
         </div>
 
         {isEditing && hasIncompleteQuestions && (
           <p className="mt-3 text-[10px] text-yellow-500/70">
-            Complete every question score before the total, percentage, and grade can be recalculated.
+            Complete every question score before saving if you want question-level validation.
           </p>
         )}
 
