@@ -53,14 +53,56 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
   <div className="text-[10px] uppercase font-bold tracking-widest text-gray-500 mb-2 mt-6 px-4 text-center">{children}</div>
 );
 
-export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, isAutoMode, onProfile, onAutoModeToggle }: SidebarProps) => {
+export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, onProfile }: SidebarProps) => {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [markingMode, setMarkingMode] = useState<'ai' | 'self'>('ai');
 
   useEffect(() => {
     const handler = () => onHelp();
     window.addEventListener('redpen:open-help', handler);
     return () => window.removeEventListener('redpen:open-help', handler);
   }, [onHelp]);
+
+  // The canvas previously owned the AI/Manual control. Keep its existing
+  // grading logic as the single source of truth, but hide that duplicate
+  // control and trigger it from the sidebar instead.
+  useEffect(() => {
+    const syncAndHideCanvasModeButton = () => {
+      const modeButton = Array.from(document.querySelectorAll('button')).find((button) =>
+        button.querySelector('svg.lucide-file-check')
+      ) as HTMLButtonElement | undefined;
+
+      if (modeButton) {
+        modeButton.style.display = 'none';
+
+        const tooltipText = modeButton.querySelector('span')?.textContent || '';
+        if (tooltipText.includes('Manual')) {
+          setMarkingMode('self');
+        } else if (tooltipText.includes('AI')) {
+          setMarkingMode('ai');
+        }
+      }
+    };
+
+    syncAndHideCanvasModeButton();
+
+    const observer = new MutationObserver(syncAndHideCanvasModeButton);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handleModeToggle = () => {
+    const modeButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.querySelector('svg.lucide-file-check')
+    ) as HTMLButtonElement | undefined;
+
+    if (!modeButton || modeButton.disabled) return;
+
+    // This invokes the exact existing AI/Manual grading behaviour.
+    modeButton.click();
+    setMarkingMode(current => current === 'ai' ? 'self' : 'ai');
+  };
 
   return (
     <aside className="w-[90px] h-full bg-sidebar border-r border-gray-800 flex flex-col relative">
@@ -71,10 +113,16 @@ export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, isA
       )}
 
       <div className="pt-3 pb-2 flex flex-col items-center">
-        <SectionLabel>Auto</SectionLabel>
+        <SectionLabel>Mode</SectionLabel>
         <div className="px-4 mt-1">
-          <button onClick={onAutoModeToggle} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all border ${isAutoMode ? 'bg-accent-blue border-accent-blue text-white shadow-lg animate-pulse' : 'bg-gray-800 border-accent-blue text-white hover:bg-gray-700'}`}>
-            <span className="text-xl font-bold">A</span>
+          <button
+            onClick={handleModeToggle}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all border ${markingMode === 'ai'
+              ? 'bg-accent-blue border-accent-blue text-white shadow-lg'
+              : 'bg-gray-800 border-accent-green text-white hover:bg-gray-700'
+              }`}
+          >
+            <span className="text-xl font-bold">{markingMode === 'ai' ? 'Ai' : 'M'}</span>
           </button>
         </div>
       </div>
