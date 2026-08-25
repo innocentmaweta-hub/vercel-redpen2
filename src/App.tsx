@@ -342,6 +342,36 @@ export default function App() {
 
     // Search functionality
     const [searchTerm, setSearchTerm] = useState('');
+    
+    /*
+     * Filter the compatibility session list used by the
+     * legacy course/session selector.
+     *
+     * The workbook is now the canonical source of truth,
+     * but some existing UI still expects SemesterCourse[].
+     */
+    const filteredSessions = sessions.filter(session => {
+        const term = searchTerm.trim().toLowerCase();
+    
+        if (!term) {
+            return true;
+        }
+    
+        return (
+            session.courseCode
+                ?.toLowerCase()
+                .includes(term) ||
+            session.courseName
+                ?.toLowerCase()
+                .includes(term) ||
+            session.customName
+                ?.toLowerCase()
+                .includes(term) ||
+            session.sessionLabel
+                ?.toLowerCase()
+                .includes(term)
+        );
+    });
 
     // Auth state
     const [user, setUser] = useState<User | null>(null);
