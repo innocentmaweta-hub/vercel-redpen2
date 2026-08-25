@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StudentInfo } from '../types';
 import { AlertTriangle, LockKeyhole } from 'lucide-react';
+import { loadLocalWorkbook } from '../lib/workbookStore';
 
 interface Props {
   info: StudentInfo;
@@ -29,10 +30,52 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
   const [selectedDepartment, setSelectedDepartment] = useState<string>(() => localStorage.getItem('lastSelectedDepartment') || '');
   const [pendingCourseCode, setPendingCourseCode] = useState<string | null>(null);
   const [pendingWorkbookChange, setPendingWorkbookChange] = useState<{ field: 'academicYear' | 'semester'; value: string } | null>(null);
+  const infoRef = useRef(info);
+
+  useEffect(() => {
+    infoRef.current = info;
+  }, [info]);
 
   useEffect(() => {
     if (selectedDepartment) localStorage.setItem('lastSelectedDepartment', selectedDepartment);
   }, [selectedDepartment]);
+
+  // The active worksheet is the source of truth for session/course metadata.
+  // The workbook store emits this event whenever a workbook is restored,
+  // switched, or changed, including after a successful cloud restore.
+  useEffect(() => {
+    const syncFromActiveWorksheet = () => {
+      const workbook = loadLocalWorkbook();
+      if (!workbook?.activeSheetId) return;
+
+      const worksheet = workbook.sheets.find(sheet => sheet.id === workbook.activeSheetId);
+      if (!worksheet?.course) return;
+
+      const course = worksheet.course;
+      const current = infoRef.current;
+      const next = {
+        ...current,
+        courseCode: course.courseCode || '',
+        year: course.year || '',
+        semester: course.semester || '',
+        academicYear: course.academicYear || '',
+        program: course.program || current.program || '',
+      };
+
+      const changed =
+        next.courseCode !== current.courseCode ||
+        next.year !== current.year ||
+        next.semester !== current.semester ||
+        next.academicYear !== current.academicYear ||
+        next.program !== current.program;
+
+      if (changed) onChange(next);
+    };
+
+    syncFromActiveWorksheet();
+    window.addEventListener('redpen:workbook-updated', syncFromActiveWorksheet);
+    return () => window.removeEventListener('redpen:workbook-updated', syncFromActiveWorksheet);
+  }, [onChange]);
 
   const handleChange = (field: keyof StudentInfo, value: string) => {
     let validatedValue = value;
@@ -89,12 +132,7 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
         </div>
         <input type="text" placeholder="Program of Study" className={inputClass} value={info.program} onChange={(e) => handleChange('program', e.target.value)} />
 
-        {/*
-         * These four fields are session/course metadata. They are deliberately
-         * read-only here because the active session/worksheet is the source of
-         * truth. Users change this context through the TopBar Session/Course
-         * controls instead of accidentally changing where grades are saved.
-         */}
+        {/* Session/course metadata is read-only here. Change context through the TopBar. */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex gap-2">
             <select className={contextSelectClass} value={info.year || ''} disabled aria-label="Year of Study">
