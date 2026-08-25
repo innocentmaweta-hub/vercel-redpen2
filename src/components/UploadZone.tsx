@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { Upload, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Upload, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Props {
@@ -23,6 +23,7 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
   ({ label, hasFile, fileName, onUpload, description, variant = 'compact', onZoneClick, optional }, ref) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadError, setUploadError] = useState('');
+    const [previewSource, setPreviewSource] = useState<string | null>(null);
 
     useImperativeHandle(ref, () => ({
       triggerInput: () => fileInputRef.current?.click(),
@@ -37,7 +38,11 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
       }
 
       const reader = new FileReader();
-      reader.onload = () => onUpload(reader.result as string, file.name);
+      reader.onload = () => {
+        const source = reader.result as string;
+        setPreviewSource(source);
+        onUpload(source, file.name);
+      };
       reader.onerror = () => setUploadError('Failed to read the file. Please try again.');
       reader.readAsDataURL(file);
     };
@@ -48,11 +53,68 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
       e.target.value = '';
     };
 
+    const isReferencePanel = /reference|marking\s*scheme/i.test(label);
+
+    const viewUploadedReference = () => {
+      if (!previewSource || !fileName) return;
+
+      const previewWindow = window.open('', '_blank');
+      if (!previewWindow) {
+        setUploadError('Please allow pop-ups to view the reference.');
+        return;
+      }
+
+      previewWindow.document.write(`<!doctype html>
+<html>
+<head>
+  <title>${fileName.replace(/[<>]/g, '')}</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: #111; color: #fff; font-family: system-ui, sans-serif; }
+    iframe, img { display: block; width: 100%; height: 100%; border: 0; object-fit: contain; }
+    pre { white-space: pre-wrap; padding: 24px; box-sizing: border-box; height: 100%; overflow: auto; margin: 0; }
+  </style>
+</head>
+<body></body>
+</html>`);
+
+      const body = previewWindow.document.body;
+
+      if (previewSource.startsWith('data:image/')) {
+        const img = previewWindow.document.createElement('img');
+        img.src = previewSource;
+        img.alt = fileName;
+        body.appendChild(img);
+      } else if (previewSource.startsWith('data:application/pdf')) {
+        const iframe = previewWindow.document.createElement('iframe');
+        iframe.src = previewSource;
+        iframe.title = fileName;
+        body.appendChild(iframe);
+      } else {
+        const pre = previewWindow.document.createElement('pre');
+        try {
+          const commaIndex = previewSource.indexOf(',');
+          const encoded = commaIndex >= 0 ? previewSource.slice(commaIndex + 1) : previewSource;
+          pre.textContent = decodeURIComponent(encoded);
+        } catch {
+          pre.textContent = 'Unable to preview this reference file.';
+        }
+        body.appendChild(pre);
+      }
+
+      previewWindow.document.close();
+    };
+
     const handleZoneClick = () => {
+      // A loaded reference is read-only from this panel. Clicking it previews
+      // the existing reference instead of opening the replacement file picker.
+      if (hasFile && isReferencePanel) {
+        viewUploadedReference();
+        return;
+      }
+
       // All upload surfaces that are tied to the current grading session use
       // the same entry flow: when no session is active, clicking the surface
       // opens the existing Load Session modal (the same flow as the TopBar).
-      // Once a session is active, the normal upload behavior is preserved.
       if (
         !hasFile &&
         onZoneClick &&
@@ -135,7 +197,9 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
               >
                 <CheckCircle2 size={isLarge ? 48 : 32} className="text-accent-green mb-3" />
                 <span className="text-[11px] font-mono font-bold text-accent-green uppercase max-w-[200px] truncate text-center">{fileName}</span>
-                <span className="text-[9px] text-gray-500 mt-2 uppercase font-bold tracking-tighter">Click to replace</span>
+                <span className="text-[9px] text-gray-500 mt-2 uppercase font-bold tracking-tighter">
+                  {isReferencePanel ? 'Click to view' : 'Click to replace'}
+                </span>
               </motion.div>
             ) : (
               <motion.div
