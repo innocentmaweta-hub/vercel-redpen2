@@ -1,7 +1,9 @@
 import { SemesterCourse } from '../types';
-import { API_ENDPOINTS, apiDelete, apiGet, apiPost, AUTH_TOKEN_KEY } from '../api';
+import { API_ENDPOINTS, apiGet } from '../api';
+import { fetchCloudWorkbooks, saveCloudWorkbook, deleteCloudWorkbook, createWorkbook, loadLocalWorkbook, writeLocalWorkbook, worksheetFromCourse } from './workbookStore';
+import type { RedPenWorkbook } from '../types/workbook';
 
-export { AUTH_TOKEN_KEY };
+export { AUTH_TOKEN_KEY } from '../api';
 export const SESSION_STORAGE_KEY = 'stored_sessions';
 export const ACTIVE_SESSION_STORAGE_KEY = 'yaza_active_session_id';
 export type SessionSaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -30,26 +32,21 @@ export function normalizeSession(session: SemesterCourse): SemesterCourse {
 }
 
 export function dedupeSessions(sessions: SemesterCourse[]): SemesterCourse[] {
-  const seen = new Set<string>();
-  const result: SemesterCourse[] = [];
-  for (const raw of sessions) {
+  const map = new Map<string, SemesterCourse>();
+  for (const raw of Array.isArray(sessions) ? sessions : []) {
     const session = normalizeSession(raw);
     if (!session.courseCode) continue;
     const key = sessionIdentityKey(session);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(session);
+    const existing = map.get(key);
+    if (!existing || String(session.updatedAt || '').localeCompare(String(existing.updatedAt || '')) >= 0) map.set(key, session);
   }
-  return result;
+  return Array.from(map.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
 
-/**
- * Sessions are first-class entities. Do not reconstruct them from grading
- * history: deleting a session must remain a deletion even when its results
- * are still present in history.
- */
 export function loadLocalSessions(): SemesterCourse[] {
   try {
+    const workbook = loadLocalWorkbook();
+    if (workbook?.sheets?.length) return dedupeSessions(workbook.sheets.map(sheet => sheet.course));
     const parsed = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || '[]');
     return dedupeSessions(Array.isArray(parsed) ? parsed : []);
   } catch {
@@ -59,6 +56,11 @@ export function loadLocalSessions(): SemesterCourse[] {
 
 export function writeLocalSessions(sessions: SemesterCourse[]): SemesterCourse[] {
   const deduped = dedupeSessions(sessions);
+  const existing = loadLocalWorkbook();
+  if (existing) {
+    const sheets = deduped.map(session => worksheetFromCourse(session, existing.sheets.find(s => s.id === session.id)?.rows || []));
+    writeLocalWorkbook({ ...existing, sheets, updatedAt: new Date().toISOString() });
+  }
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(deduped));
   window.dispatchEvent(new CustomEvent('redpen:sessions-updated'));
   return deduped;
@@ -92,36 +94,78 @@ export function resolveActiveSession(sessions: SemesterCourse[], requestedId?: s
   return list[0] || null;
 }
 
+function firstWorkbook(workbooks: RedPenWorkbook[]): RedPenWorkbook | null {
+  return workbooks[0] || null;
+}
+
 export async function fetchCloudSessions(token: string): Promise<SemesterCourse[]> {
-  // Cloud is authoritative for authenticated users. Local data is a fallback
-  // only when the request itself fails, not something that can resurrect a
-  // deliberately deleted cloud session.
-  const data = await apiGet<{ sessions?: SemesterCourse[] }>(API_ENDPOINTS.sessions.list);
-  return dedupeSessions(Array.isArray(data.sessions) ? data.sessions : []);
+  void token;
+  try {
+    const workbooks = await fetchCloudWorkbooks(token);
+    const workbook = firstWorkbook(workbooks);
+    if (!workbook) return loadLocalSessions();
+    const sessions = dedupeSessions(workbook.sheets.map(sheet => sheet.course));
+    if (sessions.length) {
+      const local = loadLocalWorkbook();
+      writeLocalWorkbook({ ...workbook, activeSheetId: workbook.activeSheetId || null });
+      if (local?.activeSheetId && sessions.some(s => s.id === local.activeSheetId)) saveActiveSessionId(local.activeSheetId);
+    }
+    return sessions;
+  } catch {
+    return loadLocalSessions();
+  }
 }
 
 export async function saveCloudSession(token: string, session: SemesterCourse): Promise<{ session: SemesterCourse; sessions: SemesterCourse[] }> {
+  void token;
   const normalized = normalizeSession(session);
   if (!normalized.courseCode) throw new Error('Course code is required');
-  const data = await apiPost<{ session?: SemesterCourse; sessions?: SemesterCourse[] }>(API_ENDPOINTS.sessions.save, { session: normalized });
-  const saved = normalizeSession(data.session || normalized);
-  const sessions = dedupeSessions(Array.isArray(data.sessions) ? data.sessions : [saved]);
+  let workbook = loadLocalWorkbook();
+  if (!workbook) workbook = createWorkbook('RedPen Workbook');
+
+  const newSheet = worksheetFromCourse(normalized, workbook.sheets.find(s => s.id === normalized.id)?.rows || []);
+  const sheets = workbook.sheets.filter(sheet => sheet.id !== newSheet.id && sessionIdentityKey(sheet.course) !== sessionIdentityKey(normalized));
+  sheets.unshift(newSheet);
+  workbook = { ...workbook, sheets, activeSheetId: newSheet.id, updatedAt: new Date().toISOString() };
+
+  const result = await saveCloudWorkbook(token, workbook);
+  const sessions = dedupeSessions(result.workbook.sheets.map(sheet => sheet.course));
   writeLocalSessions(sessions);
-  return { session: saved, sessions };
+  saveActiveSessionId(newSheet.course);
+  return { session: newSheet.course, sessions };
 }
 
 export async function deleteCloudSession(token: string, session: SemesterCourse): Promise<SemesterCourse[]> {
-  const id = clean(session.id);
+  void token;
+  const workbook = loadLocalWorkbook();
+  if (!workbook) return removeLocalSession(session);
   const key = sessionIdentityKey(session);
-  const params = new URLSearchParams(id ? { id } : { key });
-  const data = await apiDelete<{ sessions?: SemesterCourse[] }>(`${API_ENDPOINTS.sessions.delete}?${params.toString()}`);
-  const sessions = dedupeSessions(Array.isArray(data.sessions) ? data.sessions : []);
+  const sheets = workbook.sheets.filter(sheet => sheet.id !== session.id && sessionIdentityKey(sheet.course) !== key);
+  if (sheets.length === 0) {
+    await deleteCloudWorkbook(token, workbook);
+    removeLocalSession(session);
+    saveActiveSessionId(null);
+    return [];
+  }
+  const next: RedPenWorkbook = { ...workbook, sheets, activeSheetId: sheets[0].id, updatedAt: new Date().toISOString() };
+  const result = await saveCloudWorkbook(token, next);
+  const sessions = dedupeSessions(result.workbook.sheets.map(sheet => sheet.course));
   writeLocalSessions(sessions);
+  saveActiveSessionId(sessions[0] || null);
   return sessions;
 }
 
+/** Compatibility helper retained for callers that still merge old session data. */
 export function mergeCloudAndLocalSessions(cloud: SemesterCourse[], local: SemesterCourse[]): SemesterCourse[] {
-  // Kept for compatibility. Callers that have authenticated should normally
-  // use the cloud list directly so a deleted cloud session cannot reappear.
   return dedupeSessions([...cloud, ...local]);
+}
+
+/** Legacy endpoint probe retained for compatibility during migration. */
+export async function fetchLegacyCloudSessions(): Promise<SemesterCourse[]> {
+  try {
+    const data = await apiGet<{ sessions?: SemesterCourse[] }>(API_ENDPOINTS.sessions.list);
+    return dedupeSessions(Array.isArray(data.sessions) ? data.sessions : []);
+  } catch {
+    return [];
+  }
 }

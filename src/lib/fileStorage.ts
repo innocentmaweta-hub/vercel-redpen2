@@ -77,6 +77,52 @@ export async function clearSaveFolder(): Promise<void> {
     await idbSet(FOLDER_KEY, undefined);
 }
 
+export interface SavedPdfFile {
+    name: string;
+    size: number;
+    modified: number;
+    handle: FileSystemFileHandle;
+}
+
+/**
+ * List PDF files currently present in the folder selected in Settings.
+ * The same directory handle is used by PDF export, so this is the canonical
+ * view of files that RedPen has saved to that folder (including files saved
+ * in earlier sessions).
+ */
+export async function listSavedPdfFiles(): Promise<SavedPdfFile[]> {
+    const folder = await getSavedFolder();
+    if (!folder) return [];
+
+    const files: SavedPdfFile[] = [];
+
+    try {
+        // @ts-ignore — File System Access API async iterator
+        for await (const entry of folder.values()) {
+            if (entry.kind !== 'file' || !entry.name.toLowerCase().endsWith('.pdf')) {
+                continue;
+            }
+
+            try {
+                const handle = entry as FileSystemFileHandle;
+                const file = await handle.getFile();
+                files.push({
+                    name: file.name,
+                    size: file.size,
+                    modified: file.lastModified,
+                    handle,
+                });
+            } catch {
+                // Ignore files that disappear or become inaccessible while listing.
+            }
+        }
+    } catch (error) {
+        console.error('Failed to list saved PDFs:', error);
+    }
+
+    return files.sort((a, b) => b.modified - a.modified);
+}
+
 // Write a file (Blob) into the saved folder, or trigger a normal download if no folder is available.
 export async function writeFileToFolder(folder: FileSystemDirectoryHandle | null, filename: string, blob: Blob): Promise<'written' | 'downloaded'> {
     if (folder && blob instanceof Blob) {

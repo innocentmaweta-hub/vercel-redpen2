@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, X, ChevronRight, ArrowRight, AlertCircle } from 'lucide-react';
+import { motion } from 'motion/react';
+import { BookOpen, X, ChevronRight, ArrowRight, AlertCircle, FileSpreadsheet } from 'lucide-react';
 
 export interface SemesterCourse {
   id?: string;
@@ -12,6 +12,8 @@ export interface SemesterCourse {
   academicYear: string;
   sessionLabel: string;
   customName?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface NewSemesterModalProps {
@@ -64,128 +66,34 @@ function getAcademicYearOptions(): string[] {
 }
 
 const ACADEMIC_YEARS = getAcademicYearOptions();
-
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="flex flex-col gap-1">
-    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">{label}</label>
-    {children}
-  </div>
-);
-
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => <div className="flex flex-col gap-1"><label className="text-[10px] font-black uppercase tracking-widest text-gray-500">{label}</label>{children}</div>;
 const inputCls = "bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-[12px] text-white focus:border-accent-blue focus:outline-none transition-colors placeholder:text-gray-700";
 
 export const NewSemesterModal = ({ courses, onConfirm, onCancel }: NewSemesterModalProps) => (
-  <NewSessionModal
-    currentSemesterCourse={null}
-    courses={courses}
-    onConfirm={(updates) => onConfirm({ ...updates, program: '' })}
-    onCancel={onCancel}
-  />
+  <NewSessionModal currentSemesterCourse={null} courses={courses} onConfirm={updates => onConfirm({ ...updates, program: '' })} onCancel={onCancel} />
 );
 
 export const ContinueSemesterModal = ({ semesterCourse, uploadLabel, onContinue, onNewSemester, onCancel }: ContinueSemesterModalProps) => (
   <Backdrop onClose={onCancel}>
-    <motion.div initial={{ opacity: 0, scale: 0.93, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.93, y: 20 }} transition={{ duration: 0.2 }} onClick={e => e.stopPropagation()} className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center"><BookOpen size={16} className="text-accent-blue" /></div>
-          <div><p className="text-[13px] font-black text-white">Continue Session</p><p className="text-[10px] text-gray-500">{uploadLabel}</p></div>
-        </div>
-        <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors"><X size={15} /></button>
-      </div>
-      <div className="p-5">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Active Session</p>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 bg-accent-blue/10 text-accent-blue text-[11px] font-black rounded-lg border border-accent-blue/20">{semesterCourse.courseCode}</span>
-            {semesterCourse.courseName && <span className="text-[12px] text-white font-semibold">{semesterCourse.courseName}</span>}
-          </div>
-          {(semesterCourse.program || semesterCourse.year || semesterCourse.semester) && (
-            <div className="flex gap-2 mt-2 flex-wrap">
-              {semesterCourse.program && <span className="text-[10px] text-gray-500">{semesterCourse.program}</span>}
-              {semesterCourse.year && <span className="text-[10px] text-gray-600">• {semesterCourse.year}</span>}
-              {semesterCourse.semester && <span className="text-[10px] text-gray-600">• {semesterCourse.semester}</span>}
-            </div>
-          )}
-        </div>
-        <p className="text-[12px] text-gray-400 mb-4">Proceed uploading in this session?</p>
-        <div className="flex flex-col gap-2">
-          <button onClick={onContinue} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors">Continue in this session <ChevronRight size={14} /></button>
-          <button onClick={onNewSemester} className="w-full py-2 text-[11px] font-bold text-gray-500 hover:text-gray-300 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-700 transition-colors">Start new session</button>
-        </div>
-      </div>
+    <motion.div initial={{ opacity: 0, scale: .93, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: .93, y: 20 }} onClick={e => e.stopPropagation()} className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800"><div className="flex items-center gap-3"><div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center"><BookOpen size={16} className="text-accent-blue" /></div><div><p className="text-[13px] font-black text-white">Continue Workbook</p><p className="text-[10px] text-gray-500">{uploadLabel}</p></div></div><button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800"><X size={15} /></button></div>
+      <div className="p-5"><div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4"><p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Active Course</p><div className="flex items-center gap-2"><span className="px-2 py-1 bg-accent-blue/10 text-accent-blue text-[11px] font-black rounded-lg border border-accent-blue/20">{semesterCourse.courseCode}</span>{semesterCourse.courseName && <span className="text-[12px] text-white font-semibold">{semesterCourse.courseName}</span>}</div></div><p className="text-[12px] text-gray-400 mb-4">Continue working in this workbook?</p><div className="flex flex-col gap-2"><button onClick={onContinue} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600">Continue <ChevronRight size={14} /></button><button onClick={onNewSemester} className="w-full py-2 text-[11px] font-bold text-gray-500 hover:text-gray-300 bg-gray-900 border border-gray-800 rounded-xl">Create New Workbook</button></div></div>
     </motion.div>
   </Backdrop>
 );
 
 export const NewCourseModal = ({ currentSemesterCourse, onConfirm, onCancel }: NewCourseModalProps) => {
-  const [courseCode, setCourseCode] = useState('');
-  const [courseName, setCourseName] = useState('');
-  const [error, setError] = useState('');
+  const [courseCode, setCourseCode] = useState(''); const [courseName, setCourseName] = useState(''); const [error, setError] = useState('');
   const handleConfirm = () => { if (!courseCode.trim()) { setError('Course code is required.'); return; } onConfirm({ courseCode, courseName }); };
-  return (
-    <Backdrop onClose={onCancel}>
-      <motion.div initial={{ opacity: 0, scale: 0.93, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.93, y: 20 }} transition={{ duration: 0.2 }} onClick={e => e.stopPropagation()} className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <div className="flex items-center gap-3"><div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center"><BookOpen size={16} className="text-accent-blue" /></div><div><p className="text-[13px] font-black text-white">New Course</p><p className="text-[10px] text-gray-500">{currentSemesterCourse?.year && currentSemesterCourse?.semester ? `Staying in ${currentSemesterCourse.year} • ${currentSemesterCourse.semester}` : 'Switch to a different course'}</p></div></div>
-          <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors"><X size={15} /></button>
-        </div>
-        <div className="p-5 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3"><Field label="Course Code *"><input className={inputCls} placeholder="e.g. CS301" value={courseCode} onChange={e => setCourseCode(e.target.value)} autoFocus /></Field><Field label="Course Name"><input className={inputCls} placeholder="e.g. Data Structures" value={courseName} onChange={e => setCourseName(e.target.value)} /></Field></div>
-          {error && <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg"><AlertCircle size={12} className="text-red-400 shrink-0" /><p className="text-[11px] text-red-400">{error}</p></div>}
-        </div>
-        <div className="px-5 pb-5"><button onClick={handleConfirm} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20">Switch Course <ArrowRight size={14} /></button></div>
-      </motion.div>
-    </Backdrop>
-  );
+  return <Backdrop onClose={onCancel}><motion.div initial={{ opacity: 0, scale: .93, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} onClick={e => e.stopPropagation()} className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"><div className="flex items-center justify-between px-5 py-4 border-b border-gray-800"><div className="flex items-center gap-3"><div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center"><BookOpen size={16} className="text-accent-blue" /></div><div><p className="text-[13px] font-black text-white">Add Course</p><p className="text-[10px] text-gray-500">Add a worksheet to the current workbook{currentSemesterCourse?.year ? ` • ${currentSemesterCourse.year}` : ''}</p></div></div><button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800"><X size={15} /></button></div><div className="p-5 flex flex-col gap-4"><div className="grid grid-cols-2 gap-3"><Field label="Course Code *"><input className={inputCls} placeholder="e.g. CS301" value={courseCode} onChange={e => setCourseCode(e.target.value)} autoFocus /></Field><Field label="Course Name"><input className={inputCls} placeholder="e.g. Data Structures" value={courseName} onChange={e => setCourseName(e.target.value)} /></Field></div>{error && <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg"><AlertCircle size={12} className="text-red-400" /><p className="text-[11px] text-red-400">{error}</p></div>}</div><div className="px-5 pb-5"><button onClick={handleConfirm} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600">Add Course <ArrowRight size={14} /></button></div></motion.div></Backdrop>;
 };
 
 export const NewSessionModal = ({ currentSemesterCourse, courses, onConfirm, onCancel }: NewSessionModalProps) => {
   const [courseMode, setCourseMode] = useState<'select' | 'custom'>(courses.length > 0 ? 'select' : 'custom');
-  const [courseCode, setCourseCode] = useState(currentSemesterCourse?.courseCode || '');
-  const [courseName, setCourseName] = useState(currentSemesterCourse?.courseName || '');
-  const [academicYear, setAcademicYear] = useState('');
-  const [year, setYear] = useState('');
-  const [semester, setSemester] = useState('');
-  const [sessionLabel, setSessionLabel] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [error, setError] = useState('');
-
-  const handleConfirm = () => {
-    if (!courseCode.trim()) { setError('Course code is required.'); return; }
-    const hasAcademicSession = academicYear.trim() && semester.trim();
-    const hasCustomSession = customName.trim();
-    if (!hasAcademicSession && !hasCustomSession) { setError('Enter Academic Year + Semester, or a Custom Session Name.'); return; }
-    onConfirm({ academicYear, year, semester, sessionLabel, customName, courseCode, courseName });
-  };
-
-  return (
-    <Backdrop onClose={onCancel}>
-      <motion.div initial={{ opacity: 0, scale: 0.93, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.93, y: 20 }} transition={{ duration: 0.2 }} onClick={e => e.stopPropagation()} className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <div className="flex items-center gap-3"><div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center"><BookOpen size={16} className="text-accent-blue" /></div><div><p className="text-[13px] font-black text-white">New Session</p><p className="text-[10px] text-gray-500">Start a new session and course</p></div></div>
-          <button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800 transition-colors"><X size={15} /></button>
-        </div>
-        <div className="p-5 flex flex-col gap-4">
-          {courseMode === 'select' && courses.length > 0 ? (
-            <Field label="Course *"><select className={inputCls} value={courseCode} onChange={e => { const chosen = courses.find(c => c.courseCode === e.target.value); setCourseCode(chosen?.courseCode || ''); setCourseName(chosen?.courseName || ''); }} autoFocus><option value="">Select a course…</option>{courses.map(c => <option key={c.courseCode} value={c.courseCode}>{c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}</option>)}</select><button type="button" onClick={() => { setCourseMode('custom'); setCourseCode(''); setCourseName(''); }} className="text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold mt-1 text-left">+ Add a new course instead</button></Field>
-          ) : (
-            <div className="grid grid-cols-2 gap-3"><Field label="Course Code *"><input className={inputCls} placeholder="e.g. CS301" value={courseCode} onChange={e => setCourseCode(e.target.value)} autoFocus /></Field><Field label="Course Name"><input className={inputCls} placeholder="e.g. Data Structures" value={courseName} onChange={e => setCourseName(e.target.value)} /></Field>{courses.length > 0 && <button type="button" onClick={() => setCourseMode('select')} className="col-span-2 text-[10px] text-accent-blue hover:text-accent-blue/80 font-bold text-left">← Choose an existing course instead</button>}</div>
-          )}
-          <div className="grid grid-cols-2 gap-3"><Field label="Academic Year"><select className={inputCls} value={academicYear} onChange={e => setAcademicYear(e.target.value)}><option value="">Select academic year…</option>{ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}</select></Field><Field label="Year of Study"><select className={inputCls} value={year} onChange={e => setYear(e.target.value)}><option value="">Select year…</option>{YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}</select></Field></div>
-          <Field label="Semester"><select className={inputCls} value={semester} onChange={e => setSemester(e.target.value)}><option value="">Select semester…</option>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select></Field>
-          <Field label="Custom Session Name"><input className={inputCls} placeholder="e.g. Midterm Examination" value={customName} onChange={e => setCustomName(e.target.value)} /><span className="text-[9px] text-gray-600">Use this instead of a semester for a custom session.</span></Field>
-          <Field label="Session Label"><input className={inputCls} placeholder="e.g. Assignment, End of Semester" value={sessionLabel} onChange={e => setSessionLabel(e.target.value)} /></Field>
-          {error && <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg"><AlertCircle size={12} className="text-red-400 shrink-0" /><p className="text-[11px] text-red-400">{error}</p></div>}
-        </div>
-        <div className="px-5 pb-5"><button onClick={handleConfirm} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-accent-blue/20">Start New Session <ArrowRight size={14} /></button></div>
-      </motion.div>
-    </Backdrop>
-  );
+  const [courseCode, setCourseCode] = useState(currentSemesterCourse?.courseCode || ''); const [courseName, setCourseName] = useState(currentSemesterCourse?.courseName || '');
+  const [academicYear, setAcademicYear] = useState(''); const [year, setYear] = useState(''); const [semester, setSemester] = useState(''); const [sessionLabel, setSessionLabel] = useState(''); const [customName, setCustomName] = useState(''); const [error, setError] = useState('');
+  const handleConfirm = () => { if (!courseCode.trim()) { setError('Choose the first course for this workbook.'); return; } const hasAcademicSession = academicYear.trim() && semester.trim(); const hasCustomSession = customName.trim(); if (!hasAcademicSession && !hasCustomSession) { setError('Enter Academic Year + Semester, or a Workbook Name.'); return; } onConfirm({ academicYear, year, semester, sessionLabel, customName, courseCode, courseName }); };
+  return <Backdrop onClose={onCancel}><motion.div initial={{ opacity: 0, scale: .93, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} onClick={e => e.stopPropagation()} className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"><div className="flex items-center justify-between px-5 py-4 border-b border-gray-800"><div className="flex items-center gap-3"><div className="w-8 h-8 bg-accent-blue/10 rounded-xl flex items-center justify-center"><FileSpreadsheet size={16} className="text-accent-blue" /></div><div><p className="text-[13px] font-black text-white">Create Workbook</p><p className="text-[10px] text-gray-500">Create the workbook and its first course</p></div></div><button onClick={onCancel} className="p-1.5 rounded-lg text-gray-600 hover:text-white hover:bg-gray-800"><X size={15} /></button></div><div className="p-5 flex flex-col gap-4">{courseMode === 'select' && courses.length > 0 ? <Field label="First Course *"><select className={inputCls} value={courseCode} onChange={e => { const chosen = courses.find(c => c.courseCode === e.target.value); setCourseCode(chosen?.courseCode || ''); setCourseName(chosen?.courseName || ''); }} autoFocus><option value="">Select a course…</option>{courses.map(c => <option key={c.courseCode} value={c.courseCode}>{c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}</option>)}</select><button type="button" onClick={() => { setCourseMode('custom'); setCourseCode(''); setCourseName(''); }} className="text-[10px] text-accent-blue font-bold mt-1 text-left">+ Add a new course instead</button></Field> : <div className="grid grid-cols-2 gap-3"><Field label="First Course *"><input className={inputCls} placeholder="e.g. CS301" value={courseCode} onChange={e => setCourseCode(e.target.value)} autoFocus /></Field><Field label="Course Name"><input className={inputCls} placeholder="e.g. Data Structures" value={courseName} onChange={e => setCourseName(e.target.value)} /></Field></div>}<div className="grid grid-cols-2 gap-3"><Field label="Academic Year"><select className={inputCls} value={academicYear} onChange={e => setAcademicYear(e.target.value)}><option value="">Select academic year…</option>{ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}</select></Field><Field label="Year of Study"><select className={inputCls} value={year} onChange={e => setYear(e.target.value)}><option value="">Select year…</option>{YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}</select></Field></div><Field label="Semester"><select className={inputCls} value={semester} onChange={e => setSemester(e.target.value)}><option value="">Select semester…</option>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select></Field><Field label="Workbook Name"><input className={inputCls} placeholder="e.g. 2026 Semester 1 Marking" value={customName} onChange={e => setCustomName(e.target.value)} /><span className="text-[9px] text-gray-600">Use a workbook name when you don't want the academic year/semester filename.</span></Field><Field label="Workbook Label"><input className={inputCls} placeholder="e.g. Semester 1 Marking" value={sessionLabel} onChange={e => setSessionLabel(e.target.value)} /></Field>{error && <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg"><AlertCircle size={12} className="text-red-400" /><p className="text-[11px] text-red-400">{error}</p></div>}</div><div className="px-5 pb-5"><button onClick={handleConfirm} className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-blue text-white text-[12px] font-bold rounded-xl hover:bg-blue-600">Create Workbook <ArrowRight size={14} /></button></div></motion.div></Backdrop>;
 };
 
-const Backdrop = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
-  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} className="fixed inset-0 z-[9998] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-    {children}
-  </motion.div>
-);
+const Backdrop = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} className="fixed inset-0 z-[9998] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm" onClick={onClose}>{children}</motion.div>;
