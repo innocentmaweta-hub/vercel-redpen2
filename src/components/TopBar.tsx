@@ -44,30 +44,18 @@ interface DropdownItem {
   active?: boolean;
 }
 
-const YEARS_OF_STUDY = ['Year 1', 'Year 2', 'Year 3', 'Year 4'];
-const SEMESTERS = ['Semester 1', 'Semester 2'];
-
-function getRecentCourses(history: HistoryRecord[]): string[] {
-  if (!Array.isArray(history)) return [];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const r of history) {
-    const code = r.studentInfo?.courseCode;
-    if (code && !seen.has(code)) {
-      seen.add(code);
-      result.push(code);
-      if (result.length >= 6) break;
-    }
-  }
-  return result;
-}
-
 function sessionTitle(session: SemesterCourse): string {
-  return session.courseCode || session.customName || 'Unnamed session';
+  return session.sessionLabel || session.customName || session.courseCode || 'Unnamed session';
 }
 
 function sessionMeta(session: SemesterCourse): string {
-  return [session.year, session.semester, session.academicYear].filter(Boolean).join(' · ');
+  return [session.courseCode, session.courseName, session.year, session.semester, session.academicYear]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function courseTitle(session: SemesterCourse): string {
+  return session.courseCode || session.customName || 'Unnamed course';
 }
 
 const Dropdown = ({ x, items, onClose, wide = false }: { x: number; items: DropdownItem[]; onClose: () => void; wide?: boolean }) => {
@@ -91,7 +79,7 @@ const Dropdown = ({ x, items, onClose, wide = false }: { x: number; items: Dropd
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -6, scale: 0.97 }}
       transition={{ duration: 0.13 }}
-      style={{ position: 'fixed', top: 40, left: x, zIndex: 9999, minWidth: wide ? 280 : 200, maxWidth: wide ? 340 : undefined }}
+      style={{ position: 'fixed', top: 40, left: x, zIndex: 9999, minWidth: wide ? 280 : 220, maxWidth: wide ? 360 : undefined }}
       className="bg-gray-950 border border-gray-800 rounded-xl shadow-2xl py-1 overflow-hidden"
     >
       {items.map((item, i) =>
@@ -100,7 +88,13 @@ const Dropdown = ({ x, items, onClose, wide = false }: { x: number; items: Dropd
         ) : (
           <button
             key={i}
-            onClick={() => { if (!item.disabled && item.action) { item.action(); onClose(); } }}
+            onClick={() => {
+              if (!item.disabled && item.action) {
+                item.action();
+                onClose();
+              }
+            }}
+            disabled={item.disabled}
             className={`w-full text-left px-4 py-1.5 text-[11px] font-medium flex items-center justify-between transition-colors ${item.disabled
               ? 'text-gray-700 cursor-not-allowed'
               : item.active
@@ -270,7 +264,6 @@ export const TopBar = ({
   };
 
   const closeMenu = useCallback(() => setActiveMenu(null), []);
-  const recentCourses = getRecentCourses(history);
 
   const allActions: SearchAction[] = [
     { label: 'Dashboard', icon: LayoutGrid, action: () => onViewChange('dashboard') },
@@ -315,21 +308,62 @@ export const TopBar = ({
     setShowSearchResults(false);
   };
 
+  // Session is the primary workbook/session switcher.
   const sessionItems: DropdownItem[] = sessions.map(session => ({
     label: `${sessionTitle(session)}${sessionMeta(session) ? ` · ${sessionMeta(session)}` : ''}`,
     action: () => onSelectSession(session),
     active: activeSession ? sessionIdentityKey(activeSession) === sessionIdentityKey(session) : false,
   }));
 
-  const newMenuItems: DropdownItem[] = [
-    { label: 'New Session', action: onNewSession },
-    { label: 'New Course', action: onNewCourse },
-    { label: 'New Paper', action: onNewPaper },
+  const sessionMenuItems: DropdownItem[] = [
+    { label: 'Current Session', disabled: true },
+    ...(activeSession ? [{
+      label: `${sessionTitle(activeSession)}${sessionMeta(activeSession) ? ` · ${sessionMeta(activeSession)}` : ''}`,
+      disabled: true,
+      active: true,
+    }] : [{ label: 'No session selected', disabled: true }]),
     { divider: true },
-    { label: 'Sessions', disabled: true },
+    { label: 'Switch Session', disabled: true },
     ...(sessionItems.length > 0 ? sessionItems : [{ label: 'No saved sessions yet', disabled: true }]),
     { divider: true },
+    { label: 'New Session', action: onNewSession },
     { label: 'Load Session from File', action: onLoadSessionFromFile },
+  ];
+
+  // Course intentionally mirrors the Session menu: it is a context switcher,
+  // not a direct studentInfo.courseCode field editor.
+  const uniqueCourseItems = Array.from(new Map(
+    sessions.map(session => [session.courseCode || session.customName || 'Unnamed course', session])
+  ).values()).map(session => ({
+    label: `${courseTitle(session)}${session.courseName ? ` · ${session.courseName}` : ''}`,
+    action: () => onSelectSession(session),
+    active: activeSession
+      ? sessionIdentityKey(activeSession) === sessionIdentityKey(session)
+      : false,
+  }));
+
+  const courseMenuItems: DropdownItem[] = [
+    { label: 'Current Course', disabled: true },
+    ...(activeSession ? [{
+      label: `${courseTitle(activeSession)}${activeSession.courseName ? ` · ${activeSession.courseName}` : ''}`,
+      disabled: true,
+      active: true,
+    }] : [{ label: 'No course selected', disabled: true }]),
+    { divider: true },
+    { label: 'Switch Course', disabled: true },
+    ...(uniqueCourseItems.length > 0 ? uniqueCourseItems : [{ label: 'No courses available yet', disabled: true }]),
+    { divider: true },
+    { label: 'New Course', action: onNewCourse },
+  ];
+
+  const studentMenuItems: DropdownItem[] = [
+    { label: 'Student', disabled: true },
+    { label: studentInfo.name || 'No student selected', disabled: true },
+    ...(studentInfo.regNo ? [{ label: `Reg: ${studentInfo.regNo}`, disabled: true }] : []),
+    ...(studentInfo.program ? [{ label: studentInfo.program, disabled: true }] : []),
+    ...(studentInfo.year || studentInfo.semester ? [{ label: [studentInfo.year, studentInfo.semester].filter(Boolean).join(' · '), disabled: true }] : []),
+    { divider: true },
+    { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
   ];
 
   const menus: Record<string, DropdownItem[]> = {
@@ -339,24 +373,19 @@ export const TopBar = ({
       { label: 'Save As...', action: onSave, disabled: !hasResult },
       { label: 'Print Report', action: onPrint, disabled: !hasResult },
     ],
-    New: newMenuItems,
     Edit: [
       { label: 'Clear Student Info', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }) },
       { label: 'Clear Results', action: onClearResult, disabled: !hasResult },
       { divider: true },
       { label: 'Reset All', action: onNew },
     ],
-    Course: (() => {
-      const codeList = Array.from(new Set(recentCourses));
-      return codeList.length > 0
-        ? [...codeList.map(code => ({ label: code, action: () => onStudentInfoUpdate({ courseCode: code }), active: studentInfo.courseCode === code })), { divider: true }, { label: 'Add New Course...', action: onNewCourse }]
-        : [{ label: 'No courses yet — add one below', disabled: true }, { divider: true }, { label: 'Add New Course...', action: onNewCourse }];
-    })(),
-    'Year of Study': YEARS_OF_STUDY.map(yr => ({ label: yr, action: () => onStudentInfoUpdate({ year: yr }), active: studentInfo.year === yr })),
-    Semester: SEMESTERS.map(sem => ({ label: sem, action: () => onStudentInfoUpdate({ semester: sem }), active: studentInfo.semester === sem })),
+    Session: sessionMenuItems,
+    Course: courseMenuItems,
+    Placeholder: [{ label: 'Placeholder', disabled: true }],
+    Student: studentMenuItems,
   };
 
-  const menuNames = ['File', 'New', 'Edit', 'Course', 'Year of Study', 'Semester'];
+  const menuNames = ['File', 'Edit', 'Session', 'Course', 'Placeholder', 'Student'];
 
   return (
     <div className="h-10 bg-sidebar border-b border-gray-800 flex items-center px-4 gap-4 select-none">
@@ -413,7 +442,7 @@ export const TopBar = ({
       </div>
 
       <AnimatePresence>
-        {activeMenu && <Dropdown key={activeMenu.name} x={activeMenu.x} items={menus[activeMenu.name]} onClose={closeMenu} wide={activeMenu.name === 'New'} />}
+        {activeMenu && <Dropdown key={activeMenu.name} x={activeMenu.x} items={menus[activeMenu.name]} onClose={closeMenu} wide={activeMenu.name === 'Session' || activeMenu.name === 'Course'} />}
         {showSettings && <SettingsDropdown key="settings" onClose={() => setShowSettings(false)} />}
       </AnimatePresence>
     </div>
