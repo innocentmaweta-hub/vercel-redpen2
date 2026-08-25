@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   LayoutGrid,
-  PenLine,
-  Save,
+  FileText,
   History,
   HelpCircle,
   User,
@@ -14,7 +13,6 @@ import { ActiveView, User as UserType } from '../types';
 interface SidebarProps {
   activeView: ActiveView;
   onViewChange: (view: ActiveView) => void;
-  onSave: () => void;
   onHelp: () => void;
   hasResult: boolean;
   user: UserType | null;
@@ -80,7 +78,7 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-export const Sidebar = ({ activeView, onViewChange, onSave, onHelp, hasResult, user, isAutoMode, onProfile, onAutoModeToggle }: SidebarProps) => {
+export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, isAutoMode, onProfile, onAutoModeToggle }: SidebarProps) => {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   return (
@@ -127,20 +125,13 @@ export const Sidebar = ({ activeView, onViewChange, onSave, onHelp, hasResult, u
           onTooltip={setTooltip}
         />
         <SidebarItem
-          icon={PenLine}
-          label="Remark"
-          active={activeView === 'remark'}
-          onClick={() => onViewChange('remark')}
+          icon={FileText}
+          label="Results"
+          active={activeView === 'results'}
+          onClick={() => onViewChange('results')}
           onTooltip={setTooltip}
         />
         <div className="w-8 h-px bg-gray-800/50 my-1.5" />
-        <SidebarItem
-          icon={Save}
-          label="Save Results"
-          disabled={!hasResult}
-          onClick={onSave}
-          onTooltip={setTooltip}
-        />
         <SidebarItem
           icon={History}
           label="History"
