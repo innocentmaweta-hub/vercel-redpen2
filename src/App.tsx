@@ -4488,12 +4488,7 @@ export default function App() {
                         <PostsPage
                             history={history}
                             onGrade={() => {
-                                if (!user) {
-                                    setShowAuth(true);
-                                    return;
-                                }
-            
-                                handleViewChange('grade');
+                            handleViewChange('grade');
                             }}
                         />
             
