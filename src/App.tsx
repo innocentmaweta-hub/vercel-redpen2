@@ -3350,88 +3350,68 @@ export default function App() {
                 markingScheme ||
                 studentPaper
             ) {
-                const confirmed =
-                    window.confirm(
-                        hasUnsavedResult
-                            ? 'You have an unsaved grading result.\n\n' +
-                              'Refreshing will clear the current work.\n\n' +
-                              'Continue?'
-                            : 'Refresh the current workspace? Any current work will be cleared.'
-                    );
+                const confirmed = window.confirm(
+                    hasUnsavedResult
+                        ? 'You have an unsaved grading result.\n\n' +
+                          'Refreshing will clear the current work, but your workbook and courses will remain.\n\n' +
+                          'Continue?'
+                        : 'Refresh the current grading workspace? Any current student work will be cleared.'
+                );
         
                 if (!confirmed) {
                     return;
                 }
             }
         
-                        /*
+            /*
              * Refresh the grading workspace only.
              *
              * IMPORTANT:
              * The workbook and its courses are persistent workspace state.
              * Refreshing must never destroy them.
              */
-            const handleRefresh = () => {
-                if (
-                    hasUnsavedResult ||
-                    result ||
-                    markingScheme ||
-                    studentPaper
-                ) {
-                    const confirmed = window.confirm(
-                        hasUnsavedResult
-                            ? 'You have an unsaved grading result.\n\n' +
-                              'Refreshing will clear the current work, but your workbook and courses will remain.\n\n' +
-                              'Continue?'
-                            : 'Refresh the current grading workspace? Any current student work will be cleared.'
-                    );
-    
-                    if (!confirmed) {
-                        return;
-                    }
-                }
-    
-                setStudentInfo({
-                    name: '',
-                    regNo: '',
-                    program: '',
-                    year:
-                        semesterCourse?.year ||
-                        '',
-                    semester:
-                        semesterCourse?.semester ||
-                        '',
-                    courseCode:
-                        semesterCourse?.courseCode ||
-                        '',
-                    examDate: ''
-                });
-    
-                setMarkingScheme(null);
-                setStudentPaper(null);
-                setResult(null);
-                setExaminerRemarks('');
-    
-                setHasUnsavedResult(false);
-                setPendingHistoryRecord(null);
-                setHistorySaveState('idle');
-    
-                setActiveView('dashboard');
-                setMarkingModeState('ai');
-    
-                setClearCount(
-                    c => c + 1
-                );
-    
-                setZoom(1);
-                setActiveTool(null);
-                setShowToolOptions(false);
-    
-                setIsMaximized(false);
-                setIsAutoMode(false);
-    
-                setShowRefresh(false);
-            };
+        
+            setStudentInfo({
+                name: '',
+                regNo: '',
+                program: '',
+                year:
+                    semesterCourse?.year ||
+                    '',
+                semester:
+                    semesterCourse?.semester ||
+                    '',
+                courseCode:
+                    semesterCourse?.courseCode ||
+                    '',
+                examDate: ''
+            });
+        
+            setMarkingScheme(null);
+            setStudentPaper(null);
+            setResult(null);
+            setExaminerRemarks('');
+        
+            setHasUnsavedResult(false);
+            setPendingHistoryRecord(null);
+            setHistorySaveState('idle');
+        
+            setActiveView('dashboard');
+            setMarkingModeState('ai');
+        
+            setClearCount(
+                c => c + 1
+            );
+        
+            setZoom(1);
+            setActiveTool(null);
+            setShowToolOptions(false);
+        
+            setIsMaximized(false);
+            setIsAutoMode(false);
+        
+            setShowRefresh(false);
+        };
     
             // Auth handlers
             const handleAuthSuccess = (
