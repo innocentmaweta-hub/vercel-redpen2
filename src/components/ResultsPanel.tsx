@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Award, AlertCircle, Edit3, Printer, Save } from 'lucide-react';
+import { Award, AlertCircle, Edit3, Printer, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GradingResult } from '../types';
 
@@ -33,6 +33,35 @@ function parseScore(value: unknown): ParsedScore | null {
   return { score, maximum };
 }
 
+function parseOverallScore(value: unknown): ParsedScore | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().replace(/\s+/g, '');
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+
+  const score = Number(match[1]);
+  const maximum = Number(match[2]);
+
+  if (!Number.isFinite(score) || !Number.isFinite(maximum)) return null;
+  if (maximum <= 0 || score < 0 || score > maximum) return null;
+
+  return { score, maximum };
+}
+
+function splitOverallScore(value: unknown): { total: string; outOf: string } {
+  const parsed = parseOverallScore(value);
+  if (!parsed) {
+    return { total: '', outOf: '' };
+  }
+
+  return {
+    total: String(Number(parsed.score.toFixed(2))),
+    outOf: String(Number(parsed.maximum.toFixed(2))),
+  };
+}
+
 function validateScore(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -64,6 +93,25 @@ function calculateGrade(percentage: number): string {
       .sort((a, b) => b.min - a.min)
       .find(item => percentage >= item.min)?.grade || 'F'
   );
+}
+
+function calculateOverall(
+  totalValue: string,
+  outOfValue: string
+): { totalScore: string; percentage: string; grade: string } | null {
+  const total = Number(totalValue);
+  const outOf = Number(outOfValue);
+
+  if (!Number.isFinite(total) || !Number.isFinite(outOf)) return null;
+  if (outOf <= 0 || total < 0 || total > outOf) return null;
+
+  const percentage = Number(((total / outOf) * 100).toFixed(2));
+
+  return {
+    totalScore: `${Number(total.toFixed(2))}/${Number(outOf.toFixed(2))}`,
+    percentage: String(percentage),
+    grade: calculateGrade(percentage),
+  };
 }
 
 function recalculateFromQuestions(
@@ -108,31 +156,33 @@ function normalizeResult(result: GradingResult): GradingResult {
   return {
     ...result,
     questions,
-    totalScore: recalculated?.totalScore ?? (typeof result.totalScore === 'string' ? result.totalScore : ''),
-    percentage: recalculated?.percentage ?? (typeof result.percentage === 'string' ? result.percentage : ''),
-    grade: recalculated?.grade ?? (typeof result.grade === 'string' ? result.grade : ''),
+    totalScore:
+      recalculated?.totalScore ??
+      (typeof result.totalScore === 'string' ? result.totalScore : ''),
+    percentage:
+      recalculated?.percentage ??
+      (typeof result.percentage === 'string' ? result.percentage : ''),
+    grade:
+      recalculated?.grade ??
+      (typeof result.grade === 'string' ? result.grade : ''),
     feedback: typeof result.feedback === 'string' ? result.feedback : '',
   };
 }
 
 function validateResultForSave(result: GradingResult): string | null {
   if (!result) return 'There is no valid grading result to save.';
-  if (!Array.isArray(result.questions) || result.questions.length === 0) {
-    return 'No question-level marks are available. Complete grading before saving.';
-  }
 
-  if (result.questions.some((q: any) => !parseScore(q?.score))) {
-    return 'Every question must have a valid score before the result can be saved.';
-  }
-
-  const total = parseScore(result.totalScore);
+  const total = parseOverallScore(result.totalScore);
   const percentage = parsePercentage(result.percentage);
 
   if (!total) return 'The total score is incomplete or invalid.';
   if (percentage === null) return 'The percentage is incomplete or invalid.';
   if (!result.grade?.trim()) return 'The final grade is missing.';
 
-  if (result.grade.trim().toUpperCase() !== calculateGrade(percentage).toUpperCase()) {
+  if (
+    result.grade.trim().toUpperCase() !==
+    calculateGrade(percentage).toUpperCase()
+  ) {
     return 'The final grade does not match the percentage.';
   }
 
@@ -158,26 +208,44 @@ export const ResultsPanel = ({
 }: Props) => {
   const [editableResult, setEditableResult] = useState<GradingResult | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showQuestionEditor, setShowQuestionEditor] = useState(false);
   const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [manualTotal, setManualTotal] = useState('');
+  const [manualOutOf, setManualOutOf] = useState('');
 
   useEffect(() => {
     if (!result) {
       setEditableResult(null);
       setIsEditing(false);
+      setShowQuestionEditor(false);
       setScoreErrors({});
       setSaveError(null);
+      setManualTotal('');
+      setManualOutOf('');
       return;
     }
 
     if (!isEditing) {
-      setEditableResult(normalizeResult(result));
+      const normalized = normalizeResult(result);
+      setEditableResult(normalized);
+
+      const parts = splitOverallScore(normalized.totalScore);
+      setManualTotal(parts.total);
+      setManualOutOf(parts.outOf);
+
       setScoreErrors({});
       setSaveError(null);
+      setShowQuestionEditor(false);
     }
   }, [result, isEditing]);
 
   const currentResult = editableResult || result;
+
+  const isSelfMarked =
+    currentResult?.feedback ===
+      'Manually type the recommendations of this paper here' ||
+    currentResult?.totalScore === '_/100';
 
   const updateResult = (next: GradingResult) => {
     setEditableResult(next);
@@ -193,6 +261,12 @@ export const ResultsPanel = ({
 
     const recalculated = recalculateFromQuestions(questions);
 
+    if (recalculated) {
+      const parts = splitOverallScore(recalculated.totalScore);
+      setManualTotal(parts.total);
+      setManualOutOf(parts.outOf);
+    }
+
     updateResult({
       ...currentResult,
       questions,
@@ -207,6 +281,8 @@ export const ResultsPanel = ({
   };
 
   const handleScoreChange = (index: number, value: string) => {
+    if (!isSelfMarked) return;
+
     const key = String(currentResult?.questions?.[index]?.q ?? index);
     const error = validateScore(value);
 
@@ -229,28 +305,38 @@ export const ResultsPanel = ({
     updateResult({ ...currentResult, feedback: value });
   };
 
+  const updateManualOverall = (totalValue: string, outOfValue: string) => {
+    if (!currentResult) return;
+
+    setManualTotal(totalValue);
+    setManualOutOf(outOfValue);
+
+    const recalculated = calculateOverall(totalValue, outOfValue);
+
+    if (recalculated) {
+      updateResult({
+        ...currentResult,
+        ...recalculated,
+      });
+    } else {
+      updateResult({
+        ...currentResult,
+        totalScore:
+          totalValue || outOfValue
+            ? `${totalValue}/${outOfValue}`
+            : '',
+        percentage: '',
+        grade: '',
+      });
+    }
+  };
+
   const handleTotalChange = (value: string) => {
-    if (!currentResult) return;
-    updateResult({ ...currentResult, totalScore: value });
+    updateManualOverall(value, manualOutOf);
   };
 
-  const handlePercentageChange = (value: string) => {
-    if (!currentResult) return;
-    const cleanValue = value.replace(/%/g, '');
-    const parsed = parsePercentage(cleanValue);
-
-    updateResult({
-      ...currentResult,
-      percentage: cleanValue,
-      ...(parsed !== null
-        ? { grade: calculateGrade(parsed) }
-        : {}),
-    });
-  };
-
-  const handleGradeChange = (value: string) => {
-    if (!currentResult) return;
-    updateResult({ ...currentResult, grade: value.toUpperCase() });
+  const handleOutOfChange = (value: string) => {
+    updateManualOverall(manualTotal, value);
   };
 
   const handleEditToggle = () => {
@@ -259,9 +345,18 @@ export const ResultsPanel = ({
       return;
     }
 
+    if (!currentResult) return;
+
     setSaveError(null);
     setScoreErrors({});
-    setEditableResult(normalizeResult(currentResult!));
+
+    const normalized = normalizeResult(currentResult);
+    setEditableResult(normalized);
+
+    const parts = splitOverallScore(normalized.totalScore);
+    setManualTotal(parts.total);
+    setManualOutOf(parts.outOf);
+
     setIsEditing(true);
   };
 
@@ -311,25 +406,23 @@ export const ResultsPanel = ({
     );
   }
 
-  const isSelfMarked =
-    currentResult.feedback === 'Manually type the recommendations of this paper here' ||
-    currentResult.totalScore === '_/100';
-
   const ghostClass = 'text-gray-600 italic opacity-60';
-  const allQuestionsScored =
+  const hasQuestions =
     Array.isArray(currentResult.questions) &&
-    currentResult.questions.length > 0 &&
-    currentResult.questions.every((q: any) => parseScore(q?.score) !== null);
+    currentResult.questions.length > 0;
 
-  const hasIncompleteQuestions =
-    Array.isArray(currentResult.questions) &&
-    currentResult.questions.length > 0 &&
-    !allQuestionsScored;
+  const allQuestionsScored =
+    hasQuestions &&
+    currentResult.questions.every(
+      (q: any) => parseScore(q?.score) !== null
+    );
+
+  const hasIncompleteQuestions = hasQuestions && !allQuestionsScored;
 
   const hasCompleteOverallResult =
-    !!currentResult.totalScore &&
-    !!currentResult.percentage &&
-    !!currentResult.grade;
+    !!parseOverallScore(currentResult.totalScore) &&
+    parsePercentage(currentResult.percentage) !== null &&
+    !!currentResult.grade?.trim();
 
   return (
     <div className="bg-card h-full rounded-3xl border border-gray-800 shadow-xl flex flex-col overflow-hidden">
@@ -359,12 +452,14 @@ export const ResultsPanel = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mt-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
           <div className="rounded-xl bg-gray-950/50 border border-gray-800 p-3">
             <span className="text-[9px] uppercase tracking-widest text-gray-500">Total</span>
             <input
-              type="text"
-              value={currentResult.totalScore || ''}
+              type="number"
+              min="0"
+              step="any"
+              value={isEditing ? manualTotal : splitOverallScore(currentResult.totalScore).total}
               readOnly={!isEditing}
               onChange={e => handleTotalChange(e.target.value)}
               className={`mt-1 text-lg font-bold text-ink bg-transparent w-full focus:outline-none ${
@@ -377,47 +472,66 @@ export const ResultsPanel = ({
           </div>
 
           <div className="rounded-xl bg-gray-950/50 border border-gray-800 p-3">
-            <span className="text-[9px] uppercase tracking-widest text-gray-500">Percentage</span>
+            <span className="text-[9px] uppercase tracking-widest text-gray-500">Out of</span>
             <input
-              type="text"
-              value={currentResult.percentage ? `${currentResult.percentage}%` : ''}
+              type="number"
+              min="0"
+              step="any"
+              value={isEditing ? manualOutOf : splitOverallScore(currentResult.totalScore).outOf}
               readOnly={!isEditing}
-              onChange={e => handlePercentageChange(e.target.value)}
+              onChange={e => handleOutOfChange(e.target.value)}
               className={`mt-1 text-lg font-bold text-ink bg-transparent w-full focus:outline-none ${
                 isEditing
                   ? 'cursor-text border-b border-gray-700 focus:border-accent-blue'
                   : 'cursor-default'
               }`}
-              aria-label="Percentage"
+              aria-label="Maximum score"
             />
           </div>
 
           <div className="rounded-xl bg-gray-950/50 border border-gray-800 p-3">
+            <span className="text-[9px] uppercase tracking-widest text-gray-500">Percentage</span>
+            <div className="mt-1 text-lg font-bold text-ink w-full">
+              {currentResult.percentage ? `${currentResult.percentage}%` : '—'}
+            </div>
+            <span className="text-[8px] text-gray-600">Automatic</span>
+          </div>
+
+          <div className="rounded-xl bg-gray-950/50 border border-gray-800 p-3">
             <span className="text-[9px] uppercase tracking-widest text-gray-500">Grade</span>
-            <input
-              type="text"
-              value={currentResult.grade || ''}
-              readOnly={!isEditing}
-              onChange={e => handleGradeChange(e.target.value)}
-              className={`mt-1 text-lg font-bold text-accent-green bg-transparent w-full focus:outline-none uppercase ${
-                isEditing
-                  ? 'cursor-text border-b border-gray-700 focus:border-accent-green'
-                  : 'cursor-default'
-              }`}
-              aria-label="Grade"
-            />
+            <div className="mt-1 text-lg font-bold text-accent-green uppercase w-full">
+              {currentResult.grade || '—'}
+            </div>
+            <span className="text-[8px] text-gray-600">Automatic</span>
           </div>
         </div>
 
-        {isEditing && hasIncompleteQuestions && (
-          <p className="mt-3 text-[10px] text-yellow-500/70">
-            Complete every question score before saving if you want question-level validation.
+        {isEditing && isSelfMarked && hasQuestions && (
+          <button
+            type="button"
+            onClick={() => setShowQuestionEditor(value => !value)}
+            className="mt-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-accent-blue hover:text-white transition-colors"
+          >
+            {showQuestionEditor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {showQuestionEditor ? 'Hide question-level marks' : 'Edit question-level marks'}
+          </button>
+        )}
+
+        {isEditing && isSelfMarked && !hasQuestions && (
+          <p className="mt-4 text-[10px] text-gray-500">
+            Question-level marks are not available for this manual result.
           </p>
         )}
 
-        {!isSelfMarked && !hasCompleteOverallResult && !hasIncompleteQuestions && (
+        {isEditing && isSelfMarked && hasIncompleteQuestions && showQuestionEditor && (
+          <p className="mt-3 text-[10px] text-yellow-500/70">
+            Incomplete question marks are allowed in manual mode. If every question is completed, the overall result will update automatically from them.
+          </p>
+        )}
+
+        {!hasCompleteOverallResult && (
           <p className="mt-3 text-[10px] text-red-400/80">
-            The grading result is missing required overall marks and cannot be saved until it is completed.
+            Enter a valid total and maximum score to calculate the percentage and grade.
           </p>
         )}
 
@@ -430,7 +544,7 @@ export const ResultsPanel = ({
       </div>
 
       <div className="flex-1 overflow-y-auto desktop-scroll p-6 space-y-4">
-        {currentResult.questions && currentResult.questions.length > 0 ? (
+        {hasQuestions && (!isSelfMarked || showQuestionEditor) ? (
           currentResult.questions.map((q: any, idx: number) => {
             const errorKey = String(q.q ?? idx);
 
@@ -450,7 +564,7 @@ export const ResultsPanel = ({
                     </span>
                   </div>
 
-                  {isEditing ? (
+                  {isEditing && (!isSelfMarked || showQuestionEditor) ? (
                     <div className="flex flex-col items-end gap-1">
                       <input
                         type="text"
@@ -482,7 +596,7 @@ export const ResultsPanel = ({
                   )}
                 </div>
 
-                {isEditing ? (
+                {isEditing && (!isSelfMarked || showQuestionEditor) ? (
                   <textarea
                     value={q.feedback || ''}
                     onChange={e => handleFeedbackChange(idx, e.target.value)}
@@ -509,7 +623,9 @@ export const ResultsPanel = ({
         ) : (
           <div className="py-8 text-center text-gray-600">
             <AlertCircle size={28} className="mx-auto mb-2 opacity-50" />
-            <p className="text-[10px] uppercase tracking-widest">No question-level results</p>
+            <p className="text-[10px] uppercase tracking-widest">
+              {isSelfMarked ? 'Question-level results hidden' : 'No question-level results'}
+            </p>
           </div>
         )}
 
