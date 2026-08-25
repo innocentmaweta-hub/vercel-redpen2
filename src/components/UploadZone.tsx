@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { Upload, CheckCircle2 } from 'lucide-react';
+import { Upload, CheckCircle2, X, RefreshCw, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Props {
@@ -24,6 +24,7 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadError, setUploadError] = useState('');
     const [previewSource, setPreviewSource] = useState<string | null>(null);
+    const [isReferencePreviewOpen, setIsReferencePreviewOpen] = useState(false);
 
     useImperativeHandle(ref, () => ({
       triggerInput: () => fileInputRef.current?.click(),
@@ -55,66 +56,20 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
 
     const isReferencePanel = /reference|marking\s*scheme/i.test(label);
 
-    const viewUploadedReference = () => {
-      if (!previewSource || !fileName) return;
-
-      const previewWindow = window.open('', '_blank');
-      if (!previewWindow) {
-        setUploadError('Please allow pop-ups to view the reference.');
-        return;
+    const openReferencePreview = () => {
+      if (hasFile && previewSource && fileName && isReferencePanel) {
+        setIsReferencePreviewOpen(true);
       }
-
-      previewWindow.document.write(`<!doctype html>
-<html>
-<head>
-  <title>${fileName.replace(/[<>]/g, '')}</title>
-  <style>
-    html, body { margin: 0; width: 100%; height: 100%; background: #111; color: #fff; font-family: system-ui, sans-serif; }
-    iframe, img { display: block; width: 100%; height: 100%; border: 0; object-fit: contain; }
-    pre { white-space: pre-wrap; padding: 24px; box-sizing: border-box; height: 100%; overflow: auto; margin: 0; }
-  </style>
-</head>
-<body></body>
-</html>`);
-
-      const body = previewWindow.document.body;
-
-      if (previewSource.startsWith('data:image/')) {
-        const img = previewWindow.document.createElement('img');
-        img.src = previewSource;
-        img.alt = fileName;
-        body.appendChild(img);
-      } else if (previewSource.startsWith('data:application/pdf')) {
-        const iframe = previewWindow.document.createElement('iframe');
-        iframe.src = previewSource;
-        iframe.title = fileName;
-        body.appendChild(iframe);
-      } else {
-        const pre = previewWindow.document.createElement('pre');
-        try {
-          const commaIndex = previewSource.indexOf(',');
-          const encoded = commaIndex >= 0 ? previewSource.slice(commaIndex + 1) : previewSource;
-          pre.textContent = decodeURIComponent(encoded);
-        } catch {
-          pre.textContent = 'Unable to preview this reference file.';
-        }
-        body.appendChild(pre);
-      }
-
-      previewWindow.document.close();
     };
 
     const handleZoneClick = () => {
-      // A loaded reference is read-only from this panel. Clicking it previews
-      // the existing reference instead of opening the replacement file picker.
+      // A loaded reference opens in the app so it can be viewed or replaced
+      // without navigating away from the current grading workspace.
       if (hasFile && isReferencePanel) {
-        viewUploadedReference();
+        openReferencePreview();
         return;
       }
 
-      // All upload surfaces that are tied to the current grading session use
-      // the same entry flow: when no session is active, clicking the surface
-      // opens the existing Load Session modal (the same flow as the TopBar).
       if (
         !hasFile &&
         onZoneClick &&
@@ -142,6 +97,17 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
     };
 
     const isLarge = variant === 'large';
+
+    let textPreview = '';
+    if (previewSource && !previewSource.startsWith('data:image/') && !previewSource.startsWith('data:application/pdf')) {
+      try {
+        const commaIndex = previewSource.indexOf(',');
+        const encoded = commaIndex >= 0 ? previewSource.slice(commaIndex + 1) : previewSource;
+        textPreview = decodeURIComponent(encoded);
+      } catch {
+        textPreview = 'Unable to preview this reference file.';
+      }
+    }
 
     return (
       <div className="bg-card p-6 rounded-3xl border border-gray-800 shadow-xl overflow-hidden relative group h-full flex flex-col transition-all duration-500 hover:border-gray-700 hover:shadow-2xl hover:shadow-accent-blue/5">
@@ -227,6 +193,67 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
             )}
           </AnimatePresence>
         </motion.div>
+
+        <AnimatePresence>
+          {isReferencePreviewOpen && previewSource && fileName && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setIsReferencePreviewOpen(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Reference preview"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-6xl h-[90vh] bg-card border border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+              >
+                <div className="h-16 shrink-0 px-5 border-b border-gray-800 flex items-center gap-3">
+                  <FileText size={18} className="text-accent-green" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-gray-200 truncate">{fileName}</h3>
+                    <p className="text-[9px] uppercase tracking-widest text-gray-500">Reference preview</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-accent-blue text-white text-[10px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity"
+                  >
+                    <RefreshCw size={14} />
+                    Change reference
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsReferencePreviewOpen(false)}
+                    className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    aria-label="Close reference preview"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex-1 min-h-0 bg-black/20 overflow-hidden">
+                  {previewSource.startsWith('data:image/') ? (
+                    <div className="w-full h-full overflow-auto flex items-center justify-center p-6">
+                      <img src={previewSource} alt={fileName} className="max-w-full max-h-full object-contain" />
+                    </div>
+                  ) : previewSource.startsWith('data:application/pdf') ? (
+                    <iframe src={previewSource} title={fileName} className="w-full h-full border-0" />
+                  ) : (
+                    <pre className="w-full h-full overflow-auto p-8 text-sm leading-6 text-gray-200 whitespace-pre-wrap font-mono">
+                      {textPreview}
+                    </pre>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
