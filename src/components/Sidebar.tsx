@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutGrid,
   FileText,
   History,
-  HelpCircle,
+  Layers,
   User,
   Zap
 } from 'lucide-react';
@@ -83,6 +83,16 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
 export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, isAutoMode, onProfile, onAutoModeToggle }: SidebarProps) => {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
+  useEffect(() => {
+    const handler = () => onHelp();
+    window.addEventListener('redpen:open-help', handler);
+    return () => window.removeEventListener('redpen:open-help', handler);
+  }, [onHelp]);
+
+  const handleBatchClick = () => {
+    window.dispatchEvent(new Event('redpen:open-batch'));
+  };
+
   return (
     <aside className="w-[90px] h-full bg-sidebar border-r border-gray-800 flex flex-col relative">
       {tooltip && (
@@ -142,9 +152,9 @@ export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, isA
           onTooltip={setTooltip}
         />
         <SidebarItem
-          icon={HelpCircle}
-          label="Help"
-          onClick={onHelp}
+          icon={Layers}
+          label="Batch"
+          onClick={handleBatchClick}
           onTooltip={setTooltip}
         />
       </div>
