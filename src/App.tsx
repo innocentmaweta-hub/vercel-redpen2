@@ -124,17 +124,24 @@ export default function App() {
         courseCode: '',
         examDate: ''
     });
-    const syncStudentInfoFromWorksheet = (worksheet: RedPenWorksheet | null) => {
-      if (!worksheet) return;
+    const syncStudentInfoFromWorksheet = (
+        worksheet: RedPenWorksheet | null
+    ) => {
+        if (!worksheet) return;
     
-      setStudentInfo(prev => ({
-        ...prev,
-        courseCode: worksheet.course?.courseCode || '',
-        program: worksheet.course?.courseName || '',
-        year: worksheet.course?.yearOfStudy || '',
-        semester: worksheet.course?.semester || '',
-        academicYear: worksheet.course?.academicYear || '',
-      }));
+        setStudentInfo(prev => ({
+            ...prev,
+    
+            // Course/session metadata
+            courseCode: worksheet.course?.courseCode || '',
+            year: worksheet.course?.year || '',
+            semester: worksheet.course?.semester || '',
+            academicYear: worksheet.course?.academicYear || '',
+    
+            // Program of Study is NOT the course name.
+            // Keep the user's actual program value.
+            program: worksheet.course?.program || prev.program,
+        }));
     };
 
     const [markingScheme, setMarkingScheme] = useState<{
