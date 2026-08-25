@@ -40,9 +40,8 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
     if (selectedDepartment) localStorage.setItem('lastSelectedDepartment', selectedDepartment);
   }, [selectedDepartment]);
 
-  // The active worksheet is the source of truth for session/course metadata.
-  // The workbook store emits this event whenever a workbook is restored,
-  // switched, or changed, including after a successful cloud restore.
+  // Sync only session/course context here. Program of Study belongs to the student
+  // and must never be overwritten when the workbook/session changes.
   useEffect(() => {
     const syncFromActiveWorksheet = () => {
       const workbook = loadLocalWorkbook();
@@ -59,15 +58,13 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
         year: course.year || '',
         semester: course.semester || '',
         academicYear: course.academicYear || '',
-        program: course.program || current.program || '',
       };
 
       const changed =
         next.courseCode !== current.courseCode ||
         next.year !== current.year ||
         next.semester !== current.semester ||
-        next.academicYear !== current.academicYear ||
-        next.program !== current.program;
+        next.academicYear !== current.academicYear;
 
       if (changed) onChange(next);
     };
