@@ -4273,6 +4273,16 @@ export default function App() {
                                 activeSession.id ||
                                 sessionIdentityKey(activeSession)
                             );
+
+                            // Sync Identity Panel with the newly created session
+                            setStudentInfo(prev => ({
+                                ...prev,
+                                courseCode: activeSession.courseCode || '',
+                                program: activeSession.program || prev.program,
+                                year: activeSession.year || '',
+                                semester: activeSession.semester || '',
+                                academicYear: activeSession.academicYear || '',
+                            }));
                         
                             setStudentInfo(prev => ({
                                 ...prev,
