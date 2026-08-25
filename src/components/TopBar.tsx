@@ -132,14 +132,22 @@ export const TopBar = ({ sessions, activeSession, onSelectSession, onLoadSession
     { divider: true }, { label: 'Switch Course', disabled: true }, ...(uniqueCourseItems.length > 0 ? uniqueCourseItems : [{ label: 'No courses available yet', disabled: true }]), { divider: true }, { label: 'New Course', action: onNewCourse },
   ];
 
-  // Student is deliberately a small context menu: it never changes Session or Course.
   const studentMenuItems: DropdownItem[] = [
     { label: 'Current Student', disabled: true },
     { label: studentInfo.name || 'No student entered', disabled: true },
     ...(studentInfo.regNo ? [{ label: `Reg: ${studentInfo.regNo}`, disabled: true }] : []),
     { divider: true },
     { label: 'Switch Student', action: () => onViewChange('history') },
-    { label: 'New Student', action: () => onStudentInfoUpdate({ name: '', regNo: '', program: '', examDate: '' }) },
+    {
+      label: 'New Student',
+      action: () => {
+        if (!activeSession) {
+          onShowOldSessions();
+          return;
+        }
+        onStudentInfoUpdate({ name: '', regNo: '', program: '', examDate: '' });
+      },
+    },
   ];
   const menus: Record<string, DropdownItem[]> = {
     File: [{ label: 'Save Results', action: onSave, disabled: !hasResult }, { divider: true }, { label: 'Save As...', action: onSave, disabled: !hasResult }, { label: 'Print Report', action: onPrint, disabled: !hasResult }],
