@@ -356,6 +356,8 @@ export default function App() {
 
     const [showOldSessionModal, setShowOldSessionModal] =
         useState(false);
+    const [pendingGradeNavigation, setPendingGradeNavigation] =
+        useState(false);
 
     const [showNewCourseModal, setShowNewCourseModal] =
         useState(false);
@@ -2046,13 +2048,35 @@ export default function App() {
         setExaminerRemarks('');
     
         setShowOldSessionModal(false);
-        setActiveView('grade');
+        
+        if (pendingGradeNavigation) {
+            setPendingGradeNavigation(false);
+            setActiveView('grade');
+        }
     
         if (token) {
             void persistWorkbook(
                 savedWorkbook
             );
         }
+    };
+    const handleViewChange = (view: ActiveView) => {
+        if (view !== 'grade') {
+            setActiveView(view);
+            return;
+        }
+    
+        // Already inside an active session/course:
+        // go directly to Grade.
+        if (semesterCourse && activeSessionId) {
+            setActiveView('grade');
+            return;
+        }
+    
+        // No active session:
+        // remember that Grade is the destination after a session is selected.
+        setPendingGradeNavigation(true);
+        setShowOldSessionModal(true);
     };
     
     /*
@@ -4469,7 +4493,7 @@ export default function App() {
                                     return;
                                 }
             
-                                setActiveView('grade');
+                                handleViewChange('grade');
                             }}
                         />
             
