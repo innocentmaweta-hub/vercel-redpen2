@@ -1,6 +1,6 @@
 import logo from '../assets/logo.png';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, History as HistoryIcon, User, Save, Printer, Plus, BookOpen, Check } from 'lucide-react';
+import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, History as HistoryIcon, User, Save, Printer, Plus, BookOpen, Check, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
 import { sessionIdentityKey } from '../lib/sessionStore';
@@ -250,6 +250,12 @@ export const TopBar = ({
   }, [onShowOldSessions]);
 
   useEffect(() => {
+    const handler = () => onBatch();
+    window.addEventListener('redpen:open-batch', handler);
+    return () => window.removeEventListener('redpen:open-batch', handler);
+  }, [onBatch]);
+
+  useEffect(() => {
     document.documentElement.dataset.redpenSessionActive = activeSession ? 'true' : 'false';
     return () => {
       delete document.documentElement.dataset.redpenSessionActive;
@@ -276,6 +282,7 @@ export const TopBar = ({
     { label: 'Print Report', icon: Printer, action: onPrint },
     { label: 'Settings', icon: SlidersHorizontal, action: onSettings },
     { label: 'Batch Grading', icon: Layers, action: onBatch },
+    { label: 'Help', icon: HelpCircle, action: () => window.dispatchEvent(new Event('redpen:open-help')) },
     { label: 'Refresh', icon: RotateCw, action: onRefresh },
     { label: 'New Session', icon: BookOpen, action: onNewSession },
     { label: 'New Course', icon: Plus, action: onNewCourse },
@@ -394,8 +401,8 @@ export const TopBar = ({
         <button onClick={onToggleYaza} className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all duration-150 flex items-center gap-1.5 shadow-lg cursor-pointer ${isYazaOpen ? 'bg-accent-blue text-white scale-105 shadow-accent-blue/30' : 'bg-gray-700 text-white hover:bg-gray-600 hover:scale-105 hover:shadow-xl active:scale-95'}`}>
           <Bot size={12} /> Yaza AI
         </button>
-        <button onClick={onBatch} className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">
-          <Layers size={12} /> Batch
+        <button onClick={() => window.dispatchEvent(new Event('redpen:open-help'))} className="px-3 py-1 bg-accent-blue text-white text-[11px] font-bold rounded-md hover:bg-blue-600 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">
+          <HelpCircle size={12} /> Help
         </button>
         <button onClick={onRefresh} className="px-3 py-1 bg-yellow-600 text-white text-[11px] font-bold rounded-md hover:bg-yellow-500 hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-150 shadow-lg flex items-center gap-1.5 cursor-pointer">
           <RotateCw size={10} /> Refresh
