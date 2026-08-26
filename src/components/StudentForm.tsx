@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StudentInfo } from '../types';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, LockKeyhole } from 'lucide-react';
+import { loadLocalWorkbook } from '../lib/workbookStore';
 
 interface Props {
   info: StudentInfo;
@@ -29,10 +30,49 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
   const [selectedDepartment, setSelectedDepartment] = useState<string>(() => localStorage.getItem('lastSelectedDepartment') || '');
   const [pendingCourseCode, setPendingCourseCode] = useState<string | null>(null);
   const [pendingWorkbookChange, setPendingWorkbookChange] = useState<{ field: 'academicYear' | 'semester'; value: string } | null>(null);
+  const infoRef = useRef(info);
+
+  useEffect(() => {
+    infoRef.current = info;
+  }, [info]);
 
   useEffect(() => {
     if (selectedDepartment) localStorage.setItem('lastSelectedDepartment', selectedDepartment);
   }, [selectedDepartment]);
+
+  // Sync only session/course context here. Program of Study belongs to the student
+  // and must never be overwritten when the workbook/session changes.
+  useEffect(() => {
+    const syncFromActiveWorksheet = () => {
+      const workbook = loadLocalWorkbook();
+      if (!workbook?.activeSheetId) return;
+
+      const worksheet = workbook.sheets.find(sheet => sheet.id === workbook.activeSheetId);
+      if (!worksheet?.course) return;
+
+      const course = worksheet.course;
+      const current = infoRef.current;
+      const next = {
+        ...current,
+        courseCode: course.courseCode || '',
+        year: course.year || '',
+        semester: course.semester || '',
+        academicYear: course.academicYear || '',
+      };
+
+      const changed =
+        next.courseCode !== current.courseCode ||
+        next.year !== current.year ||
+        next.semester !== current.semester ||
+        next.academicYear !== current.academicYear;
+
+      if (changed) onChange(next);
+    };
+
+    syncFromActiveWorksheet();
+    window.addEventListener('redpen:workbook-updated', syncFromActiveWorksheet);
+    return () => window.removeEventListener('redpen:workbook-updated', syncFromActiveWorksheet);
+  }, [onChange]);
 
   const handleChange = (field: keyof StudentInfo, value: string) => {
     let validatedValue = value;
@@ -43,6 +83,7 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
 
   const inputClass = "w-full bg-sidebar border border-gray-800 rounded-lg py-2 px-3 text-sm focus:border-accent-blue focus:outline-none transition-all placeholder:text-gray-600";
   const selectClass = `${inputClass} appearance-none cursor-pointer`;
+  const contextSelectClass = `${inputClass} appearance-none cursor-not-allowed opacity-75 text-gray-300`;
 
   const requestCourseChange = (value: string) => {
     const trimmed = value.trim();
@@ -75,33 +116,45 @@ export const StudentForm = ({ info, onChange, courses, hasUnsavedResult = false,
   return (
     <>
       <div className="bg-card p-6 rounded-3xl border border-gray-800 shadow-xl space-y-1">
-        <div className="flex items-center gap-2 mb-4"><div className="w-2 h-4 bg-accent-blue rounded-full" /><h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Identity Panel</h2></div>
-        <div className="grid grid-cols-2 gap-4"><input type="text" placeholder="Student Name" className={inputClass} value={info.name} onChange={(e) => handleChange('name', e.target.value)} /><input type="text" placeholder="Registration Number" className={inputClass} value={info.regNo} onChange={(e) => handleChange('regNo', e.target.value)} /></div>
-        <input type="text" placeholder="Program of Study" className={inputClass} value={info.program} onChange={(e) => handleChange('program', e.target.value)} />
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex gap-2"><select className={selectClass} value={info.year} onChange={(e) => handleChange('year', e.target.value)}><option value="">Year of Study</option>{YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}</select><select className={selectClass} value={(pendingWorkbookChange?.field === 'semester' ? pendingWorkbookChange.value : info.semester) || ''} onChange={(e) => requestWorkbookChange('semester', e.target.value)}><option value="">Semester</option>{SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-          <select className={selectClass} value={(pendingWorkbookChange?.field === 'academicYear' ? pendingWorkbookChange.value : info.academicYear) || ''} onChange={(e) => requestWorkbookChange('academicYear', e.target.value)}><option value="">Academic Year</option>{ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}</select>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2"><div className="w-2 h-4 bg-accent-blue rounded-full" /><h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Identity Panel</h2></div>
+          <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-gray-600" title="Course and academic details come from the active session/course">
+            <LockKeyhole size={10} /> Session context
+          </div>
         </div>
+
         <div className="grid grid-cols-2 gap-4">
-          <select
-            className={selectClass}
-            value={info.courseCode || ''}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '__new__') {
-                onNewCourse?.();
-                return;
-              }
-              requestCourseChange(value);
-            }}
-          >
+          <input type="text" placeholder="Student Name" className={inputClass} value={info.name} onChange={(e) => handleChange('name', e.target.value)} />
+          <input type="text" placeholder="Registration Number" className={inputClass} value={info.regNo} onChange={(e) => handleChange('regNo', e.target.value)} />
+        </div>
+        <input type="text" placeholder="Program of Study" className={inputClass} value={info.program} onChange={(e) => handleChange('program', e.target.value)} />
+
+        {/* Session/course metadata is read-only here. Change context through the TopBar. */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex gap-2">
+            <select className={contextSelectClass} value={info.year || ''} disabled aria-label="Year of Study">
+              <option value="">Year of Study</option>
+              {YEARS_OF_STUDY.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select className={contextSelectClass} value={info.semester || ''} disabled aria-label="Semester">
+              <option value="">Semester</option>
+              {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <select className={contextSelectClass} value={info.academicYear || ''} disabled aria-label="Academic Year">
+            <option value="">Academic Year</option>
+            {ACADEMIC_YEARS.map(ay => <option key={ay} value={ay}>{ay}</option>)}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <select className={contextSelectClass} value={info.courseCode || ''} disabled aria-label="Course">
             <option value="">Course</option>
             {courses.map(c => (
               <option key={c.courseCode} value={c.courseCode}>
                 {c.courseCode}{c.courseName ? ` — ${c.courseName}` : ''}
               </option>
             ))}
-            <option value="__new__">+ Add New Course</option>
           </select>
           <input type="date" placeholder="Date of Exams" className={`${inputClass} text-gray-400`} value={info.examDate} onChange={(e) => handleChange('examDate', e.target.value)} />
         </div>
