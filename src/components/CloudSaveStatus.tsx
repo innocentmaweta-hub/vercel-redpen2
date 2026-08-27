@@ -12,7 +12,17 @@ interface Props {
 export const CloudSaveStatus = ({ state, onRetry, label = 'Workbook' }: Props) => {
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => setDismissed(false), [state]);
+  useEffect(() => {
+      setDismissed(false);
+  
+      if (state === 'saved') {
+          const timer = setTimeout(() => {
+              setDismissed(true);
+          }, 5000);
+  
+          return () => clearTimeout(timer);
+      }
+  }, [state]);
   if (state === 'idle' || dismissed) return null;
 
   if (state === 'saving') return <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-accent-blue/10 border border-accent-blue/20 text-[9px] font-bold text-accent-blue"><Loader2 size={11} className="animate-spin" />Saving…</div>;
