@@ -188,7 +188,8 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving = fals
         !currentResult?.totalScore &&
         Array.isArray(currentResult?.questions) &&
         currentResult.questions.length === 0) ||
-      (isEditing && showQuestionEditor);
+      (isEditing &&
+        Array.isArray(currentResult?.questions));
 
   const updateResult = (next: GradingResult) => {
     setEditableResult(next);
