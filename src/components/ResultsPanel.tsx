@@ -8,7 +8,7 @@ const GRADE_SCALE = [
   { min: 75, grade: 'A' },
   { min: 70, grade: 'B+' },
   { min: 65, grade: 'B' },
-  { min: 60, grade: 'C+' },
+  { min: 60, grade: 'C+' }, 
   { min: 55, grade: 'C' },
   { min: 50, grade: 'D' },
   { min: 0, grade: 'F' },
@@ -181,10 +181,15 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving = fals
   }, [result, isEditing]);
 
   const currentResult = editableResult || result;
-  const isSelfMarked =
-    currentResult?.feedback === 'Manually type the recommendations of this paper here' ||
-    currentResult?.totalScore === '_/100' ||
-    (!!currentResult?.extracted_info && !currentResult?.totalScore && Array.isArray(currentResult?.questions) && currentResult.questions.length === 0);
+    const isSelfMarked =
+      currentResult?.feedback === 'Manually type the recommendations of this paper here' ||
+      currentResult?.totalScore === '_/100' ||
+      (!!currentResult?.extracted_info &&
+        !currentResult?.totalScore &&
+        Array.isArray(currentResult?.questions) &&
+        currentResult.questions.length === 0) ||
+      (isEditing &&
+        Array.isArray(currentResult?.questions));
 
   const updateResult = (next: GradingResult) => {
     setEditableResult(next);
@@ -351,12 +356,6 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving = fals
           </button>
         </div>
 
-        {isSelfMarked && (
-          <div className="mt-3 rounded-xl border border-accent-green/15 bg-accent-green/[0.03] px-3 py-2 text-[10px] text-gray-500">
-            Enter marks question by question as <span className="text-gray-300 font-mono">score/maximum</span>, for example <span className="text-gray-300 font-mono">7/10</span>. Percentage and grade are calculated automatically.
-          </div>
-        )}
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
           <div className="rounded-xl bg-gray-950/50 border border-gray-800 p-3">
             <span className="text-[9px] uppercase tracking-widest text-gray-500">Total</span>
@@ -390,8 +389,6 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving = fals
           </div>
         )}
 
-        {isEditing && isSelfMarked && hasIncompleteQuestions && showQuestionEditor && <p className="mt-3 text-[10px] text-yellow-500/70">Complete every question score before saving a question-level manual result.</p>}
-        {!hasCompleteOverallResult && <p className="mt-3 text-[10px] text-red-400/80">Enter a valid total and maximum score, or add question marks, to calculate the percentage and grade.</p>}
         {saveError && <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2"><AlertCircle size={13} className="text-red-400 mt-0.5 shrink-0" /><p className="text-[10px] text-red-400">{saveError}</p></div>}
       </div>
 
