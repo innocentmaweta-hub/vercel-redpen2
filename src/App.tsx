@@ -4551,7 +4551,7 @@ export default function App() {
                                 } flex flex-col gap-4 overflow-hidden`}
                             >
             
-                                {semesterCourse && !isMaximized && (
+                                {semesterCourse && !isMaximized && showSessionStatus && (
                                     <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
             
                                         <CloudSaveStatus
@@ -4560,6 +4560,9 @@ export default function App() {
                                                 if (semesterCourse) {
                                                     persistSession(semesterCourse);
                                                 }
+                                            }}
+                                            onDismiss={() => {
+                                                setShowSessionStatus(false);
                                             }}
                                             label="Session"
                                         />
