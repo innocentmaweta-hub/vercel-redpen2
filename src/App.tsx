@@ -106,6 +106,7 @@ import type {
 import {
     createWorkbook,
     loadLocalWorkbook,
+    worksheetFromCourse,
     writeLocalWorkbook,
     setActiveWorksheet,
     updateWorksheet,
@@ -1662,7 +1663,7 @@ export default function App() {
             return;
         }
     
-        const worksheet = createWorksheetFromCourse(
+        const worksheet = worksheetFromCourse(
             newCourse
         );
     
