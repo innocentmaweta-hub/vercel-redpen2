@@ -1795,14 +1795,19 @@ export default function App() {
         };
     
         const worksheet =
-            createWorksheetFromCourse(
+            worksheetFromCourse(
                 newSession
             );
     
         const newWorkbook =
             createWorkbook(
-                newSession,
-                worksheet
+                newSession.customName ||
+                    newSession.sessionLabel ||
+                    newSession.courseCode ||
+                    'RedPen Workbook',
+                [
+                    worksheet
+                ]
             );
     
         const savedWorkbook =
@@ -1869,9 +1874,15 @@ export default function App() {
         setShowNewSessionModal(false);
     
         if (token) {
-            void persistWorkbook(
+            void saveCloudWorkbook(
+                token,
                 savedWorkbook
-            );
+            ).catch(error => {
+                console.error(
+                    'Failed to save new workbook to cloud:',
+                    error
+                );
+            });
         }
     };
     
