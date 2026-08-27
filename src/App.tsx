@@ -1864,12 +1864,6 @@ export default function App() {
         setActiveView('grade');
     
         setShowNewSessionModal(false);
-
-        setShowOldSessionModal(false);
-        setPendingGradeNavigation(false);
-        setTimeout(() => {
-            setActiveView('grade');
-        }, 0);
     
         if (token) {
             void saveCloudWorkbook(
