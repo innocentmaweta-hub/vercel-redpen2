@@ -3206,7 +3206,8 @@ export default function App() {
                      * Persist the workbook immediately so the current
                      * worksheet remains the source of truth after refresh.
                      */
-                    await persistWorkbook(
+                    await saveCloudWorkbook(
+                        token,
                         updatedWorkbook
                     );
         
