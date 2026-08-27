@@ -182,15 +182,13 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving = fals
 
   const currentResult = editableResult || result;
     const isSelfMarked =
-    currentResult?.feedback === 'Manually type the recommendations of this paper here' ||
-    currentResult?.totalScore === '_/100' ||
-    (!!currentResult?.extracted_info &&
-      (!currentResult?.totalScore || currentResult?.totalScore === '') &&
-      Array.isArray(currentResult?.questions) &&
-      currentResult.questions.length === 0) ||
-    (isEditing &&
-      Array.isArray(currentResult?.questions) &&
-      currentResult.questions.some((q: any) => q?.score === ''));
+      currentResult?.feedback === 'Manually type the recommendations of this paper here' ||
+      currentResult?.totalScore === '_/100' ||
+      (!!currentResult?.extracted_info &&
+        !currentResult?.totalScore &&
+        Array.isArray(currentResult?.questions) &&
+        currentResult.questions.length === 0) ||
+      (isEditing && showQuestionEditor);
 
   const updateResult = (next: GradingResult) => {
     setEditableResult(next);
