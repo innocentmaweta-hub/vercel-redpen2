@@ -360,7 +360,7 @@ export default function App() {
     const [showOldSessionModal, setShowOldSessionModal] =
         useState(false);
     const [pendingGradeNavigation, setPendingGradeNavigation] =
-        useState(false);
+        useRef(false);
 
     const [showNewCourseModal, setShowNewCourseModal] =
         useState(false);
