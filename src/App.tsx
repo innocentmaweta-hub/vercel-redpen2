@@ -3185,60 +3185,103 @@ export default function App() {
                  * Update the active worksheet in the workbook.
                  */
                 try {
+                    /*
+                     * The workbook's activeSheetId is the authoritative
+                     * identifier for the worksheet being graded.
+                     */
+                    const activeWorksheetId =
+                        workbook.activeSheetId;
+                
+                    if (!activeWorksheetId) {
+                        throw new Error(
+                            'No active worksheet is selected.'
+                        );
+                    }
+                
+                    const activeWorksheet =
+                        workbook.sheets.find(
+                            sheet =>
+                                sheet.id ===
+                                activeWorksheetId
+                        );
+                
+                    if (!activeWorksheet) {
+                        throw new Error(
+                            'The active worksheet could not be found in the workbook.'
+                        );
+                    }
+                
+                    /*
+                     * Add the saved grading result to the active worksheet.
+                     */
+                    const updatedRows = [
+                        ...(activeWorksheet.rows || []),
+                        {
+                            id: record.id,
+                            studentInfo: saveStudentInfo,
+                            result: record.result,
+                            gradedAt: record.date,
+                        },
+                    ];
+                
                     const updatedWorkbook =
-                        updateWorksheetResult(
+                        updateWorksheet(
                             workbook,
-                            activeCourseCode,
+                            activeWorksheet.id,
                             {
-                                studentInfo:
-                                    saveStudentInfo,
-        
-                                result:
-                                    currentResult,
+                                rows: updatedRows,
                             }
                         );
-        
+                
+                    /*
+                     * Update the UI immediately.
+                     */
                     setWorkbook(
                         updatedWorkbook
                     );
-        
+                
                     /*
-                     * Persist the workbook immediately so the current
-                     * worksheet remains the source of truth after refresh.
+                     * Persist the updated workbook to cloud/local storage.
                      */
-                    await saveCloudWorkbook(
-                        token,
-                        updatedWorkbook
+                    const workbookResponse =
+                        await saveCloudWorkbook(
+                            token,
+                            updatedWorkbook
+                        );
+                
+                    setWorkbook(
+                        workbookResponse.workbook
                     );
-        
+                
                     /*
                      * Export the marked paper PDF when a saved folder exists.
                      * Workbook persistence above is the important save operation.
                      */
                     const folder =
                         await getSavedFolder();
-        
+                
                     const paperImage =
                         paperCanvasRef.current
                             ?.captureFullPaper();
-        
+                
                     if (paperImage) {
                         const pdfBlob =
                             await buildPaperPdfBlob(
                                 paperImage
                             );
-        
+                
                         const pdfFilename =
                             buildPaperPdfFilename(
                                 saveStudentInfo
                             );
-        
+                
                         await writeFileToFolder(
                             folder,
                             pdfFilename,
                             pdfBlob
                         );
                     }
+                
                     await appendResultToSessionExcel(
                         folder,
                         {
