@@ -1684,15 +1684,7 @@ export default function App() {
         setWorkbook(savedWorkbook);
     
         setSemesterCourse(newCourse);
-        setSessions(
-            savedWorkbook.sheets.map(
-                sheet =>
-                    normalizeSession(
-                        sheet.course
-                    )
-            )
-        );
-    
+            
         setActiveSessionId(worksheet.id);
     
         localStorage.setItem(
