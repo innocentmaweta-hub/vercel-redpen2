@@ -3235,6 +3235,22 @@ export default function App() {
                             pdfBlob
                         );
                     }
+                    await appendResultToSessionExcel(
+                        folder,
+                        {
+                            academicYear:
+                                semesterCourse.academicYear || '',
+                            semester:
+                                semesterCourse.semester || '',
+                            sessionLabel:
+                                semesterCourse.sessionLabel || '',
+                            customName:
+                                semesterCourse.customName,
+                        },
+                        activeCourseCode,
+                        saveStudentInfo,
+                        currentResult
+                    );
                 }
                 catch (exportError) {
                     console.error(
