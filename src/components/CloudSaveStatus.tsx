@@ -6,10 +6,17 @@ export type CloudSaveState = 'idle' | 'saving' | 'saved' | 'error';
 interface Props {
   state: CloudSaveState;
   onRetry?: () => void;
+  onDismiss?: () => void;
   label?: string;
 }
 
-export const CloudSaveStatus = ({ state, onRetry, label = 'Workbook' }: Props) => {
+export const CloudSaveStatus = ({
+    state,
+    onRetry,
+    onDismiss,
+    label = 'Workbook'
+}: Props) => {
+  
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -18,6 +25,7 @@ export const CloudSaveStatus = ({ state, onRetry, label = 'Workbook' }: Props) =
       if (state === 'saved') {
           const timer = setTimeout(() => {
               setDismissed(true);
+              onDismiss?.();
           }, 5000);
   
           return () => clearTimeout(timer);
