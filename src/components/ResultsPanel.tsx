@@ -8,7 +8,7 @@ const GRADE_SCALE = [
   { min: 75, grade: 'A' },
   { min: 70, grade: 'B+' },
   { min: 65, grade: 'B' },
-  { min: 60, grade: 'C+' },
+  { min: 60, grade: 'C+' }, 
   { min: 55, grade: 'C' },
   { min: 50, grade: 'D' },
   { min: 0, grade: 'F' },
