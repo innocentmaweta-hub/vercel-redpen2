@@ -106,6 +106,7 @@ import type {
 import {
     createWorkbook,
     loadLocalWorkbook,
+    worksheetFromCourse,
     writeLocalWorkbook,
     setActiveWorksheet,
     updateWorksheet,
@@ -1662,7 +1663,7 @@ export default function App() {
             return;
         }
     
-        const worksheet = createWorksheetFromCourse(
+        const worksheet = worksheetFromCourse(
             newCourse
         );
     
@@ -1683,15 +1684,7 @@ export default function App() {
         setWorkbook(savedWorkbook);
     
         setSemesterCourse(newCourse);
-        setSessions(
-            savedWorkbook.sheets.map(
-                sheet =>
-                    normalizeSession(
-                        sheet.course
-                    )
-            )
-        );
-    
+            
         setActiveSessionId(worksheet.id);
     
         localStorage.setItem(
@@ -1794,14 +1787,19 @@ export default function App() {
         };
     
         const worksheet =
-            createWorksheetFromCourse(
+            worksheetFromCourse(
                 newSession
             );
     
         const newWorkbook =
             createWorkbook(
-                newSession,
-                worksheet
+                newSession.customName ||
+                    newSession.sessionLabel ||
+                    newSession.courseCode ||
+                    'RedPen Workbook',
+                [
+                    worksheet
+                ]
             );
     
         const savedWorkbook =
@@ -1868,9 +1866,15 @@ export default function App() {
         setShowNewSessionModal(false);
     
         if (token) {
-            void persistWorkbook(
+            void saveCloudWorkbook(
+                token,
                 savedWorkbook
-            );
+            ).catch(error => {
+                console.error(
+                    'Failed to save new workbook to cloud:',
+                    error
+                );
+            });
         }
     };
     
