@@ -223,6 +223,8 @@ export default function App() {
 
     const [historySaveState, setHistorySaveState] =
         useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [showSessionStatus, setShowSessionStatus] =
+        useState(false);
 
     const [pendingHistoryRecord, setPendingHistoryRecord] =
         useState<HistoryRecord | null>(null);
@@ -845,6 +847,7 @@ export default function App() {
                 return savedLocalWorkbook;
             }
     
+            setShowSessionStatus(true);
             setSessionSaveState('saving');
     
             try {
