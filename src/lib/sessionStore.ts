@@ -46,9 +46,33 @@ export function dedupeSessions(sessions: SemesterCourse[]): SemesterCourse[] {
 export function loadLocalSessions(): SemesterCourse[] {
   try {
     const workbook = loadLocalWorkbook();
-    if (workbook?.sheets?.length) return dedupeSessions(workbook.sheets.map(sheet => sheet.course));
-    const parsed = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || '[]');
-    return dedupeSessions(Array.isArray(parsed) ? parsed : []);
+
+    if (workbook?.sheets?.length) {
+      const sessions = workbook.sheets
+        .map(sheet => sheet.course)
+        .filter(session =>
+          clean(session.academicYear) ||
+          clean(session.year) ||
+          clean(session.semester) ||
+          clean(session.sessionLabel) ||
+          clean(session.customName)
+        );
+
+      return dedupeSessions(sessions);
+    }
+
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          SESSION_STORAGE_KEY
+        ) || '[]'
+      );
+
+    return dedupeSessions(
+      Array.isArray(parsed)
+        ? parsed
+        : []
+    );
   } catch {
     return [];
   }
@@ -104,7 +128,31 @@ export async function fetchCloudSessions(token: string): Promise<SemesterCourse[
     const workbooks = await fetchCloudWorkbooks(token);
     const workbook = firstWorkbook(workbooks);
     if (!workbook) return loadLocalSessions();
-    const sessions = dedupeSessions(workbook.sheets.map(sheet => sheet.course));
+    const sessions =
+        dedupeSessions(
+            workbook.sheets
+                .map(
+                    sheet => sheet.course
+                )
+                .filter(
+                    session =>
+                        clean(
+                            session.academicYear
+                        ) ||
+                        clean(
+                            session.year
+                        ) ||
+                        clean(
+                            session.semester
+                        ) ||
+                        clean(
+                            session.sessionLabel
+                        ) ||
+                        clean(
+                            session.customName
+                        )
+                )
+        );
     if (sessions.length) {
       const local = loadLocalWorkbook();
       writeLocalWorkbook({ ...workbook, activeSheetId: workbook.activeSheetId || null });
@@ -129,7 +177,31 @@ export async function saveCloudSession(token: string, session: SemesterCourse): 
   workbook = { ...workbook, sheets, activeSheetId: newSheet.id, updatedAt: new Date().toISOString() };
 
   const result = await saveCloudWorkbook(token, workbook);
-  const sessions = dedupeSessions(result.workbook.sheets.map(sheet => sheet.course));
+  const sessions =
+      dedupeSessions(
+          result.workbook.sheets
+              .map(
+                  sheet => sheet.course
+              )
+              .filter(
+                  session =>
+                      clean(
+                          session.academicYear
+                      ) ||
+                      clean(
+                          session.year
+                      ) ||
+                      clean(
+                          session.semester
+                      ) ||
+                      clean(
+                          session.sessionLabel
+                      ) ||
+                      clean(
+                          session.customName
+                      )
+              )
+      );
   writeLocalSessions(sessions);
   saveActiveSessionId(newSheet.course);
   return { session: newSheet.course, sessions };
