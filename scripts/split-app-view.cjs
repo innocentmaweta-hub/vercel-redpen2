@@ -5,6 +5,7 @@ const ts = require('typescript');
 const root = process.cwd();
 const controllerPath = path.join(root, 'src/app/AppControllerCore.tsx');
 const viewPath = path.join(root, 'src/app/AppView.tsx');
+const entryPath = path.join(root, 'src/App.tsx');
 
 if (fs.existsSync(viewPath)) process.exit(0);
 const source = fs.readFileSync(controllerPath, 'utf8');
@@ -32,4 +33,5 @@ const start=returnStmt.getStart(sf)+importText.length;
 const end=returnStmt.end+importText.length;
 const replacement=`return <AppView {...{${props.join(',')}}} />;`;
 fs.writeFileSync(controllerPath, withImport.slice(0,start)+replacement+withImport.slice(end));
-console.log(`Extracted AppView with ${props.length} bindings.`);
+fs.writeFileSync(entryPath, "export { default } from './app/AppControllerCore';\n");
+console.log(`Extracted AppView with ${props.length} bindings and replaced src/App.tsx with a thin entrypoint.`);
