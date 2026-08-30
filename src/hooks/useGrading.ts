@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { StudentInfo, GradingResult, ApiGradingResult } from '../types';
 import type { RedPenWorkbook } from '../types/workbook';
 import { writeLocalWorkbook, updateWorksheet } from '../lib/workbookStore';
-import { validateAndNormalizeResult } from '../lib/exportUtils'; // adjust import path to wherever this actually lives
+import { validateAndNormalizeResult } from '../lib/resultUtils';
 
 const AUTH_TOKEN_KEY = 'yaza_auth_token';
 
@@ -200,6 +200,7 @@ export function useGrading({
                         regNo: studentInfo.regNo || '',
                         program: studentInfo.program || '',
                         year: studentInfo.year || '',
+                        semester: studentInfo.semester || '',
                         courseCode: studentInfo.courseCode || semesterCourse.courseCode || '',
                         examDate: studentInfo.examDate || ''
                     }
