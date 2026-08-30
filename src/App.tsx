@@ -90,7 +90,7 @@ export default function App() {
         setIsMaximized,
         setActiveView,
         setShowAuth: auth.setShowAuth,
-        setShowCourseSelector: modals.showCourseSelector /* placeholder, fixed below */,
+        setShowCourseSelector: (value: boolean) => modals.setShowCourseSelector(value),
         setWorkbook: workbookState.setWorkbook,
         autoHideTimerRef: tools.autoHideTimerRef,
     });
