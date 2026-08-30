@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SemesterCourse } from '../components/CourseSessionModal';
-import { sessionIdentityKey, normalizeSession } from '../lib/sessionStore';
+import { sessionIdentityKey, normalizeSession, dedupeSessions } from '../lib/sessionStore';
 import { createWorkbook, worksheetFromCourse, writeLocalWorkbook, setActiveWorksheet, saveCloudWorkbook } from '../lib/workbookStore';
 import { loadWorkbookFromExcelFile } from '../lib/exportUtils'; // adjust to actual location
 
@@ -78,7 +78,10 @@ export function useCourseSessionModals({
 
         deps.setSessions(prev => {
             const key = sessionIdentityKey(semester);
-            return dedupeSessionsSafe([semester, ...prev.filter(s => sessionIdentityKey(s) !== key)]);
+            return dedupeSessions([
+                semester,
+                ...prev.filter(s => sessionIdentityKey(s) !== key)
+            ]);
         });
 
         void deps.persistSession(semester);
@@ -423,10 +426,4 @@ export function useCourseSessionModals({
         handleViewChange,
         handleLoadFromFile,
     };
-}
-
-// Local copy since dedupeSessions was imported at the top level in App.tsx —
-// re-export from sessionStore instead of duplicating logic.
-function dedupeSessionsSafe(sessions: SemesterCourse[]): SemesterCourse[] {
-    throw new Error('Replace this with the real dedupeSessions import from lib/sessionStore');
 }
