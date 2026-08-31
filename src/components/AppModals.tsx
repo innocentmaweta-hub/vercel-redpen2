@@ -23,16 +23,8 @@ export function AppModals({ app }: AppModalsProps) {
         setActiveSessionId: workbookState.setActiveSessionId, resetForCourseSwitch: app.resetForCourseSwitch,
         persistWorkbook: workbookState.persistWorkbook,
     };
-
     return <>
-        {modals.showOldSessionModal && <OldSessionModal
-            searchTerm={workbookState.searchTerm} onSearchTermChange={workbookState.setSearchTerm}
-            filteredSessions={workbookState.filteredSessions}
-            onSelectSession={(session) => modals.loadOldSemester(session, sessionDeps)}
-            onLoadFromFile={() => modals.handleLoadFromFile({ token: auth.token, persistWorkbook: workbookState.persistWorkbook, setWorkbook: workbookState.setWorkbook, setSessions: workbookState.setSessions, setSemesterCourse: workbookState.setSemesterCourse, setActiveSessionId: workbookState.setActiveSessionId, setSessionSaveState: workbookState.setSessionSaveState, resetWorkspaceForImport: app.resetWorkspaceForImport, confirmDiscardUnsavedWork: app.confirmDiscardUnsavedWork })}
-            onNewSession={() => { if (!app.confirmDiscardUnsavedWork('start a new session')) return; modals.setModalType('new'); modals.setShowOldSessionModal(false); }}
-            onClose={() => modals.setShowOldSessionModal(false)}
-        />}
+        {modals.showOldSessionModal && <OldSessionModal searchTerm={workbookState.searchTerm} onSearchTermChange={workbookState.setSearchTerm} filteredSessions={workbookState.filteredSessions} onSelectSession={(session) => modals.loadOldSemester(session, sessionDeps)} onLoadFromFile={() => modals.handleLoadFromFile({ token: auth.token, persistWorkbook: workbookState.persistWorkbook, setWorkbook: workbookState.setWorkbook, setSessions: workbookState.setSessions, setSemesterCourse: workbookState.setSemesterCourse, setActiveSessionId: workbookState.setActiveSessionId, setSessionSaveState: workbookState.setSessionSaveState, resetWorkspaceForImport: app.resetWorkspaceForImport, confirmDiscardUnsavedWork: app.confirmDiscardUnsavedWork })} onNewSession={() => { modals.setModalType('new'); modals.setShowOldSessionModal(false); }} onClose={() => modals.setShowOldSessionModal(false)} />}
         {modals.showCourseSelector && workbookState.workbook && <WorkbookCoursePicker workbook={workbookState.workbook} onSelect={(sheet) => modals.loadOldSemester(sheet.course, sessionDeps)} onCancel={() => modals.setShowCourseSelector(false)} />}
         {grading.upgradePromptMessage && <UpgradePromptModal message={grading.upgradePromptMessage} onUpgrade={() => { grading.setUpgradePromptMessage(null); app.handleUpgrade(); }} onAddApiKey={() => { grading.setUpgradePromptMessage(null); app.setShowSettings(true); }} onCancel={() => grading.setUpgradePromptMessage(null)} />}
         {paymentCallback.paymentStatusMessage && <PaymentStatusModal message={paymentCallback.paymentStatusMessage} onClose={() => paymentCallback.setPaymentStatusMessage(null)} />}
