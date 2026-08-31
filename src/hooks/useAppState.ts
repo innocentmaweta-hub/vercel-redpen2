@@ -43,7 +43,18 @@ export function useAppState() {
     const handleSaveRemarks = () => { if (examinerRemarks.trim()) { grading.setHasUnsavedResult(true); alert("Remarks added. Use 'Save Results' to include them in the saved result."); } if (confirmDiscardUnsavedWork('leave the remarks view')) setActiveView('dashboard'); };
     const handleUpgrade = () => setShowSettings(true);
     const handleStudentInfoChange = (nextInfo: StudentInfo) => { const sessionChanged = nextInfo.courseCode !== studentInfo.courseCode || nextInfo.year !== studentInfo.year || nextInfo.semester !== studentInfo.semester || nextInfo.academicYear !== studentInfo.academicYear; if (sessionChanged && grading.hasUnsavedResult) { if (!confirmDiscardUnsavedWork('change the session/course information')) return; grading.setHasUnsavedResult(false); grading.setResult(null); } setStudentInfo(nextInfo); };
-    const handleSelectSessionFromTopBar = async (session: any) => { if (!confirmDiscardUnsavedWork('switch sessions')) return; const savedSession = await workbookState.persistSession(session); const activeSession = savedSession || session; workbookState.setSemesterCourse(activeSession); workbookState.setActiveSessionId(activeSession.id || sessionIdentityKey(activeSession)); setStudentInfo(prev => ({ ...prev, courseCode: activeSession.courseCode || prev.courseCode, year: activeSession.year || prev.year, semester: activeSession.semester || prev.semester, program: activeSession.program || prev.program, academicYear: activeSession.academicYear || prev.academicYear })); grading.setResult(null); setExaminerRemarks(''); grading.setHasUnsavedResult(false); history.setPendingHistoryRecord(null); history.setHistorySaveState('idle'); setActiveView('grade'); };
+    const handleSelectSessionFromTopBar = async (session: any) => {
+        if (!confirmDiscardUnsavedWork('switch sessions')) return;
+        const savedSession = await workbookState.persistSession(session);
+        const activeSession = savedSession || session;
+        workbookState.setSemesterCourse(activeSession);
+        workbookState.setActiveSessionId(activeSession.id || sessionIdentityKey(activeSession));
+        resetForCourseSwitch();
+        setStudentInfo(prev => ({ ...prev, courseCode: activeSession.courseCode || prev.courseCode, year: activeSession.year || prev.year, semester: activeSession.semester || prev.semester, program: activeSession.program || prev.program, academicYear: activeSession.academicYear || prev.academicYear }));
+        history.setPendingHistoryRecord(null);
+        history.setHistorySaveState('idle');
+        setActiveView('grade');
+    };
     const handleGradeButtonClick = () => { if (grading.hasUnsavedResult && !confirmDiscardUnsavedWork('grade this paper again')) return; grading.handleGrade(tools.resetTools); };
     const handlePaperUpload = (base64: string, name: string) => { if (studentPaper && !confirmDiscardUnsavedWork('replace the current student paper')) return; workspaceActions.handlePaperUpload(base64, name); };
     const handleClearStudentPaper = () => { if (!studentPaper) return; if (grading.hasUnsavedResult && !confirmDiscardUnsavedWork('clear the current student paper')) return; workspaceActions.handleClearStudentPaper(); };
@@ -55,7 +66,13 @@ export function useAppState() {
     const handleNewCourse = () => { if (!confirmDiscardUnsavedWork('start a new course')) return; modals.setShowNewCourseModal(true); };
     const handleNewSession = () => { if (!confirmDiscardUnsavedWork('start a new session')) return; modals.setShowNewSessionModal(true); };
     const handleLoadSessions = () => { modals.setShowOldSessionModal(true); };
-    const handleViewChange = (view: ActiveView) => setActiveView(view);
+    const handleViewChange = (view: ActiveView) => {
+        if (view !== 'grade' && activeView === 'grade' && grading.hasUnsavedResult) {
+            if (!confirmDiscardUnsavedWork(`leave grading and open ${view}`)) return;
+            grading.setHasUnsavedResult(false);
+        }
+        setActiveView(view);
+    };
     const resetForCourseSwitch = () => { setMarkingModeState('ai'); tools.resetTools(); grading.setResult(null); grading.setHasUnsavedResult(false); setStudentPaper(null); setExaminerRemarks(''); if (modals.pendingGradeNavigation) { modals.setPendingGradeNavigation(false); setActiveView('grade'); } };
     const resetWorkspaceForNewCourse = () => { setMarkingScheme(null); setStudentPaper(null); grading.setResult(null); grading.setHasUnsavedResult(false); setExaminerRemarks(''); setMarkingModeState('ai'); tools.resetTools(); setZoom(1); setClearCount(c => c + 1); setIsMaximized(false); grading.setIsAutoMode(false); setActiveView('grade'); };
     const resetWorkspaceForImport = () => { setStudentInfo({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }); setMarkingScheme(null); setStudentPaper(null); grading.setResult(null); grading.setHasUnsavedResult(false); setExaminerRemarks(''); setMarkingModeState('ai'); tools.resetTools(); setZoom(1); setClearCount(c => c + 1); setIsMaximized(false); grading.setIsAutoMode(false); };
