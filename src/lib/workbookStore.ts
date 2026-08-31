@@ -39,51 +39,25 @@ export function clearWorkbookStorageScope(ownerId?: string | number | null): voi
 export function worksheetFromCourse(course: SemesterCourse, rows: RedPenWorksheet['rows'] = []): RedPenWorksheet {
   const id = clean(course.id) || `${clean(course.courseCode).toUpperCase()}|${clean(course.academicYear)}|${clean(course.year)}|${clean(course.semester)}|${clean(course.customName)}`;
   const now = new Date().toISOString();
-  return {
-    id,
-    name: clean(course.courseCode) || clean(course.customName) || 'Course',
-    course: { ...course, id },
-    rows,
-    createdAt: course.createdAt || now,
-    updatedAt: course.updatedAt || now,
-  };
+  return { id, name: clean(course.courseCode) || clean(course.customName) || 'Course', course: { ...course, id }, rows, createdAt: course.createdAt || now, updatedAt: course.updatedAt || now };
 }
 
 export function createWorkbook(name: string, sheets: RedPenWorksheet[] = []): RedPenWorkbook {
   const now = new Date().toISOString();
-  return {
-    id: `workbook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: clean(name) || 'Untitled Workbook',
-    fileName: clean(name) ? `${clean(name).replace(/\.xlsx$/i, '')}.xlsx` : 'Untitled Workbook.xlsx',
-    createdAt: now,
-    updatedAt: now,
-    activeSheetId: null,
-    sheets,
-  };
+  return { id: `workbook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: clean(name) || 'Untitled Workbook', fileName: clean(name) ? `${clean(name).replace(/\.xlsx$/i, '')}.xlsx` : 'Untitled Workbook.xlsx', createdAt: now, updatedAt: now, activeSheetId: null, sheets };
 }
 
 export function normalizeWorkbook(input: RedPenWorkbook): RedPenWorkbook {
   const sheets = Array.isArray(input?.sheets) ? input.sheets.map(sheet => worksheetFromCourse(sheet.course, sheet.rows || [])) : [];
   const requestedActive = clean(input?.activeSheetId);
-  return {
-    ...input,
-    id: clean(input?.id) || `workbook-${Date.now()}`,
-    name: clean(input?.name) || 'Untitled Workbook',
-    fileName: clean(input?.fileName) || undefined,
-    createdAt: input?.createdAt || new Date().toISOString(),
-    updatedAt: input?.updatedAt || new Date().toISOString(),
-    activeSheetId: sheets.some(s => s.id === requestedActive) ? requestedActive : null,
-    sheets,
-  };
+  return { ...input, id: clean(input?.id) || `workbook-${Date.now()}`, name: clean(input?.name) || 'Untitled Workbook', fileName: clean(input?.fileName) || undefined, createdAt: input?.createdAt || new Date().toISOString(), updatedAt: input?.updatedAt || new Date().toISOString(), activeSheetId: sheets.some(s => s.id === requestedActive) ? requestedActive : null, sheets };
 }
 
 export function loadLocalWorkbook(ownerId?: string | number | null): RedPenWorkbook | null {
   try {
     const raw = localStorage.getItem(storageKey(WORKBOOK_STORAGE_KEY, ownerId));
     return raw ? normalizeWorkbook(JSON.parse(raw)) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export function writeLocalWorkbook(workbook: RedPenWorkbook, ownerId?: string | number | null): RedPenWorkbook {
@@ -122,13 +96,14 @@ export async function fetchCloudWorkbooks(token: string): Promise<RedPenWorkbook
 
 export async function saveCloudWorkbook(token: string, workbook: RedPenWorkbook): Promise<{ workbook: RedPenWorkbook; workbooks: RedPenWorkbook[] }> {
   void token;
+  const localVersionTime = new Date(workbook.updatedAt || 0).getTime();
   const normalized = normalizeWorkbook({ ...workbook, updatedAt: new Date().toISOString() });
-
-  // Re-read the server copy before writing. If another device has a newer
-  // version, never overwrite it with an older local snapshot.
   const currentCloudWorkbooks = await fetchCloudWorkbooks(token);
   const currentCloud = currentCloudWorkbooks.find(candidate => candidate.id === normalized.id);
-  if (currentCloud && new Date(currentCloud.updatedAt || 0).getTime() > new Date(workbook.updatedAt || 0).getTime()) {
+  const cloudVersionTime = currentCloud ? new Date(currentCloud.updatedAt || 0).getTime() : 0;
+
+  // Never replace a newer server copy with an older local snapshot.
+  if (currentCloud && cloudVersionTime > localVersionTime) {
     writeLocalWorkbook(currentCloud);
     return { workbook: currentCloud, workbooks: currentCloudWorkbooks };
   }
