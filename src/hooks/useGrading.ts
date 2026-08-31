@@ -40,10 +40,11 @@ export function useGrading({
     setShowCourseSelector,
     setWorkbook,
     autoHideTimerRef,
+    markingMode,
+    setMarkingModeState,
 }: any) {
     const [result, setResult] = useState<GradingResult | null>(null);
     const [loading, setLoading] = useState(false);
-    const [markingMode, setMarkingModeState] = useState<'self' | 'ai'>('ai');
     const [isGradingInProgress, setIsGradingInProgress] = useState(false);
     const [isAutoMode, setIsAutoMode] = useState(false);
     const [hasUnsavedResult, setHasUnsavedResult] = useState(false);
