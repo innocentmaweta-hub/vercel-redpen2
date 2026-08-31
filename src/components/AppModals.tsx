@@ -9,6 +9,7 @@ import { YazaPanel } from './YazaPanel';
 import { OldSessionModal } from './OldSessionModal';
 import { UpgradePromptModal } from './UpgradePromptModal';
 import { PaymentStatusModal } from './PaymentStatusModal';
+import { WorkbookCoursePicker } from './WorkbookCoursePicker';
 import {
     NewSemesterModal, ContinueSemesterModal, NewCourseModal, NewSessionModal,
 } from './CourseSessionModal';
@@ -18,7 +19,7 @@ interface AppModalsProps {
 }
 
 export function AppModals({ app }: AppModalsProps) {
-    const { auth, history, workbookState, tools, grading, modals, workspaceActions, paymentCallback } = app;
+    const { auth, history, workbookState, grading, modals, workspaceActions, paymentCallback } = app;
 
     return (
         <>
@@ -54,6 +55,28 @@ export function AppModals({ app }: AppModalsProps) {
                         modals.setShowOldSessionModal(false);
                     }}
                     onClose={() => modals.setShowOldSessionModal(false)}
+                />
+            )}
+
+            {modals.showCourseSelector && workbookState.workbook && (
+                <WorkbookCoursePicker
+                    workbook={workbookState.workbook}
+                    onSelect={(sheet) => {
+                        modals.loadOldSemester(sheet.course, {
+                            hasUnsavedResult: grading.hasUnsavedResult,
+                            workbook: workbookState.workbook,
+                            token: auth.token,
+                            setHasUnsavedResult: grading.setHasUnsavedResult,
+                            setWorkbook: workbookState.setWorkbook,
+                            setStudentInfo: app.setStudentInfo,
+                            setSemesterCourse: workbookState.setSemesterCourse,
+                            setActiveSessionId: workbookState.setActiveSessionId,
+                            resetForCourseSwitch: app.resetForCourseSwitch,
+                            persistWorkbook: workbookState.persistWorkbook,
+                        });
+                        modals.setShowCourseSelector(false);
+                    }}
+                    onCancel={() => modals.setShowCourseSelector(false)}
                 />
             )}
 
