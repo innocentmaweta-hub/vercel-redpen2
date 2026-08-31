@@ -25,7 +25,7 @@ export function SessionStatusBar({
     setActiveSessionId, setSessionSaveState,
 }: SessionStatusBarProps) {
     const handleClear = async () => {
-        // Clearing the active session must NOT delete the workbook or
+        // Clearing the active course session must NOT delete the workbook or
         // any worksheets — only the active worksheet selection.
         const currentWorkbook = workbook;
 
@@ -43,11 +43,9 @@ export function SessionStatusBar({
         };
 
         const locallySaved = writeLocalWorkbook(clearedWorkbook);
-
         setWorkbook(locallySaved);
         setSemesterCourse(null);
         setActiveSessionId(null);
-
         localStorage.removeItem('yaza_active_session_id');
 
         if (!token) {
@@ -56,44 +54,37 @@ export function SessionStatusBar({
         }
 
         setSessionSaveState('saving');
-
         try {
             const response = await saveCloudWorkbook(token, locallySaved);
             const savedWorkbook = response.workbook;
-
             setWorkbook(savedWorkbook);
             setSessions(savedWorkbook.sheets.map(sheet => normalizeSession(sheet.course)));
             setSessionSaveState('saved');
-        }
-        catch (error) {
-            console.error('Failed to clear active session:', error);
+        } catch (error) {
+            console.error('Failed to clear active course session:', error);
             setSessionSaveState('error');
         }
     };
 
+    const sessionName = semesterCourse.customName || semesterCourse.sessionLabel || semesterCourse.academicYear || 'Current session';
+
     return (
         <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded-xl shrink-0">
-            <CloudSaveStatus state={sessionSaveState} onRetry={onRetry} onDismiss={onDismiss} label="Session" />
-
+            <CloudSaveStatus state={sessionSaveState} onRetry={onRetry} onDismiss={onDismiss} label="Course session" />
             <div className="w-1.5 h-4 bg-accent-blue rounded-full" />
-
             <span className="text-[10px] font-black text-accent-blue uppercase tracking-wider">
-                Session: {semesterCourse.customName || semesterCourse.sessionLabel || semesterCourse.semester || 'Session'}
+                Session: {sessionName}
             </span>
-
             <span className="text-[10px] text-gray-500">
                 • Course: {semesterCourse.courseCode}
             </span>
-
-            {sessionSaveState === 'saving' && (
-                <span className="text-[9px] text-gray-500">Saving…</span>
-            )}
-
+            {sessionSaveState === 'saving' && <span className="text-[9px] text-gray-500">Saving…</span>}
             <button
                 onClick={handleClear}
                 className="ml-auto text-[9px] text-gray-600 hover:text-gray-400 uppercase font-bold tracking-wider transition-colors"
+                title="Leave the current course session without deleting the workbook"
             >
-                Clear
+                Leave Session
             </button>
         </div>
     );
