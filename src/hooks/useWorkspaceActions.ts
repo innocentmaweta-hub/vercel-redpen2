@@ -95,21 +95,10 @@ export function useWorkspaceActions({
         setIsAutoMode(false);
     };
 
-    const handleRefresh = (hasUnsavedResult: boolean, result: any, markingScheme: any, studentPaper: any, semesterCourse: any) => {
-        if (hasUnsavedResult || result || markingScheme || studentPaper) {
-            const confirmed = window.confirm(
-                hasUnsavedResult
-                    ? 'You have an unsaved grading result.\n\nRefreshing will clear the current work, but your workbook and courses will remain.\n\nContinue?'
-                    : 'Refresh the current grading workspace? Any current student work will be cleared.'
-            );
-
-            if (!confirmed) {
-                return;
-            }
-        }
-
-        // IMPORTANT: workbook and courses are persistent workspace state.
-        // Refreshing must never destroy them — only student/paper/result state.
+    const handleRefresh = (_hasUnsavedResult: boolean, _result: any, _markingScheme: any, _studentPaper: any, semesterCourse: any) => {
+        // The RefreshModal is the single confirmation point. Once the user
+        // clicks its Reload button, clear only transient grading state and
+        // leave the persistent workbook/courses untouched.
         setStudentInfo({
             name: '', regNo: '', program: '',
             year: semesterCourse?.year || '',
