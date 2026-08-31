@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { StudentInfo } from '../types';
 import type { RedPenWorkbook, RedPenWorksheet } from '../types/workbook';
 import { sessionIdentityKey, normalizeSession } from '../lib/sessionStore';
-import { createWorkbook, loadLocalWorkbook, writeLocalWorkbook, setActiveWorksheet, fetchCloudWorkbooks, saveCloudWorkbook } from '../lib/workbookStore';
+import { createWorkbook, loadLocalWorkbook, writeLocalWorkbook, setActiveWorksheet, fetchCloudWorkbooks, saveCloudWorkbook, setWorkbookStorageScope } from '../lib/workbookStore';
 import { fetchCloudHistory, writeLocalHistory } from '../lib/historyStore';
 import { SemesterCourse } from '../components/CourseSessionModal';
 
@@ -15,6 +15,7 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
     const [showSessionStatus, setShowSessionStatus] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
+    const ownerId = user?.id ? String(user.id) : null;
     const courses = workbook ? workbook.sheets.map(sheet => sheet.course).filter(course => course.courseCode?.trim()).map(course => ({ courseCode: course.courseCode.trim(), courseName: course.courseName || '' })) : Array.from(new Map(sessions.filter(session => session.courseCode?.trim()).map(session => [session.courseCode.trim(), { courseCode: session.courseCode.trim(), courseName: session.courseName || '' }])).values());
 
     const filteredSessions = sessions.filter(session => {
@@ -40,7 +41,7 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
         const worksheet = existingWorksheet ? { ...existingWorksheet, id: existingWorksheet.id || worksheetId, name: normalized.courseCode || normalized.customName || existingWorksheet.name || 'Course', course: { ...existingWorksheet.course, ...normalized, id: existingWorksheet.id || worksheetId }, updatedAt: now } : { id: worksheetId, name: normalized.courseCode || normalized.customName || 'Course', course: { ...normalized, id: worksheetId }, rows: [], createdAt: normalized.createdAt || now, updatedAt: now };
         const nextSheets = existingWorksheet ? currentWorkbook.sheets.map(sheet => sheet.id === existingWorksheet.id ? worksheet : sheet) : [...currentWorkbook.sheets, worksheet];
         const nextWorkbook: RedPenWorkbook = { ...currentWorkbook, updatedAt: now, activeSheetId: worksheet.id, sheets: nextSheets };
-        const savedLocalWorkbook = writeLocalWorkbook(nextWorkbook);
+        const savedLocalWorkbook = writeLocalWorkbook(nextWorkbook, ownerId);
         setWorkbook(savedLocalWorkbook);
         const nextSessions = savedLocalWorkbook.sheets.map(sheet => normalizeSession(sheet.course));
         setSessions(nextSessions);
@@ -55,7 +56,7 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
         try {
             const cloudResponse = await saveCloudWorkbook(token, savedLocalWorkbook);
             const cloudWorkbook = cloudResponse.workbook;
-            const normalizedCloudWorkbook = writeLocalWorkbook(cloudWorkbook);
+            const normalizedCloudWorkbook = writeLocalWorkbook(cloudWorkbook, ownerId);
             setWorkbook(normalizedCloudWorkbook);
             setSessions(normalizedCloudWorkbook.sheets.map(sheet => normalizeSession(sheet.course)));
             const cloudActiveWorksheet = normalizedCloudWorkbook.sheets.find(sheet => sheet.id === normalizedCloudWorkbook.activeSheetId);
@@ -75,10 +76,10 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
             setSessionSaveState('error');
             return activeSession;
         }
-    }, [workbook, token]);
+    }, [workbook, token, ownerId]);
 
     const persistWorkbook = useCallback(async (nextWorkbook: RedPenWorkbook): Promise<RedPenWorkbook> => {
-        const savedLocalWorkbook = writeLocalWorkbook(nextWorkbook);
+        const savedLocalWorkbook = writeLocalWorkbook(nextWorkbook, ownerId);
         setWorkbook(savedLocalWorkbook);
         setSessions(savedLocalWorkbook.sheets.map(sheet => normalizeSession(sheet.course)));
         if (!token) { setSessionSaveState('saved'); return savedLocalWorkbook; }
@@ -86,7 +87,7 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
         setSessionSaveState('saving');
         try {
             const cloudWorkbook = await saveCloudWorkbook(token, savedLocalWorkbook);
-            const savedCloudWorkbook = writeLocalWorkbook(cloudWorkbook);
+            const savedCloudWorkbook = writeLocalWorkbook(cloudWorkbook, ownerId);
             setWorkbook(savedCloudWorkbook);
             setSessions(savedCloudWorkbook.sheets.map(sheet => normalizeSession(sheet.course)));
             setSessionSaveState('saved');
@@ -96,30 +97,79 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
             setSessionSaveState('error');
             return savedLocalWorkbook;
         }
-    }, [token]);
+    }, [token, ownerId]);
 
     useEffect(() => {
-        if (!user || !token) return;
         let cancelled = false;
+
+        if (!user || !token || !ownerId) {
+            setWorkbook(null);
+            setSessions([]);
+            setSemesterCourse(null);
+            setActiveSessionId(null);
+            setHistory([]);
+            localStorage.removeItem('yaza_active_session_id');
+            setSessionSaveState('idle');
+            return () => { cancelled = true; };
+        }
+
+        // Establish the account scope before any local workbook/history read.
+        setWorkbookStorageScope(ownerId);
+
         const syncCloudData = async () => {
             try {
                 const [cloudWorkbooks, cloudHistory] = await Promise.all([fetchCloudWorkbooks(token), fetchCloudHistory(token)]);
                 if (cancelled) return;
                 setHistory(cloudHistory);
                 writeLocalHistory(cloudHistory);
-                const localWorkbook = loadLocalWorkbook();
-                const restoredWorkbook = (localWorkbook && cloudWorkbooks.find(candidate => candidate.id === localWorkbook.id)) || cloudWorkbooks[0] || localWorkbook || null;
+
+                const localWorkbook = loadLocalWorkbook(ownerId);
+                const matchingCloud = localWorkbook ? cloudWorkbooks.find(candidate => candidate.id === localWorkbook.id) : null;
+                let restoredWorkbook: RedPenWorkbook | null = null;
+
+                if (matchingCloud && localWorkbook) {
+                    const localTime = new Date(localWorkbook.updatedAt || 0).getTime();
+                    const cloudTime = new Date(matchingCloud.updatedAt || 0).getTime();
+                    // Same workbook on multiple devices: newest snapshot wins.
+                    // If local is newer, preserve it and push it to cloud rather
+                    // than silently replacing it with the older server copy.
+                    restoredWorkbook = localTime > cloudTime ? localWorkbook : matchingCloud;
+                    if (localTime > cloudTime) {
+                        try {
+                            const saved = await saveCloudWorkbook(token, localWorkbook);
+                            restoredWorkbook = saved.workbook;
+                        } catch (error) {
+                            console.error('Failed to upload newer local workbook:', error);
+                        }
+                    }
+                } else if (localWorkbook && cloudWorkbooks.length === 0) {
+                    // A new local workbook for this account should be preserved
+                    // and uploaded, not replaced by an unrelated first workbook.
+                    restoredWorkbook = localWorkbook;
+                    try {
+                        const saved = await saveCloudWorkbook(token, localWorkbook);
+                        restoredWorkbook = saved.workbook;
+                    } catch (error) {
+                        console.error('Failed to upload local workbook:', error);
+                    }
+                } else {
+                    restoredWorkbook = cloudWorkbooks[0] || localWorkbook || null;
+                }
+
+                if (cancelled) return;
                 if (!restoredWorkbook) {
                     setWorkbook(null); setSessions([]); setSemesterCourse(null); setActiveSessionId(null); localStorage.removeItem('yaza_active_session_id'); setSessionSaveState('saved'); return;
                 }
+
                 const activeWorksheet = restoredWorkbook.activeSheetId ? restoredWorkbook.sheets.find(sheet => sheet.id === restoredWorkbook.activeSheetId) : null;
                 const normalizedWorkbook = { ...restoredWorkbook, activeSheetId: activeWorksheet?.id || null };
-                const savedWorkbook = writeLocalWorkbook(normalizedWorkbook);
+                const savedWorkbook = writeLocalWorkbook(normalizedWorkbook, ownerId);
                 setWorkbook(savedWorkbook);
                 setSessions(savedWorkbook.sheets.map(sheet => normalizeSession(sheet.course)));
                 if (activeWorksheet) {
                     const normalized = normalizeSession(activeWorksheet.course);
                     setSemesterCourse(normalized); setActiveSessionId(activeWorksheet.id); localStorage.setItem('yaza_active_session_id', activeWorksheet.id);
+                    syncStudentInfoFromWorksheet(activeWorksheet);
                 } else {
                     setSemesterCourse(null); setActiveSessionId(null); localStorage.removeItem('yaza_active_session_id');
                 }
@@ -127,22 +177,24 @@ export function useWorkbook(user: any, token: string | null, setStudentInfo: Rea
             } catch (error) {
                 if (cancelled) return;
                 console.error('Failed to restore workbook data:', error);
-                const localWorkbook = loadLocalWorkbook();
+                const localWorkbook = loadLocalWorkbook(ownerId);
                 if (localWorkbook) {
                     setWorkbook(localWorkbook);
                     setSessions(localWorkbook.sheets.map(sheet => normalizeSession(sheet.course)));
                     const activeWorksheet = localWorkbook.activeSheetId ? localWorkbook.sheets.find(sheet => sheet.id === localWorkbook.activeSheetId) : null;
                     if (activeWorksheet) {
                         const normalized = normalizeSession(activeWorksheet.course);
-                        setSemesterCourse(normalized); setActiveSessionId(activeWorksheet.id);
+                        setSemesterCourse(normalized); setActiveSessionId(activeWorksheet.id); syncStudentInfoFromWorksheet(activeWorksheet);
                     }
+                } else {
+                    setWorkbook(null); setSessions([]); setSemesterCourse(null); setActiveSessionId(null);
                 }
                 setSessionSaveState('error');
             }
         };
         syncCloudData();
         return () => { cancelled = true; };
-    }, [user, token]);
+    }, [user, token, ownerId]);
 
     useEffect(() => {
         if (!activeSessionId) { localStorage.removeItem('yaza_active_session_id'); return; }
