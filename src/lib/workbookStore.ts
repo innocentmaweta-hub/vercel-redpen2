@@ -5,8 +5,36 @@ import { apiDelete, apiGet, apiPost, API_ENDPOINTS } from '../api';
 export const WORKBOOK_STORAGE_KEY = 'redpen_workbook';
 export const ACTIVE_WORKBOOK_STORAGE_KEY = 'redpen_active_workbook_id';
 export const ACTIVE_WORKSHEET_STORAGE_KEY = 'redpen_active_worksheet_id';
+const STORAGE_SCOPE_KEY = 'redpen_storage_owner';
 
 const clean = (value: unknown) => typeof value === 'string' ? value.trim() : '';
+const storageKey = (base: string, ownerId?: string | number | null) => {
+  const owner = clean(ownerId ?? localStorage.getItem(STORAGE_SCOPE_KEY));
+  return owner ? `${base}:${encodeURIComponent(owner)}` : base;
+};
+
+export function setWorkbookStorageScope(ownerId: string | number | null): void {
+  if (ownerId === null || ownerId === undefined || !clean(ownerId)) {
+    localStorage.removeItem(STORAGE_SCOPE_KEY);
+    return;
+  }
+  localStorage.setItem(STORAGE_SCOPE_KEY, clean(ownerId));
+}
+
+export function clearWorkbookStorageScope(ownerId?: string | number | null): void {
+  const owner = clean(ownerId ?? localStorage.getItem(STORAGE_SCOPE_KEY));
+  if (owner) {
+    localStorage.removeItem(storageKey(WORKBOOK_STORAGE_KEY, owner));
+    localStorage.removeItem(storageKey(ACTIVE_WORKBOOK_STORAGE_KEY, owner));
+    localStorage.removeItem(storageKey(ACTIVE_WORKSHEET_STORAGE_KEY, owner));
+  }
+  if (!ownerId || owner === clean(localStorage.getItem(STORAGE_SCOPE_KEY))) {
+    localStorage.removeItem(STORAGE_SCOPE_KEY);
+    localStorage.removeItem(WORKBOOK_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_WORKBOOK_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_WORKSHEET_STORAGE_KEY);
+  }
+}
 
 export function worksheetFromCourse(course: SemesterCourse, rows: RedPenWorksheet['rows'] = []): RedPenWorksheet {
   const id = clean(course.id) || `${clean(course.courseCode).toUpperCase()}|${clean(course.academicYear)}|${clean(course.year)}|${clean(course.semester)}|${clean(course.customName)}`;
@@ -49,28 +77,31 @@ export function normalizeWorkbook(input: RedPenWorkbook): RedPenWorkbook {
   };
 }
 
-export function loadLocalWorkbook(): RedPenWorkbook | null {
+export function loadLocalWorkbook(ownerId?: string | number | null): RedPenWorkbook | null {
   try {
-    const raw = localStorage.getItem(WORKBOOK_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(WORKBOOK_STORAGE_KEY, ownerId));
     return raw ? normalizeWorkbook(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
 }
 
-export function writeLocalWorkbook(workbook: RedPenWorkbook): RedPenWorkbook {
+export function writeLocalWorkbook(workbook: RedPenWorkbook, ownerId?: string | number | null): RedPenWorkbook {
   const normalized = normalizeWorkbook(workbook);
-  localStorage.setItem(WORKBOOK_STORAGE_KEY, JSON.stringify(normalized));
-  if (normalized.id) localStorage.setItem(ACTIVE_WORKBOOK_STORAGE_KEY, normalized.id);
-  if (normalized.activeSheetId) localStorage.setItem(ACTIVE_WORKSHEET_STORAGE_KEY, normalized.activeSheetId);
+  const owner = ownerId ?? localStorage.getItem(STORAGE_SCOPE_KEY);
+  localStorage.setItem(storageKey(WORKBOOK_STORAGE_KEY, owner), JSON.stringify(normalized));
+  localStorage.setItem(storageKey(ACTIVE_WORKBOOK_STORAGE_KEY, owner), normalized.id);
+  if (normalized.activeSheetId) localStorage.setItem(storageKey(ACTIVE_WORKSHEET_STORAGE_KEY, owner), normalized.activeSheetId);
+  else localStorage.removeItem(storageKey(ACTIVE_WORKSHEET_STORAGE_KEY, owner));
   window.dispatchEvent(new CustomEvent('redpen:workbook-updated'));
   return normalized;
 }
 
-export function clearLocalWorkbook(): void {
-  localStorage.removeItem(WORKBOOK_STORAGE_KEY);
-  localStorage.removeItem(ACTIVE_WORKBOOK_STORAGE_KEY);
-  localStorage.removeItem(ACTIVE_WORKSHEET_STORAGE_KEY);
+export function clearLocalWorkbook(ownerId?: string | number | null): void {
+  const owner = ownerId ?? localStorage.getItem(STORAGE_SCOPE_KEY);
+  localStorage.removeItem(storageKey(WORKBOOK_STORAGE_KEY, owner));
+  localStorage.removeItem(storageKey(ACTIVE_WORKBOOK_STORAGE_KEY, owner));
+  localStorage.removeItem(storageKey(ACTIVE_WORKSHEET_STORAGE_KEY, owner));
 }
 
 export function setActiveWorksheet(workbook: RedPenWorkbook, worksheetId: string): RedPenWorkbook {
@@ -92,6 +123,16 @@ export async function fetchCloudWorkbooks(token: string): Promise<RedPenWorkbook
 export async function saveCloudWorkbook(token: string, workbook: RedPenWorkbook): Promise<{ workbook: RedPenWorkbook; workbooks: RedPenWorkbook[] }> {
   void token;
   const normalized = normalizeWorkbook({ ...workbook, updatedAt: new Date().toISOString() });
+
+  // Re-read the server copy before writing. If another device has a newer
+  // version, never overwrite it with an older local snapshot.
+  const currentCloudWorkbooks = await fetchCloudWorkbooks(token);
+  const currentCloud = currentCloudWorkbooks.find(candidate => candidate.id === normalized.id);
+  if (currentCloud && new Date(currentCloud.updatedAt || 0).getTime() > new Date(workbook.updatedAt || 0).getTime()) {
+    writeLocalWorkbook(currentCloud);
+    return { workbook: currentCloud, workbooks: currentCloudWorkbooks };
+  }
+
   const data = await apiPost<{ workbook?: RedPenWorkbook; workbooks?: RedPenWorkbook[] }>(API_ENDPOINTS.workbooks.save, { workbook: normalized });
   const saved = normalizeWorkbook(data.workbook || normalized);
   const workbooks = Array.isArray(data.workbooks) ? data.workbooks.map(normalizeWorkbook) : [saved];
