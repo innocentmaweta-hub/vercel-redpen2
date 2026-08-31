@@ -17,11 +17,7 @@ function configurePdfWorker() {
 /**
  * Render every page of a PDF into one vertically stacked image for the
  * existing marking canvas. The original PDF remains untouched for AI grading.
- *
- * Large PDFs are rendered at a reduced scale when necessary so that browser
- * canvas dimension/memory limits do not turn a valid upload into a blank or
- * crashed workspace. If the document still cannot fit safely, a clear error
- * is returned instead of allocating an unsafe canvas.
+ * Large PDFs are automatically rendered at a lower scale when necessary.
  */
 export async function renderPdfToImage(dataUrl: string, scale = 1.5): Promise<string> {
     configurePdfWorker();
@@ -39,16 +35,17 @@ export async function renderPdfToImage(dataUrl: string, scale = 1.5): Promise<st
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    let pdf: Awaited<ReturnType<typeof pdfjsLib.getDocument>> extends infer T ? T : never;
+    let pdf;
     try {
-        pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+        const loadingTask = pdfjsLib.getDocument({ data: bytes });
+        pdf = await loadingTask.promise;
     } catch {
         throw new Error('The PDF could not be opened. It may be corrupted, encrypted, or unsupported.');
     }
 
     if (pdf.numPages < 1) throw new Error('The PDF contains no pages.');
 
-    const pages = [] as Array<{ page: any; width: number; height: number }>;
+    const pages: Array<{ page: any; width: number; height: number }> = [];
     let requestedHeight = 0;
     let requestedWidth = 0;
 
@@ -63,10 +60,7 @@ export async function renderPdfToImage(dataUrl: string, scale = 1.5): Promise<st
     }
 
     const requestedPixels = pages.reduce((sum, page) => sum + page.width * page.height, 0);
-    const dimensionScale = Math.min(
-        1,
-        MAX_COMBINED_DIMENSION / Math.max(requestedWidth, requestedHeight),
-    );
+    const dimensionScale = Math.min(1, MAX_COMBINED_DIMENSION / Math.max(requestedWidth, requestedHeight));
     const pixelScale = Math.sqrt(MAX_COMBINED_PIXELS / Math.max(1, requestedPixels));
     const safeFactor = Math.min(1, dimensionScale, pixelScale);
     const effectiveScale = scale * safeFactor;
