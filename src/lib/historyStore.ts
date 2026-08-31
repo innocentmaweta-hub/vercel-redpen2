@@ -2,25 +2,38 @@ import { HistoryRecord } from '../types';
 
 export const HISTORY_STORAGE_KEY = 'grading_history';
 export const HISTORY_MAX_LOCAL = 500;
+const STORAGE_SCOPE_KEY = 'redpen_storage_owner';
 
 export type HistorySaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-export function loadLocalHistory(): HistoryRecord[] {
+const historyStorageKey = (ownerId?: string | number | null) => {
+  const owner = typeof ownerId === 'string' || typeof ownerId === 'number'
+    ? String(ownerId).trim()
+    : (localStorage.getItem(STORAGE_SCOPE_KEY) || '').trim();
+  return owner ? `${HISTORY_STORAGE_KEY}:${encodeURIComponent(owner)}` : HISTORY_STORAGE_KEY;
+};
+
+export function clearLocalHistory(ownerId?: string | number | null): void {
+  localStorage.removeItem(historyStorageKey(ownerId));
+  if (!ownerId) localStorage.removeItem(HISTORY_STORAGE_KEY);
+}
+
+export function loadLocalHistory(ownerId?: string | number | null): HistoryRecord[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(historyStorageKey(ownerId)) || '[]');
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
-export function writeLocalHistory(records: HistoryRecord[]): HistoryRecord[] {
+export function writeLocalHistory(records: HistoryRecord[], ownerId?: string | number | null): HistoryRecord[] {
   const next = records
     .filter(Boolean)
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     .slice(0, HISTORY_MAX_LOCAL);
   try {
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(historyStorageKey(ownerId), JSON.stringify(next));
   } catch {
     // Large history should never make grading fail. Keep the in-memory state.
   }
