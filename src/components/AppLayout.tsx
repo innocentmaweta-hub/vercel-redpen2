@@ -9,6 +9,9 @@ export function AppLayout({ app }: AppLayoutProps) {
     return (
         <div className="flex flex-col bg-bg-dark h-screen overflow-hidden text-ink border-4 border-gray-900 shadow-2xl">
             <TopBar
+                workbooks={workbookState.workbooks}
+                activeWorkbook={workbookState.activeWorkbook}
+                onSelectWorkbook={app.handleSelectWorkbookFromTopBar}
                 sessions={workbookState.sessions}
                 activeSession={workbookState.semesterCourse}
                 onSelectSession={app.handleSelectSessionFromTopBar}
