@@ -2,7 +2,7 @@ import logo from '../assets/logo.png';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, SlidersHorizontal, RotateCw, Bot, Layers, FolderOpen, LogIn, LogOut, LayoutGrid, Zap, PenLine, History as HistoryIcon, User, Save, Printer, Plus, BookOpen, Check, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';
+import { StudentInfo, HistoryRecord, SemesterCourse } from '../types';  
 import type { RedPenWorkbook } from '../types/workbook';
 
 interface TopBarProps { workbooks: RedPenWorkbook[]; activeWorkbook: RedPenWorkbook | null; onSelectWorkbook: (workbook: RedPenWorkbook) => void; sessions: SemesterCourse[]; activeSession: SemesterCourse | null; onSelectSession: (session: SemesterCourse) => void; onLoadSessionFromFile: () => void; onNew: () => void; onNewCourse: () => void; onNewSession: () => void; onNewPaper: () => void; onSave: () => void; onPrint: () => void; onClearResult: () => void; onRefresh: () => void; onSettings: () => void; onBatch: () => void; hasResult: boolean; studentInfo: StudentInfo; onStudentInfoUpdate: (updates: Partial<StudentInfo>) => void; history: HistoryRecord[]; onShowOldSessions: () => void; onSearchTermChange: (term: string) => void; isLoggedIn: boolean; onLogin: () => void; onLogout: () => void; onToggleYaza: () => void; isYazaOpen: boolean; onViewChange: (view: 'dashboard' | 'grade' | 'history' | 'remark') => void; onProfile: () => void; onLoadRecord: (record: HistoryRecord) => void; }
