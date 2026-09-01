@@ -5,36 +5,26 @@ import type { RedPenWorkbook } from '../types/workbook';
 
 export { AUTH_TOKEN_KEY } from '../api';
 
-// Compatibility module for older imports. Persistence is workbook/worksheet based.
+// Compatibility module: the persisted model is now Workbook -> Worksheet -> Student.
 export const WORKBOOK_STORAGE_KEY = 'redpen_workbook';
 export const ACTIVE_WORKSHEET_STORAGE_KEY = 'redpen_active_worksheet_id';
+export const SESSION_STORAGE_KEY = WORKBOOK_STORAGE_KEY;
+export const ACTIVE_SESSION_STORAGE_KEY = ACTIVE_WORKSHEET_STORAGE_KEY;
 export type WorkbookSaveState = 'idle' | 'saving' | 'saved' | 'error';
+export type SessionSaveState = WorkbookSaveState;
 
 const clean = (value: unknown) => typeof value === 'string' ? value.trim() : '';
-
-export function worksheetIdentityKey(course: SemesterCourse): string {
-  return [clean(course.courseCode).toUpperCase(), clean(course.academicYear), clean(course.year), clean(course.semester), clean(course.customName)].join('|');
-}
-
-export function normalizeCourse(course: SemesterCourse): SemesterCourse {
-  const identity = worksheetIdentityKey(course);
-  return { ...course, id: clean(course.id) || identity, courseCode: clean(course.courseCode).toUpperCase(), courseName: clean(course.courseName), program: clean(course.program), year: clean(course.year), semester: clean(course.semester), academicYear: clean(course.academicYear), sessionLabel: clean(course.sessionLabel), customName: clean(course.customName) || undefined, updatedAt: course.updatedAt || new Date().toISOString() };
-}
-
-export function dedupeCourses(courses: SemesterCourse[]): SemesterCourse[] {
-  const map = new Map<string, SemesterCourse>();
-  for (const raw of Array.isArray(courses) ? courses : []) { const course = normalizeCourse(raw); if (!course.courseCode) continue; const key = worksheetIdentityKey(course); const existing = map.get(key); if (!existing || String(course.updatedAt || '').localeCompare(String(existing.updatedAt || '')) >= 0) map.set(key, course); }
-  return Array.from(map.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-}
-
+export function worksheetIdentityKey(course: SemesterCourse): string { return [clean(course.courseCode).toUpperCase(), clean(course.academicYear), clean(course.year), clean(course.semester), clean(course.customName)].join('|'); }
+export function normalizeCourse(course: SemesterCourse): SemesterCourse { const identity = worksheetIdentityKey(course); return { ...course, id: clean(course.id) || identity, courseCode: clean(course.courseCode).toUpperCase(), courseName: clean(course.courseName), program: clean(course.program), year: clean(course.year), semester: clean(course.semester), academicYear: clean(course.academicYear), sessionLabel: clean(course.sessionLabel), customName: clean(course.customName) || undefined, updatedAt: course.updatedAt || new Date().toISOString() }; }
+export function dedupeCourses(courses: SemesterCourse[]): SemesterCourse[] { const map = new Map<string, SemesterCourse>(); for (const raw of Array.isArray(courses) ? courses : []) { const course = normalizeCourse(raw); if (!course.courseCode) continue; const key = worksheetIdentityKey(course); const existing = map.get(key); if (!existing || String(course.updatedAt || '').localeCompare(String(existing.updatedAt || '')) >= 0) map.set(key, course); } return Array.from(map.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))); }
 export function loadLocalCourses(): SemesterCourse[] { try { const workbook = loadLocalWorkbook(); return workbook?.sheets?.length ? dedupeCourses(workbook.sheets.map(sheet => sheet.course)) : []; } catch { return []; } }
 export function writeLocalCourses(courses: SemesterCourse[]): SemesterCourse[] { const deduped = dedupeCourses(courses); const existing = loadLocalWorkbook(); if (existing) writeLocalWorkbook({ ...existing, sheets: deduped.map(course => worksheetFromCourse(course, existing.sheets.find(s => s.id === course.id)?.rows || [])), updatedAt: new Date().toISOString() }); return deduped; }
 export function removeLocalCourse(course: SemesterCourse): SemesterCourse[] { const id = clean(course.id), key = worksheetIdentityKey(course); return writeLocalCourses(loadLocalCourses().filter(c => c.id !== id && worksheetIdentityKey(c) !== key)); }
 export function loadActiveWorksheetId(): string | null { try { return localStorage.getItem(ACTIVE_WORKSHEET_STORAGE_KEY); } catch { return null; } }
-export function saveActiveWorksheetId(courseOrId: SemesterCourse | string | null): void { try { const id = typeof courseOrId === 'string' ? clean(courseOrId) : courseOrId ? (clean(courseOrId.id) || worksheetIdentityKey(courseOrId)) : ''; if (id) localStorage.setItem(ACTIVE_WORKSHEET_STORAGE_KEY, id); else localStorage.removeItem(ACTIVE_WORKSHEET_STORAGE_KEY); } catch { /* storage may be unavailable */ } }
+export function saveActiveWorksheetId(courseOrId: SemesterCourse | string | null): void { try { const id = typeof courseOrId === 'string' ? clean(courseOrId) : courseOrId ? (clean(courseOrId.id) || worksheetIdentityKey(courseOrId)) : ''; if (id) localStorage.setItem(ACTIVE_WORKSHEET_STORAGE_KEY, id); else localStorage.removeItem(ACTIVE_WORKSHEET_STORAGE_KEY); } catch {} }
 export function resolveActiveCourse(courses: SemesterCourse[], requestedId?: string | null): SemesterCourse | null { const list = dedupeCourses(courses); const id = clean(requestedId) || loadActiveWorksheetId(); if (id) { const exact = list.find(course => course.id === id || worksheetIdentityKey(course) === id); if (exact) return exact; } return list[0] || null; }
 
-// Transitional aliases keep older internal callers working while all persisted state uses workbook terminology.
+// Temporary source-compatibility aliases; they no longer define the storage model.
 export const sessionIdentityKey = worksheetIdentityKey;
 export const normalizeSession = normalizeCourse;
 export const dedupeSessions = dedupeCourses;
