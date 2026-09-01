@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { HistoryRecord } from '../types';
 import type { RedPenWorkbook } from '../types/workbook';
-import { Clock, ChevronRight, BookOpen, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Clock, Trash2, ChevronRight, BookOpen, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
 
 interface Props {
   history: HistoryRecord[];
@@ -57,7 +57,7 @@ export const HistoryPanel = ({ history, onLoad, onDelete, workbooks, activeWorkb
           <div className="flex flex-col gap-3">
             {history.length === 0 ? <div className="flex-1 flex flex-col items-center justify-center text-center p-8"><Clock size={48} className="text-gray-800 mb-4" /><h3 className="text-sm font-bold uppercase tracking-widest text-gray-600">No Results Yet</h3><p className="text-[10px] text-gray-700 mt-2 uppercase font-medium">Saved grading results will appear here</p></div> : history.map(record => (
               <div key={record.id} className="group bg-card border border-gray-800 rounded-2xl p-4 hover:border-accent-blue/40 hover:bg-accent-blue/5 transition-all duration-200 cursor-pointer" onClick={() => onLoad(record)}>
-                <div className="flex items-center justify-between"><div className="flex-1 min-w-0"><div className="flex items-center gap-2 mb-1"><span className={`text-lg font-bold font-mono ${record.result.grade?.startsWith('A') ? 'text-accent-green' : 'text-accent-blue'}`}>{record.result.grade}</span><span className="text-xs font-mono text-gray-400">{record.result.totalScore}</span></div><p className="text-xs font-bold text-gray-300 truncate">{record.studentInfo.name || 'Unknown Student'}</p><p className="text-[10px] text-gray-600 mt-0.5 uppercase font-medium">{record.studentInfo.courseCode || '—'} · {record.date}</p></div><div className="flex items-center gap-2 ml-3"><button onClick={(e) => { e.stopPropagation(); requestDelete(record); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-gray-600 transition-all" aria-label="Delete grading record">×</button><ChevronRight size={16} className="text-gray-700 group-hover:text-accent-blue transition-colors" /></div></div>
+                <div className="flex items-center justify-between"><div className="flex-1 min-w-0"><div className="flex items-center gap-2 mb-1"><span className={`text-lg font-bold font-mono ${record.result.grade?.startsWith('A') ? 'text-accent-green' : 'text-accent-blue'}`}>{record.result.grade}</span><span className="text-xs font-mono text-gray-400">{record.result.totalScore}</span></div><p className="text-xs font-bold text-gray-300 truncate">{record.studentInfo.name || 'Unknown Student'}</p><p className="text-[10px] text-gray-600 mt-0.5 uppercase font-medium">{record.studentInfo.courseCode || '—'} · {record.date}</p></div><div className="flex items-center gap-2 ml-3"><button onClick={(e) => { e.stopPropagation(); requestDelete(record); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-gray-600 transition-all" aria-label="Delete grading record"><Trash2 size={13} /></button><ChevronRight size={16} className="text-gray-700 group-hover:text-accent-blue transition-colors" /></div></div>
               </div>
             ))}
           </div>
