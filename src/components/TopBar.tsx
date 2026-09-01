@@ -7,7 +7,7 @@ import type { RedPenWorkbook } from '../types/workbook';
 
 interface TopBarProps { workbooks: RedPenWorkbook[]; activeWorkbook: RedPenWorkbook | null; onSelectWorkbook: (workbook: RedPenWorkbook) => void; sessions: SemesterCourse[]; activeSession: SemesterCourse | null; onSelectSession: (session: SemesterCourse) => void; onLoadSessionFromFile: () => void; onNew: () => void; onNewCourse: () => void; onNewSession: () => void; onNewPaper: () => void; onSave: () => void; onPrint: () => void; onClearResult: () => void; onRefresh: () => void; onSettings: () => void; onBatch: () => void; hasResult: boolean; studentInfo: StudentInfo; onStudentInfoUpdate: (updates: Partial<StudentInfo>) => void; history: HistoryRecord[]; onShowOldSessions: () => void; onSearchTermChange: (term: string) => void; isLoggedIn: boolean; onLogin: () => void; onLogout: () => void; onToggleYaza: () => void; isYazaOpen: boolean; onViewChange: (view: 'dashboard' | 'grade' | 'history' | 'remark') => void; onProfile: () => void; onLoadRecord: (record: HistoryRecord) => void; }
 interface DropdownItem { label?: string; action?: () => void; disabled?: boolean; divider?: boolean; active?: boolean; }
-const workbookTitle = (w: RedPenWorkbook) => w.name?.trim() || 'Unnamed Session';
+const workbookTitle = (w: RedPenWorkbook) => w.name?.trim() || 'Unnamed Workbook';
 const courseTitle = (c: SemesterCourse) => c.courseCode || c.customName || 'Unnamed course';
 const courseMeta = (c: SemesterCourse) => [c.courseName, c.year, c.semester, c.academicYear].filter(Boolean).join(' · ');
 
