@@ -1,7 +1,7 @@
 import React from 'react';
 import { BookOpen, ChevronDown, Check, Plus } from 'lucide-react';
 import { SemesterCourse } from './CourseSessionModal';
-import { worksheetIdentityKey } from '../lib/sessionStore';
+import { worksheetIdentityKey } from '../lib/sessionStore'; 
 
 interface Props { sessions: SemesterCourse[]; activeSession: SemesterCourse | null; onSelect: (session: SemesterCourse) => void; onNewSession: () => void; disabled?: boolean; }
 const courseTitle=(c:SemesterCourse)=>c.courseCode||c.customName||'Unnamed course';
