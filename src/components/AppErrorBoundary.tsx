@@ -35,7 +35,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
         <div style={{ maxWidth: 420, textAlign: 'center' }}>
           <h1 style={{ marginBottom: 12 }}>RedPen needs to reload</h1>
           <p style={{ marginBottom: 20, lineHeight: 1.5 }}>
-            An unexpected application error occurred. Your account and saved server data are not affected.
+            An unexpected application error occurred. Saved workbook data is preserved, but any edits that were not saved may need to be repeated after reload.
           </p>
           <button type="button" onClick={this.handleReload} style={{ padding: '10px 18px', cursor: 'pointer' }}>
             Reload RedPen
