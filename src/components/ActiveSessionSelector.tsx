@@ -10,7 +10,7 @@ interface Props {
   disabled?: boolean;
 }
 
-const workbookTitle = (workbook: RedPenWorkbook) => workbook.name?.trim() || 'Unnamed Session';
+const workbookTitle = (workbook: RedPenWorkbook) => workbook.name?.trim() || 'Unnamed Workbook';
 const workbookMeta = (workbook: RedPenWorkbook) => {
   const courses = workbook.sheets?.length || 0;
   return `${courses} ${courses === 1 ? 'course' : 'courses'}`;
