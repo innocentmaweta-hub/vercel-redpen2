@@ -8,7 +8,7 @@ import {
 } from '../lib/historyStore';
 import { saveCloudWorkbook, updateWorksheet } from '../lib/workbookStore';
 import { getSavedFolder } from '../lib/fileStorage';
-import { buildPaperPdfBlob, buildPaperPdfFilename, appendResultToSessionExcel } from '../lib/exportUtils';
+import { buildPaperPdfBlob, buildPaperPdfFilename, appendResultToWorkbookExcel, buildWorkbookExcelFilename } from '../lib/exportUtils';
 import { writeFileToFolder } from '../lib/fileStorage';
 import { parseQuestionScore } from '../lib/resultUtils';
 
@@ -140,14 +140,11 @@ export function useHistory() {
                     const pdfFilename = buildPaperPdfFilename(saveStudentInfo);
                     await writeFileToFolder(folder, pdfFilename, pdfBlob);
                 }
-                await appendResultToSessionExcel(
+
+                const workbookFilename = buildWorkbookExcelFilename(updatedWorkbook);
+                await appendResultToWorkbookExcel(
                     folder,
-                    {
-                        academicYear: semesterCourse.academicYear || '',
-                        semester: semesterCourse.semester || '',
-                        sessionLabel: semesterCourse.sessionLabel || '',
-                        customName: semesterCourse.customName,
-                    },
+                    workbookFilename,
                     activeCourseCode,
                     saveStudentInfo,
                     currentResult
@@ -245,3 +242,4 @@ export function useHistory() {
         retryHistorySave, handleSave, handleSaveAllBatch, handleLoadRecord, handleDeleteRecord,
     };
 }
+
