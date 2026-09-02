@@ -2,95 +2,40 @@ import { Router } from 'express';
 import OpenAI from 'openai';
 import { TOKEN_PRICING } from './payments.js';
 
+const UI_ACTIONS = ['click', 'type', 'set_value', 'select', 'check', 'uncheck', 'set_range', 'upload', 'scroll', 'wait'];
+const UI_STEP_SCHEMA = {
+  type: 'object',
+  properties: {
+    action: { type: 'string', enum: UI_ACTIONS },
+    target: { type: 'string' },
+    value: { type: 'string' },
+    option: { type: 'string' },
+  },
+  required: ['action', 'target'],
+};
+
 const YAZA_TOOLS_OPENAI = [
   {
     type: 'function',
     function: {
       name: 'ui_action',
-      description: 'Operate any currently visible RedPen UI control exactly like a human. Use the UI map in the current app state. Actions: click, type, set_value, select, check, uncheck, set_range, upload. For click use target. For type/set_value use target and value. For select use target and option. For check/uncheck use target. For set_range use target and value. Use upload only when the app already exposes a file control; browser security may require the user to choose the local file.',
-      parameters: {
-        type: 'object',
-        properties: {
-          action: { type: 'string', enum: ['click', 'type', 'set_value', 'select', 'check', 'uncheck', 'set_range', 'upload'] },
-          target: { type: 'string' },
-          value: { type: 'string' },
-          option: { type: 'string' },
-        },
-        required: ['action', 'target'],
-      },
+      description: 'Operate any currently visible RedPen UI control like a human. Use the UI map in the current app state. click, type/set_value, select, check/uncheck, set_range, upload, scroll, and wait are supported. For scroll use target="window" and value="up", "down", "top", or "bottom". For wait use target="window" and value milliseconds. Never invent a target.',
+      parameters: { type: 'object', properties: { action: { type: 'string', enum: UI_ACTIONS }, target: { type: 'string' }, value: { type: 'string' }, option: { type: 'string' } }, required: ['action', 'target'] },
     },
   },
   {
     type: 'function',
     function: {
       name: 'ui_sequence',
-      description: 'Perform a short sequence of UI operations in order. Use only targets present in the current UI map. This is useful for workflows such as opening a modal, filling fields, and confirming. Keep sequences short because the UI can change after each step.',
-      parameters: {
-        type: 'object',
-        properties: {
-          steps: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                action: { type: 'string', enum: ['click', 'type', 'set_value', 'select', 'check', 'uncheck', 'set_range', 'upload'] },
-                target: { type: 'string' },
-                value: { type: 'string' },
-                option: { type: 'string' },
-              },
-              required: ['action', 'target'],
-            },
-            minItems: 1,
-            maxItems: 12,
-          },
-        },
-        required: ['steps'],
-      },
+      description: 'Perform a short ordered sequence of RedPen UI operations. Keep sequences short because the UI can change after each step; use wait when a screen needs time to update. Use only targets present in the current UI map.',
+      parameters: { type: 'object', properties: { steps: { type: 'array', items: UI_STEP_SCHEMA, minItems: 1, maxItems: 12 } }, required: ['steps'] },
     },
   },
-  {
-    type: 'function',
-    function: {
-      name: 'update_student_info',
-      description: "Update one or more fields of the current student's info form.",
-      parameters: {
-        type: 'object',
-        properties: { name: { type: 'string' }, regNo: { type: 'string' }, program: { type: 'string' }, year: { type: 'string' }, courseCode: { type: 'string' }, examDate: { type: 'string' } },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'trigger_grading',
-      description: 'Run grading on the currently uploaded student paper.',
-      parameters: { type: 'object', properties: { mode: { type: 'string', enum: ['ai', 'manual'] } }, required: ['mode'] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'navigate_view',
-      description: 'Switch the app to a different view/screen.',
-      parameters: { type: 'object', properties: { view: { type: 'string', enum: ['dashboard', 'grade', 'remark', 'history'] } }, required: ['view'] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'edit_result_feedback',
-      description: "Change the overall feedback text of the current grading result.",
-      parameters: { type: 'object', properties: { feedback: { type: 'string' } }, required: ['feedback'] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'edit_question_score',
-      description: 'Edit the score and/or feedback for a specific question.',
-      parameters: { type: 'object', properties: { questionNumber: { type: 'number' }, score: { type: 'string' }, feedback: { type: 'string' } }, required: ['questionNumber'] },
-    },
-  },
+  { type: 'function', function: { name: 'update_student_info', description: "Update one or more fields of the current student's info form.", parameters: { type: 'object', properties: { name: { type: 'string' }, regNo: { type: 'string' }, program: { type: 'string' }, year: { type: 'string' }, courseCode: { type: 'string' }, examDate: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'trigger_grading', description: 'Run grading on the currently uploaded student paper.', parameters: { type: 'object', properties: { mode: { type: 'string', enum: ['ai', 'manual'] } }, required: ['mode'] } } },
+  { type: 'function', function: { name: 'navigate_view', description: 'Switch the app to a different view/screen.', parameters: { type: 'object', properties: { view: { type: 'string', enum: ['dashboard', 'grade', 'remark', 'history'] } }, required: ['view'] } } },
+  { type: 'function', function: { name: 'edit_result_feedback', description: "Change the overall feedback text of the current grading result.", parameters: { type: 'object', properties: { feedback: { type: 'string' } }, required: ['feedback'] } } },
+  { type: 'function', function: { name: 'edit_question_score', description: 'Edit the score and/or feedback for a specific question.', parameters: { type: 'object', properties: { questionNumber: { type: 'number' }, score: { type: 'string' }, feedback: { type: 'string' } }, required: ['questionNumber'] } } },
   { type: 'function', function: { name: 'save_results', description: 'Save the current grading result to history.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'open_settings', description: "Open the app's settings panel.", parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'open_profile', description: "Open the user's profile panel.", parameters: { type: 'object', properties: {} } } },
@@ -102,7 +47,6 @@ const MAX_MESSAGES_PER_SESSION = 50;
 export function createYazaRouter({ authMiddleware, getUserMeta, updateUserMeta }) {
   const router = Router();
   const OPENROUTER_KEY = process.env.OPENAI_API_KEY;
-
   const client = OPENROUTER_KEY ? new OpenAI({ apiKey: OPENROUTER_KEY, baseURL: 'https://openrouter.ai/api/v1' }) : null;
 
   router.post('/api/yaza/chat', authMiddleware, async (req, res) => {
@@ -111,26 +55,19 @@ export function createYazaRouter({ authMiddleware, getUserMeta, updateUserMeta }
       const key = sessionKey || DEFAULT_SESSION_KEY;
       if (!message || typeof message !== 'string') return res.status(400).json({ code: 'MISSING_MESSAGE', message: 'Message is required' });
       if (!client) return res.status(500).json({ code: 'NO_PROVIDER_CONFIGURED', message: 'OpenRouter API key not configured' });
-
       const preUsage = (await getUserMeta(req.user.id, 'redpen_usage')) || { tier: 'free', chatTokenBalance: 0, tokenBalance: 0 };
       const chatBalance = preUsage.chatTokenBalance || 0;
       const generalBalance = preUsage.tokenBalance || 0;
       const cost = TOKEN_PRICING.CHAT_TOKEN_COST;
       if (chatBalance + generalBalance < cost) return res.status(403).json({ code: 'LIMIT_REACHED', message: "You're out of chat tokens. Buy more tokens to keep chatting with Yaza AI." });
 
-      const systemPrompt = `You are Yaza AI, an assistant embedded in RedPen, an exam-grading app.\nYou can chat normally, and you can operate the visible RedPen UI using ui_action or ui_sequence. Prefer the UI tools when the user asks you to click, open, close, fill, select, change, or otherwise operate something in the app. Use the existing specialized tools when they are safer or more direct.\nTreat the UI map as authoritative: never invent a target. Before acting, identify the matching visible control from the UI map. If a modal or screen changes, keep sequences short and use the updated UI map on the next turn. Never bypass application restrictions such as an inactive grading session. Do not perform destructive or irreversible actions unless the user explicitly requested them.\nCurrent app state and visible UI map:\n${JSON.stringify(appContext || {}, null, 2)}`;
+      const systemPrompt = `You are Yaza AI, an assistant embedded in RedPen, an exam-grading app.\nYou can chat normally, and you can operate the visible RedPen UI using ui_action or ui_sequence. Prefer the UI tools when the user asks you to click, open, close, fill, select, change, scroll, or otherwise operate something in the app. Use the existing specialized tools when they are safer or more direct.\nTreat the UI map as authoritative: never invent a target. Never bypass application restrictions such as an inactive grading session. Do not perform destructive or irreversible actions unless the user explicitly requested them. Keep UI sequences short and use wait between state-changing steps when necessary.\nCurrent app state and visible UI map:\n${JSON.stringify(appContext || {}, null, 2)}`;
 
       const history = Array.isArray(conversationHistory) ? conversationHistory : [];
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text })),
-        { role: 'user', content: message },
-      ];
-
+      const messages = [{ role: 'system', content: systemPrompt }, ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text })), { role: 'user', content: message }];
       const completion = await client.chat.completions.create({ model: 'openrouter/free', messages, tools: YAZA_TOOLS_OPENAI });
       const choice = completion.choices[0];
-      const toolCalls = choice.message.tool_calls || [];
-      const actions = toolCalls.map((tc) => ({ name: tc.function.name, args: JSON.parse(tc.function.arguments || '{}') }));
+      const actions = (choice.message.tool_calls || []).map((tc) => ({ name: tc.function.name, args: JSON.parse(tc.function.arguments || '{}') }));
       const textReply = (choice.message.content || '').trim();
 
       try {
