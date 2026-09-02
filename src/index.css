@@ -29,6 +29,80 @@
     .glow-green {
         box-shadow: 0 0 20px rgba(0, 255, 0, 0.15);
     }
+
+    .ct-boxshadow {
+        border: 1px solid rgba(146, 63, 151, 0.8);
+        box-shadow:
+            0 0 0 1px rgba(146, 63, 151, 0.35),
+            0 4px 20px rgba(146, 63, 151, 0.25),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+}
+
+/* Animated 2px Yaza AI boundary stroke.
+   The button stays fully visible; only the border pseudo-element animates. */
+@property --yaza-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+@keyframes yaza-border-cycle {
+    0% {
+        --yaza-angle: 0deg;
+        opacity: 1;
+    }
+    25.53% {
+        --yaza-angle: 360deg;
+        opacity: 1;
+    }
+    25.54%,
+    100% {
+        --yaza-angle: 360deg;
+        opacity: 0;
+    }
+}
+
+body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
+    position: relative;
+    isolation: isolate;
+    border: 2px solid transparent;
+    background: #161a21;
+}
+
+body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot)::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    pointer-events: none;
+    z-index: -1;
+    background:
+        conic-gradient(
+            from var(--yaza-angle),
+            rgba(37, 99, 235, 0.12) 0deg,
+            rgba(37, 99, 235, 0.12) 285deg,
+            rgba(37, 99, 235, 0.28) 305deg,
+            rgba(37, 99, 235, 0.65) 325deg,
+            #ffffff 340deg,
+            #2563eb 348deg,
+            rgba(37, 99, 235, 0.12) 360deg
+        ) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: yaza-border-cycle 9.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot)::before {
+        animation: none;
+        opacity: 1;
+        background: #2563eb;
+        -webkit-mask: none;
+        mask: none;
+    }
 }
 
 @layer base {

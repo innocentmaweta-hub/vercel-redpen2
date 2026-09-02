@@ -47,10 +47,6 @@ export function useAppState() {
     const handleClearStudentPaper = () => { if (!studentPaper) return; if (grading.hasUnsavedResult && !confirmDiscardUnsavedWork('clear the current student paper')) return; workspaceActions.handleClearStudentPaper(); };
     const handleNewPaper = () => {
         if (!confirmDiscardUnsavedWork('start a new paper')) return;
-
-        // New Student is intentionally handled here, where the real grading
-        // setters are available. This avoids the stale/undefined setter
-        // references created inside useWorkspaceActions before useGrading.
         setStudentInfo(prev => ({ ...prev, name: '', regNo: '', program: '' }));
         setStudentPaper(null);
         grading.setResult(null);
@@ -70,7 +66,16 @@ export function useAppState() {
     const handleNewCourse = () => { if (!confirmDiscardUnsavedWork('start a new course')) return; modals.setShowNewCourseModal(true); };
     const handleNewSession = () => { if (!confirmDiscardUnsavedWork('start a new workbook')) return; modals.setShowNewSessionModal(true); };
     const handleLoadSessions = () => { modals.setShowOldSessionModal(true); };
-    const handleViewChange = (view: ActiveView) => { if (view !== 'grade' && activeView === 'grade' && grading.hasUnsavedResult) { if (!confirmDiscardUnsavedWork(`leave grading and open ${view}`)) return; grading.setHasUnsavedResult(false); } setActiveView(view); };
+    const handleViewChange = (view: ActiveView) => {
+        if (view === 'grade' && (!workbookState.semesterCourse || !workbookState.activeSessionId)) {
+            modals.setPendingGradeNavigation(false);
+            modals.setShowNewSessionModal(false);
+            modals.setShowOldSessionModal(true);
+            return;
+        }
+        if (view !== 'grade' && activeView === 'grade' && grading.hasUnsavedResult) { if (!confirmDiscardUnsavedWork(`leave grading and open ${view}`)) return; grading.setHasUnsavedResult(false); }
+        setActiveView(view);
+    };
     const resetForCourseSwitch = () => { setMarkingModeState('ai'); tools.resetTools(); grading.setResult(null); grading.setHasUnsavedResult(false); setStudentPaper(null); setExaminerRemarks(''); if (modals.pendingGradeNavigation) { modals.setPendingGradeNavigation(false); setActiveView('grade'); } };
     const resetWorkspaceForNewCourse = () => { setMarkingScheme(null); setStudentPaper(null); grading.setResult(null); grading.setHasUnsavedResult(false); setExaminerRemarks(''); setMarkingModeState('ai'); tools.resetTools(); setZoom(1); setClearCount(c => c + 1); setIsMaximized(false); grading.setIsAutoMode(false); setActiveView('grade'); };
     const resetWorkspaceForImport = () => { setStudentInfo({ name: '', regNo: '', program: '', year: '', semester: '', courseCode: '', examDate: '' }); setMarkingScheme(null); setStudentPaper(null); grading.setResult(null); grading.setHasUnsavedResult(false); setExaminerRemarks(''); setMarkingModeState('ai'); tools.resetTools(); setZoom(1); setClearCount(c => c + 1); setIsMaximized(false); grading.setIsAutoMode(false); };
