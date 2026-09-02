@@ -50,7 +50,6 @@ export function useWorkspaceActions({
 
         setStudentInfo((prev: any) => ({ ...prev, name: '', regNo: '', program: '' }));
         setStudentPaper(null);
-        setResult(null);
         setExaminerRemarks('');
         setMarkingModeState('ai');
         resetTools();
@@ -96,9 +95,6 @@ export function useWorkspaceActions({
     };
 
     const handleRefresh = (_hasUnsavedResult: boolean, _result: any, _markingScheme: any, _studentPaper: any, semesterCourse: any) => {
-        // The RefreshModal is the single confirmation point. Once the user
-        // clicks its Reload button, clear only transient grading state and
-        // leave the persistent workbook/courses untouched.
         setStudentInfo({
             name: '', regNo: '', program: '',
             year: semesterCourse?.year || '',
