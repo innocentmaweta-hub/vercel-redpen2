@@ -12,19 +12,15 @@ interface Props {
   onUpdateStudentInfo: (updates: Partial<StudentInfo>) => void; onTriggerGrading: (mode: 'ai' | 'manual') => void; onNavigateView: (view: ActiveView) => void;
   onEditResultFeedback: (feedback: string) => void; onEditQuestionScore: (questionNumber: number, score?: string, feedback?: string) => void;
   onSaveResults: () => void; onOpenSettings: () => void; onOpenProfile: () => void;
+  onCreateWorkbook: (details: Record<string, any>) => void;
 }
 
 export const YazaPanel = (props: Props) => {
-  const { onClose, authHeaders, isLoggedIn, onRequireLogin, sessionKey, studentInfo, result, activeView, hasStudentPaper, onUpdateStudentInfo, onTriggerGrading, onNavigateView, onEditResultFeedback, onEditQuestionScore, onSaveResults, onOpenSettings, onOpenProfile } = props;
+  const { onClose, authHeaders, isLoggedIn, onRequireLogin, sessionKey, studentInfo, result, activeView, hasStudentPaper, onUpdateStudentInfo, onTriggerGrading, onNavigateView, onEditResultFeedback, onEditQuestionScore, onSaveResults, onOpenSettings, onOpenProfile, onCreateWorkbook } = props;
   const [messages, setMessages] = useState<ChatMessage[]>([]); const [input, setInput] = useState(''); const [loading, setLoading] = useState(false); const [loadingHistory, setLoadingHistory] = useState(true); const [uiSnapshot, setUiSnapshot] = useState<YazaUIElement[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null); const MIN_WIDTH = 390; const [panelWidth, setPanelWidth] = useState(MIN_WIDTH); const isDraggingRef = useRef(false); const textareaRef = useRef<HTMLTextAreaElement>(null); const MAX_TEXTAREA_HEIGHT = 200;
 
-  useEffect(() => {
-    const update = () => setUiSnapshot(refreshYazaUIRegistry());
-    const observer = new MutationObserver(update); update();
-    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'value', 'checked', 'class', 'style'] });
-    return () => observer.disconnect();
-  }, []);
+  useEffect(() => { const update = () => setUiSnapshot(refreshYazaUIRegistry()); const observer = new MutationObserver(update); update(); observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['disabled', 'aria-disabled', 'value', 'checked', 'class', 'style'] }); return () => observer.disconnect(); }, []);
   useEffect(() => { const handleMouseMove = (e: MouseEvent) => { if (!isDraggingRef.current) return; const newWidth = window.innerWidth - e.clientX - 16; setPanelWidth(Math.min(Math.max(newWidth, MIN_WIDTH), window.innerWidth - 32)); }; const handleMouseUp = () => { isDraggingRef.current = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; }; window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', handleMouseUp); return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); }; }, []);
   const startDragging = () => { isDraggingRef.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; };
   const autoResizeTextarea = () => { const el = textareaRef.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`; }; useEffect(() => { autoResizeTextarea(); }, [input]);
@@ -32,12 +28,9 @@ export const YazaPanel = (props: Props) => {
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, loading]);
 
   const executeAction = async (action: YazaAction): Promise<string> => {
+    if (action.name === 'create_workbook') { onCreateWorkbook(action.args); return `Created workbook for ${action.args.courseCode}.`; }
     if (action.name === 'ui_action') { const outcome = await executeYazaUIAction(action.args); setTimeout(() => setUiSnapshot(refreshYazaUIRegistry()), 0); return outcome.message; }
-    if (action.name === 'ui_sequence') {
-      const steps = Array.isArray(action.args.steps) ? action.args.steps.slice(0, 12) : []; const summaries: string[] = [];
-      for (const step of steps) { const outcome = await executeYazaUIAction(step); summaries.push(outcome.message); if (!outcome.ok) break; }
-      setTimeout(() => setUiSnapshot(refreshYazaUIRegistry()), 0); return summaries.join('\n');
-    }
+    if (action.name === 'ui_sequence') { const steps = Array.isArray(action.args.steps) ? action.args.steps.slice(0, 12) : []; const summaries: string[] = []; for (const step of steps) { const outcome = await executeYazaUIAction(step); summaries.push(outcome.message); if (!outcome.ok) break; } setTimeout(() => setUiSnapshot(refreshYazaUIRegistry()), 0); return summaries.join('\n'); }
     switch (action.name) {
       case 'update_student_info': onUpdateStudentInfo(action.args); return 'Updated student info.';
       case 'trigger_grading': if (!hasStudentPaper) return "No student paper is uploaded yet, so I can't grade."; onTriggerGrading(action.args.mode === 'manual' ? 'manual' : 'ai'); return `Triggered ${action.args.mode === 'manual' ? 'manual' : 'AI'} grading.`;
@@ -60,10 +53,8 @@ export const YazaPanel = (props: Props) => {
       const appContext = { activeView, studentInfo, hasStudentPaper, result: result ? { totalScore: result.totalScore, grade: result.grade, feedback: result.feedback, questions: result.questions } : null, ui: liveUi };
       const res = await fetch('/api/yaza/chat', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ message: trimmed, appContext, conversationHistory: messages.slice(-10), sessionKey }) });
       const data = await res.json(); if (!res.ok) { setMessages(prev => [...prev, { role: 'assistant', text: data.message || 'Something went wrong.' }]); return; }
-      const actionSummaries: string[] = [];
-      if (Array.isArray(data.actions)) { for (const action of data.actions as YazaAction[]) actionSummaries.push(await executeAction(action)); }
-      const replyText = data.reply?.trim(); const combined = [replyText, ...actionSummaries.filter(Boolean)].filter(Boolean).join('\n\n');
-      setMessages(prev => [...prev, { role: 'assistant', text: combined || 'Done.' }]);
+      const actionSummaries: string[] = []; if (Array.isArray(data.actions)) { for (const action of data.actions as YazaAction[]) actionSummaries.push(await executeAction(action)); }
+      const replyText = data.reply?.trim(); const combined = [replyText, ...actionSummaries.filter(Boolean)].filter(Boolean).join('\n\n'); setMessages(prev => [...prev, { role: 'assistant', text: combined || 'Done.' }]);
     } catch (err) { console.error('Yaza chat failed:', err); setMessages(prev => [...prev, { role: 'assistant', text: 'Failed to reach Yaza AI. Please try again.' }]); }
     finally { setLoading(false); }
   };
