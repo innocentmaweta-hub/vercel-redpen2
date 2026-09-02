@@ -1,26 +1,39 @@
 import { Search, Upload, Plus } from 'lucide-react';
-import { SemesterCourse } from './CourseSessionModal';
+import type { RedPenWorkbook } from '../types/workbook';
 
 interface OldSessionModalProps {
     searchTerm: string;
     onSearchTermChange: (term: string) => void;
-    filteredSessions: SemesterCourse[];
-    onSelectSession: (session: SemesterCourse) => void;
+    workbooks: RedPenWorkbook[];
+    activeWorkbookId: string | null;
+    onSelectWorkbook: (workbook: RedPenWorkbook) => void;
     onLoadFromFile: () => void;
-    onNewSession: () => void;
+    onNewWorkbook: () => void;
     onClose: () => void;
 }
 
 export function OldSessionModal({
-    searchTerm, onSearchTermChange, filteredSessions,
-    onSelectSession, onLoadFromFile, onNewSession, onClose,
+    searchTerm,
+    onSearchTermChange,
+    workbooks,
+    activeWorkbookId,
+    onSelectWorkbook,
+    onLoadFromFile,
+    onNewWorkbook,
+    onClose,
 }: OldSessionModalProps) {
+    const query = searchTerm.trim().toLowerCase();
+    const filteredWorkbooks = workbooks.filter((workbook) => {
+        if (!query) return true;
+        return `${workbook.name} ${workbook.fileName ?? ''}`.toLowerCase().includes(query);
+    });
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-card rounded-3xl border border-gray-800 shadow-xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
                 <div className="p-6 border-b border-gray-800 bg-sidebar/50 flex items-center justify-between">
                     <h2 className="text-lg font-bold uppercase tracking-widest text-gray-400">
-                        Load Session
+                        Load Workbook
                     </h2>
 
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-300">
@@ -34,30 +47,47 @@ export function OldSessionModal({
 
                         <input
                             type="text"
-                            placeholder="Search sessions..."
+                            placeholder="Search workbooks..."
                             value={searchTerm}
                             onChange={(e) => onSearchTermChange(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 bg-sidebar border border-gray-700 rounded-lg text-sm focus:outline-none focus:border-accent-blue"
                         />
                     </div>
 
-                    {filteredSessions.length > 0 ? (
-                        filteredSessions.map((session, index) => (
-                            <div
-                                key={index}
-                                className="p-4 bg-gray-900/30 rounded-xl border border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer"
-                                onClick={() => onSelectSession(session)}
-                            >
-                                <div className="font-bold text-ink">{session.courseCode}</div>
-                                <div className="text-sm text-gray-400">{session.courseName || 'No course name'}</div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Program: {session.program || 'N/A'} | Year: {session.year || 'N/A'}
+                    {filteredWorkbooks.length > 0 ? (
+                        filteredWorkbooks.map((workbook) => {
+                            const isActive = workbook.id === activeWorkbookId;
+                            const sheetCount = workbook.sheets?.length ?? 0;
+
+                            return (
+                                <div
+                                    key={workbook.id}
+                                    className={`p-4 rounded-xl border transition-colors cursor-pointer ${isActive
+                                        ? 'border-accent-blue bg-accent-blue/10'
+                                        : 'border-gray-800 bg-gray-900/30 hover:bg-gray-800/50'
+                                    }`}
+                                    onClick={() => onSelectWorkbook(workbook)}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="font-bold text-ink truncate">
+                                            {workbook.name || 'Unnamed Workbook'}
+                                        </div>
+                                        {isActive && (
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-accent-blue shrink-0">
+                                                Active
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                        {sheetCount} {sheetCount === 1 ? 'course' : 'courses'}
+                                        {workbook.fileName ? ` · ${workbook.fileName}` : ''}
+                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="text-center py-8 text-gray-500">
-                            No sessions found
+                            {workbooks.length === 0 ? 'No workbooks yet' : 'No workbooks found'}
                         </div>
                     )}
 
@@ -71,18 +101,18 @@ export function OldSessionModal({
                         </button>
 
                         <p className="text-xs text-gray-500 mt-2 text-center">
-                            Select a saved grading session file (.xlsx)
+                            Select a saved workbook file (.xlsx)
                         </p>
                     </div>
                 </div>
 
                 <div className="p-4 border-t border-gray-800 bg-sidebar/50">
                     <button
-                        onClick={onNewSession}
+                        onClick={onNewWorkbook}
                         className="w-full bg-accent-blue text-white py-2 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
                     >
                         <Plus size={16} />
-                        New Session
+                        New Workbook
                     </button>
                 </div>
             </div>
