@@ -29,6 +29,23 @@
     .glow-green {
         box-shadow: 0 0 20px rgba(0, 255, 0, 0.15);
     }
+
+    .ct-boxshadow {
+        border: 1px solid rgba(146, 63, 151, 0.8);
+        box-shadow:
+            0 0 0 1px rgba(146, 63, 151, 0.35),
+            0 4px 20px rgba(146, 63, 151, 0.25),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+}
+
+/* Give the Yaza AI button the purple CT box-shadow while its panel is closed. */
+body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
+    border: 1px solid rgba(146, 63, 151, 0.8);
+    box-shadow:
+        0 0 0 1px rgba(146, 63, 151, 0.35),
+        0 4px 20px rgba(146, 63, 151, 0.25),
+        inset 0 0 12px rgba(255, 255, 255, 0.04);
 }
 
 @layer base {
