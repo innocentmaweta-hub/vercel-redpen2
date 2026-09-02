@@ -39,8 +39,8 @@
     }
 }
 
-/* Animated 2px Yaza AI boundary stroke. One revolution lasts 2.4s,
-   then the stroke stays hidden for 7s before starting again. */
+/* Animated 2px Yaza AI boundary stroke. The button itself stays visible;
+   only the animated stroke disappears for 7s after each revolution. */
 @property --yaza-angle {
     syntax: '<angle>';
     initial-value: 0deg;
@@ -56,6 +56,7 @@
         --yaza-angle: 360deg;
         opacity: 1;
     }
+    25.54%,
     100% {
         --yaza-angle: 360deg;
         opacity: 0;
