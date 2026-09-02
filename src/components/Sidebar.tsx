@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutGrid, FileText, History, User } from 'lucide-react';
+import { LayoutGrid, FileText, FilePenLine, History, User } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ActiveView, User as UserType } from '../types';
 
@@ -39,7 +39,7 @@ export const Sidebar = ({ activeView, onViewChange, onHelp, hasResult, user, onP
     </div>
     <div className="flex-1 flex flex-col items-center justify-center gap-0">
       <SidebarItem icon={LayoutGrid} label="Dashboard" active={activeView === 'dashboard'} onClick={() => onViewChange('dashboard')} onTooltip={setTooltip} />
-      <SidebarItem icon={FileText} label="Grade" active={activeView === 'grade'} onClick={() => onViewChange('grade')} onTooltip={setTooltip} />
+      <SidebarItem icon={FilePenLine} label="Grade" active={activeView === 'grade'} onClick={() => onViewChange('grade')} onTooltip={setTooltip} />
       <SidebarItem icon={FileText} label="Results" active={activeView === 'remark'} onClick={() => onViewChange('remark')} onTooltip={setTooltip} />
       <div className="w-8 h-px bg-gray-800/50 my-1.5" />
       <SidebarItem icon={History} label="History" active={activeView === 'history'} onClick={() => onViewChange('history')} onTooltip={setTooltip} />
