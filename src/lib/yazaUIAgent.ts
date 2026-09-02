@@ -60,21 +60,32 @@ function typeOf(el: HTMLElement): YazaUIElement['type'] {
     return 'other';
 }
 
-export function refreshYazaUIRegistry() {
-    const previous = document.querySelectorAll('[data-yaza-target]');
-    previous.forEach(el => el.removeAttribute('data-yaza-target'));
+function makeTarget(type: YazaUIElement['type'], label: string, occurrence: number) {
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 55) || 'control';
+    return `ui-${type}-${slug}-${occurrence}`;
+}
 
-    const elements = Array.from(document.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR)).filter(visible);
+export function refreshYazaUIRegistry() {
+    document.querySelectorAll('[data-yaza-target]').forEach(el => el.removeAttribute('data-yaza-target'));
+
+    const counts = new Map<string, number>();
+    const elements = Array.from(document.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR))
+        .filter(el => visible(el) && !el.closest('[data-yaza-ignore]'));
     const snapshot: YazaUIElement[] = [];
 
-    elements.forEach((el, index) => {
-        const target = `ui-${index + 1}`;
-        el.setAttribute('data-yaza-target', target);
+    elements.forEach(el => {
         const type = typeOf(el);
+        const label = elementLabel(el);
+        const key = `${type}:${label.toLowerCase()}`;
+        const occurrence = (counts.get(key) || 0) + 1;
+        counts.set(key, occurrence);
+        const target = makeTarget(type, label, occurrence);
+        el.setAttribute('data-yaza-target', target);
+
         const item: YazaUIElement = {
             target,
             type,
-            label: elementLabel(el),
+            label,
             disabled: (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true',
         };
         if ('value' in el) item.value = clean(String((el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value));
