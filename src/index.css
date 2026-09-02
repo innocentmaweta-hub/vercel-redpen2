@@ -60,13 +60,13 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
         linear-gradient(#161a21, #161a21) padding-box,
         conic-gradient(
             from var(--yaza-angle),
-            rgba(146, 63, 151, 0.12) 0deg,
-            rgba(146, 63, 151, 0.12) 285deg,
-            rgba(146, 63, 151, 0.28) 305deg,
-            rgba(146, 63, 151, 0.65) 325deg,
+            rgba(37, 99, 235, 0.12) 0deg,
+            rgba(37, 99, 235, 0.12) 285deg,
+            rgba(37, 99, 235, 0.28) 305deg,
+            rgba(37, 99, 235, 0.65) 325deg,
             #ffffff 340deg,
-            #923f97 348deg,
-            rgba(146, 63, 151, 0.12) 360deg
+            #2563eb 348deg,
+            rgba(37, 99, 235, 0.12) 360deg
         ) border-box;
     animation: yaza-border-rotate 2.4s linear infinite;
 }
@@ -76,7 +76,7 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
         animation: none;
         background:
             linear-gradient(#161a21, #161a21) padding-box,
-            #923f97 border-box;
+            #2563eb border-box;
     }
 }
 
