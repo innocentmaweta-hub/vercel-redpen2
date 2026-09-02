@@ -39,8 +39,8 @@
     }
 }
 
-/* Animated 2px Yaza AI boundary stroke. The button itself stays visible;
-   only the animated stroke disappears for 7s after each revolution. */
+/* Animated 2px Yaza AI boundary stroke.
+   The button stays fully visible; only the border pseudo-element animates. */
 @property --yaza-angle {
     syntax: '<angle>';
     initial-value: 0deg;
@@ -67,8 +67,18 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
     position: relative;
     isolation: isolate;
     border: 2px solid transparent;
+    background: #161a21;
+}
+
+body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot)::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    pointer-events: none;
+    z-index: -1;
     background:
-        linear-gradient(#161a21, #161a21) padding-box,
         conic-gradient(
             from var(--yaza-angle),
             rgba(37, 99, 235, 0.12) 0deg,
@@ -79,15 +89,19 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
             #2563eb 348deg,
             rgba(37, 99, 235, 0.12) 360deg
         ) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
     animation: yaza-border-cycle 9.4s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
+    body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot)::before {
         animation: none;
-        background:
-            linear-gradient(#161a21, #161a21) padding-box,
-            #2563eb border-box;
+        opacity: 1;
+        background: #2563eb;
+        -webkit-mask: none;
+        mask: none;
     }
 }
 
