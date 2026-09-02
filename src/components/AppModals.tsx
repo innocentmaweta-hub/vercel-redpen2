@@ -18,20 +18,25 @@ export function AppModals({ app }: AppModalsProps) {
     const { auth, history, workbookState, grading, modals, workspaceActions, paymentCallback, tools } = app;
     const sessionDeps = { hasUnsavedResult: grading.hasUnsavedResult, workbook: workbookState.workbook, token: auth.token, setHasUnsavedResult: grading.setHasUnsavedResult, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setStudentInfo: app.setStudentInfo, setSemesterCourse: workbookState.setSemesterCourse, setActiveSessionId: workbookState.setActiveSessionId, resetForCourseSwitch: app.resetForCourseSwitch, persistWorkbook: workbookState.persistWorkbook, setActiveView: app.setActiveView };
     const newWorkbookDeps = { hasUnsavedResult: grading.hasUnsavedResult, token: auth.token, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setSemesterCourse: workbookState.setSemesterCourse, setSessions: workbookState.setSessions, setActiveSessionId: workbookState.setActiveSessionId, setStudentInfo: app.setStudentInfo, setHasUnsavedResult: grading.setHasUnsavedResult, resetWorkspaceForNewCourse: app.resetWorkspaceForNewCourse, confirmDiscardUnsavedWork: app.confirmDiscardUnsavedWork };
+    const createWorkbookFromYaza = (details: Record<string, any>) => {
+        const updates = {
+            workbookName: details.workbookName || `${details.courseCode || 'RedPen'} Workbook`,
+            courseCode: details.courseCode || '',
+            courseName: details.courseName || '',
+            program: details.program || '',
+            year: details.year || '',
+            semester: details.semester || '',
+            academicYear: details.academicYear || '',
+            sessionLabel: details.sessionLabel || '',
+            customName: details.workbookName || '',
+        };
+        modals.handleCreateNewWorkbook(updates, newWorkbookDeps);
+        if (details.studentName || details.regNo || details.program || details.year || details.semester || details.courseCode || details.examDate) {
+            app.setStudentInfo(prev => ({ ...prev, name: details.studentName || '', regNo: details.regNo || '', program: details.program || '', year: details.year || updates.year, semester: details.semester || updates.semester, courseCode: details.courseCode || updates.courseCode, examDate: details.examDate || '' }));
+        }
+    };
     return <>
-        {modals.showOldSessionModal && <OldSessionModal
-            searchTerm={workbookState.searchTerm}
-            onSearchTermChange={workbookState.setSearchTerm}
-            workbooks={workbookState.workbooks}
-            activeWorkbookId={workbookState.activeWorkbook?.id ?? null}
-            onSelectWorkbook={async (workbook) => {
-                const switched = await app.handleSelectWorkbookFromTopBar(workbook);
-                if (switched) modals.setShowOldSessionModal(false);
-            }}
-            onLoadFromFile={() => modals.handleLoadFromFile({ token: auth.token, persistWorkbook: workbookState.persistWorkbook, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setSessions: workbookState.setSessions, setSemesterCourse: workbookState.setSemesterCourse, setActiveSessionId: workbookState.setActiveSessionId, setSessionSaveState: workbookState.setSessionSaveState, resetWorkspaceForImport: app.resetWorkspaceForImport, confirmDiscardUnsavedWork: app.confirmDiscardUnsavedWork })}
-            onNewWorkbook={() => { modals.setModalType('new'); modals.setShowOldSessionModal(false); }}
-            onClose={() => modals.setShowOldSessionModal(false)}
-        />}
+        {modals.showOldSessionModal && <OldSessionModal searchTerm={workbookState.searchTerm} onSearchTermChange={workbookState.setSearchTerm} workbooks={workbookState.workbooks} activeWorkbookId={workbookState.activeWorkbook?.id ?? null} onSelectWorkbook={async (workbook) => { const switched = await app.handleSelectWorkbookFromTopBar(workbook); if (switched) modals.setShowOldSessionModal(false); }} onLoadFromFile={() => modals.handleLoadFromFile({ token: auth.token, persistWorkbook: workbookState.persistWorkbook, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setSessions: workbookState.setSessions, setSemesterCourse: workbookState.setSemesterCourse, setActiveSessionId: workbookState.setActiveSessionId, setSessionSaveState: workbookState.setSessionSaveState, resetWorkspaceForImport: app.resetWorkspaceForImport, confirmDiscardUnsavedWork: app.confirmDiscardUnsavedWork })} onNewWorkbook={() => { modals.setModalType('new'); modals.setShowOldSessionModal(false); }} onClose={() => modals.setShowOldSessionModal(false)} />}
         {modals.showCourseSelector && workbookState.workbook && <WorkbookCoursePicker workbook={workbookState.workbook} onSelect={(sheet) => modals.selectWorksheetById(sheet.id, sessionDeps)} onCancel={() => modals.setShowCourseSelector(false)} />}
         {grading.upgradePromptMessage && <UpgradePromptModal message={grading.upgradePromptMessage} onUpgrade={() => { grading.setUpgradePromptMessage(null); app.handleUpgrade(); }} onAddApiKey={() => { grading.setUpgradePromptMessage(null); app.setShowSettings(true); }} onCancel={() => grading.setUpgradePromptMessage(null)} />}
         {paymentCallback.paymentStatusMessage && <PaymentStatusModal message={paymentCallback.paymentStatusMessage} onClose={() => paymentCallback.setPaymentStatusMessage(null)} />}
@@ -39,7 +44,7 @@ export function AppModals({ app }: AppModalsProps) {
             {app.showHelp && <HelpModal onClose={() => app.setShowHelp(false)} />}
             {app.showRefresh && <RefreshModal onConfirm={() => { workspaceActions.handleRefresh(grading.hasUnsavedResult, grading.result, app.markingScheme, app.studentPaper, workbookState.semesterCourse); app.setShowRefresh(false); }} onCancel={() => app.setShowRefresh(false)} />}
             {auth.showAuth && <AuthModal onClose={() => auth.setShowAuth(false)} onAuthSuccess={auth.handleAuthSuccess} />}
-            {app.showYaza && <YazaPanel onClose={() => app.setShowYaza(false)} authHeaders={auth.authHeaders} studentInfo={app.studentInfo} result={grading.result} activeView={app.activeView} hasStudentPaper={!!app.studentPaper} isLoggedIn={!!auth.user} onRequireLogin={() => auth.setShowAuth(true)} sessionKey={workbookState.semesterCourse?.courseCode || 'general'} onUpdateStudentInfo={(updates) => app.setStudentInfo(prev => ({ ...prev, ...updates }))} onTriggerGrading={(mode) => { if (grading.hasUnsavedResult && !app.confirmDiscardUnsavedWork('run grading again')) return; grading.setMarkingModeState(mode); setTimeout(() => grading.handleGrade(tools.resetTools), 100); }} onNavigateView={app.handleViewChange} onEditResultFeedback={(feedback) => { grading.setResult(prev => prev ? { ...prev, feedback } : prev); grading.setHasUnsavedResult(true); }} onEditQuestionScore={app.handleYazaEditQuestionScore} onSaveResults={app.handleSave} onOpenSettings={() => app.setShowSettings(true)} onOpenProfile={() => auth.setShowProfile(true)} />}
+            {app.showYaza && <YazaPanel onClose={() => app.setShowYaza(false)} authHeaders={auth.authHeaders} studentInfo={app.studentInfo} result={grading.result} activeView={app.activeView} hasStudentPaper={!!app.studentPaper} isLoggedIn={!!auth.user} onRequireLogin={() => auth.setShowAuth(true)} sessionKey={workbookState.semesterCourse?.courseCode || 'general'} onUpdateStudentInfo={(updates) => app.setStudentInfo(prev => ({ ...prev, ...updates }))} onTriggerGrading={(mode) => { if (grading.hasUnsavedResult && !app.confirmDiscardUnsavedWork('run grading again')) return; grading.setMarkingModeState(mode); setTimeout(() => grading.handleGrade(tools.resetTools), 100); }} onNavigateView={app.handleViewChange} onEditResultFeedback={(feedback) => { grading.setResult(prev => prev ? { ...prev, feedback } : prev); grading.setHasUnsavedResult(true); }} onEditQuestionScore={app.handleYazaEditQuestionScore} onSaveResults={app.handleSave} onOpenSettings={() => app.setShowSettings(true)} onOpenProfile={() => auth.setShowProfile(true)} onCreateWorkbook={createWorkbookFromYaza} />}
             {auth.showProfile && auth.user && <ProfileModal user={auth.user} onClose={() => auth.setShowProfile(false)} onLogout={app.handleLogout} onOpenSettings={() => { auth.setShowProfile(false); app.setShowSettings(true); }} onSaveProfile={auth.handleSaveProfile} onChangePassword={auth.handleChangePassword} onDeleteAccount={app.handleDeleteAccount} onUploadAvatar={auth.handleUploadAvatar} authHeaders={auth.authHeaders} />}
             {app.showSettings && <SettingsModal user={auth.user} onClose={() => app.setShowSettings(false)} onSaveApiKeys={auth.handleSaveApiKeys} authHeaders={auth.authHeaders} />}
             {app.showBatch && <BatchModal onClose={() => app.setShowBatch(false)} markingScheme={app.markingScheme} onGradeSingle={grading.handleGradeSingle} onSaveAll={(results) => history.handleSaveAllBatch(results, auth.token, app.studentInfo, auth.setShowAuth, app.setShowBatch)} />}
