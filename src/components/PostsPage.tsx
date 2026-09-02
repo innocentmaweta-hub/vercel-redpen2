@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'; 
 import { motion } from 'motion/react';
 import { Award, FileText, BookOpen, Bell, CheckCircle, Clock, Star, ThumbsUp, BarChart2, Zap, ChevronRight, Calendar } from 'lucide-react';
 import type { HistoryRecord } from '../types';
