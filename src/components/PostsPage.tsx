@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { TrendingUp, Award, FileText, BookOpen, Bell, CheckCircle, Clock, Star, MessageSquare, ThumbsUp, BarChart2, Users, Zap, ChevronRight, Calendar } from 'lucide-react';
-import { HistoryRecord } from '../types';
+import { Award, FileText, BookOpen, Bell, CheckCircle, Clock, Star, ThumbsUp, BarChart2, Zap, ChevronRight, Calendar } from 'lucide-react';
+import type { HistoryRecord } from '../types';
+import type { RedPenWorksheet } from '../types/workbook';
 
-interface PostsPageProps { history: HistoryRecord[]; onGrade: () => void; activeCourseCode?: string; }
+interface PostsPageProps { history: HistoryRecord[]; onGrade: () => void; activeWorksheet?: RedPenWorksheet | null; }
 
 const GRADE_COLORS: Record<string, string> = { 'A': 'text-emerald-400', 'A+': 'text-emerald-400', 'A-': 'text-emerald-400', 'B': 'text-blue-400', 'B+': 'text-blue-400', 'B-': 'text-blue-400', 'C': 'text-yellow-400', 'C+': 'text-yellow-400', 'C-': 'text-yellow-400', 'D': 'text-orange-400', 'F': 'text-red-400' };
 const GRADE_BG: Record<string, string> = { 'A': 'bg-emerald-400/10 border-emerald-400/20', 'A+': 'bg-emerald-400/10 border-emerald-400/20', 'B': 'bg-blue-400/10 border-blue-400/20', 'B+': 'bg-blue-400/10 border-blue-400/20', 'C': 'bg-yellow-400/10 border-yellow-400/20', 'D': 'bg-orange-400/10 border-orange-400/20', 'F': 'bg-red-400/10 border-red-400/20' };
@@ -73,18 +74,22 @@ const AnnouncementCard = ({ post, index }: { post: typeof ANNOUNCEMENTS[0]; inde
   </motion.div>
 ); };
 
-export const PostsPage = ({ history, onGrade, activeCourseCode }: PostsPageProps) => {
-  const normalizedCode = activeCourseCode?.trim().toUpperCase();
-  const scopedHistory = normalizedCode ? history.filter(r => (r.studentInfo?.courseCode || '').trim().toUpperCase() === normalizedCode) : history;
-  const stats = getStats(scopedHistory);
-  const now = new Date(); const hour = now.getHours(); const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+export const PostsPage = ({ onGrade, activeWorksheet }: PostsPageProps) => {
+  const worksheetRecords: HistoryRecord[] = (activeWorksheet?.rows || []).map(row => ({
+    id: row.id,
+    studentInfo: row.studentInfo,
+    result: row.result,
+    date: row.gradedAt || activeWorksheet.updatedAt,
+  }));
+  const stats = getStats(worksheetRecords);
+  const courseCode = activeWorksheet?.course?.courseCode?.trim().toUpperCase();
   return (
     <div className="flex-1 flex overflow-hidden bg-bg-dark"><div className="flex-1 flex flex-col overflow-y-auto px-6 py-5 gap-5">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between"><div><h1 className="text-xl font-black text-white">{greeting} 👋</h1><p className="text-[11px] text-gray-500 mt-0.5">{normalizedCode ? `Showing activity for ${normalizedCode}.` : "Here's what's happening with your grading activity."}</p></div><button onClick={onGrade} className="flex items-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg"><Zap size={13} />Start Grading<ChevronRight size={13} /></button></motion.div>
-      <div className="flex gap-3"><StatCard icon={FileText} label="Papers Graded" value={stats.total} sub={normalizedCode || 'all time'} color="bg-accent-blue/10 text-accent-blue" /><StatCard icon={BarChart2} label="Avg Score" value={stats.total ? `${stats.avgScore}%` : '—'} sub="across all papers" color="bg-purple-400/10 text-purple-400" /><StatCard icon={CheckCircle} label="Pass Rate" value={stats.total ? `${stats.passRate}%` : '—'} sub="≥ 50% threshold" color="bg-emerald-400/10 text-emerald-400" /><StatCard icon={Award} label="Best Grade" value={stats.topGrade} sub="highest achieved" color="bg-yellow-400/10 text-yellow-400" /></div>
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between"><div><h1 className="text-xl font-black text-white">Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'} 👋</h1><p className="text-[11px] text-gray-500 mt-0.5">{courseCode ? `Showing activity for ${courseCode}.` : 'Select an active worksheet to see its grading activity.'}</p></div><button onClick={onGrade} className="flex items-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg"><Zap size={13} />Start Grading<ChevronRight size={13} /></button></motion.div>
+      <div className="flex gap-3"><StatCard icon={FileText} label="Papers Graded" value={stats.total} sub={courseCode || 'active worksheet'} color="bg-accent-blue/10 text-accent-blue" /><StatCard icon={BarChart2} label="Avg Score" value={stats.total ? `${stats.avgScore}%` : '—'} sub="active worksheet" color="bg-purple-400/10 text-purple-400" /><StatCard icon={CheckCircle} label="Pass Rate" value={stats.total ? `${stats.passRate}%` : '—'} sub="≥ 50% threshold" color="bg-emerald-400/10 text-emerald-400" /><StatCard icon={Award} label="Best Grade" value={stats.topGrade} sub="active worksheet" color="bg-yellow-400/10 text-yellow-400" /></div>
       <div className="flex gap-5 min-h-0"><div className="flex-[3] flex flex-col gap-3"><div className="flex items-center gap-2"><Bell size={13} className="text-gray-500" /><h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Announcements</h2></div>{ANNOUNCEMENTS.map((post, i) => <AnnouncementCard key={post.id} post={post} index={i} />)}</div>
-        <div className="flex-[4] flex flex-col gap-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Clock size={13} className="text-gray-500" /><h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Recent Activity{normalizedCode ? ` · ${normalizedCode}` : ''}</h2></div>{scopedHistory.length > 0 && <span className="text-[10px] text-gray-700">{scopedHistory.length} record{scopedHistory.length !== 1 ? 's' : ''}</span>}</div>
-          {scopedHistory.length === 0 ? <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col items-center justify-center gap-3 bg-card border border-gray-800 rounded-2xl py-12"><FileText size={32} className="text-gray-700" /><p className="text-[12px] text-gray-600 font-medium">{normalizedCode ? `No graded papers for ${normalizedCode} yet` : 'No grading activity yet'}</p><button onClick={onGrade} className="px-4 py-1.5 bg-accent-blue/10 text-accent-blue text-[11px] font-bold rounded-lg border border-accent-blue/20 hover:bg-accent-blue/20 transition-colors">Grade your first paper →</button></motion.div> : <div className="flex flex-col gap-3 overflow-y-auto">{[...scopedHistory].reverse().map((rec, i) => <PostCard key={rec.id} record={rec} index={i} />)}</div>}
+        <div className="flex-[4] flex flex-col gap-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Clock size={13} className="text-gray-500" /><h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Recent Activity{courseCode ? ` · ${courseCode}` : ''}</h2></div>{worksheetRecords.length > 0 && <span className="text-[10px] text-gray-700">{worksheetRecords.length} record{worksheetRecords.length !== 1 ? 's' : ''}</span>}</div>
+          {worksheetRecords.length === 0 ? <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col items-center justify-center gap-3 bg-card border border-gray-800 rounded-2xl py-12"><FileText size={32} className="text-gray-700" /><p className="text-[12px] text-gray-600 font-medium">{courseCode ? `No graded papers for ${courseCode} yet` : 'No active worksheet selected'}</p><button onClick={onGrade} className="px-4 py-1.5 bg-accent-blue/10 text-accent-blue text-[11px] font-bold rounded-lg border border-accent-blue/20 hover:bg-accent-blue/20 transition-colors">Grade your first paper →</button></motion.div> : <div className="flex flex-col gap-3 overflow-y-auto">{[...worksheetRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((rec, i) => <PostCard key={rec.id} record={rec} index={i} />)}</div>}
         </div></div>
     </div></div>
   );
