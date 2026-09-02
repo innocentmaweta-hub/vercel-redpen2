@@ -450,7 +450,7 @@ export const ResultsPanel = ({ result, loading, onPrint, onSave, isSaving = fals
         </button>
         <button type="button" onClick={onPrint} className="flex-1 bg-accent-blue text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg">
           <Printer size={16} />
-          Print
+          Next
         </button>
       </div>
     </div>
