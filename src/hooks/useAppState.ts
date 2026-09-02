@@ -45,7 +45,24 @@ export function useAppState() {
     const handleGradeButtonClick = () => { if (grading.hasUnsavedResult && !confirmDiscardUnsavedWork('grade this paper again')) return; grading.handleGrade(tools.resetTools); };
     const handlePaperUpload = (base64: string, name: string) => { if (studentPaper && !confirmDiscardUnsavedWork('replace the current student paper')) return; workspaceActions.handlePaperUpload(base64, name); };
     const handleClearStudentPaper = () => { if (!studentPaper) return; if (grading.hasUnsavedResult && !confirmDiscardUnsavedWork('clear the current student paper')) return; workspaceActions.handleClearStudentPaper(); };
-    const handleNewPaper = () => { if (!confirmDiscardUnsavedWork('start a new paper')) return; workspaceActions.handleNewPaper(workbookState.semesterCourse, workbookState.activeSessionId, grading.result, studentPaper); grading.setResult(null); };
+    const handleNewPaper = () => {
+        if (!confirmDiscardUnsavedWork('start a new paper')) return;
+
+        // New Student is intentionally handled here, where the real grading
+        // setters are available. This avoids the stale/undefined setter
+        // references created inside useWorkspaceActions before useGrading.
+        setStudentInfo(prev => ({ ...prev, name: '', regNo: '', program: '' }));
+        setStudentPaper(null);
+        grading.setResult(null);
+        setExaminerRemarks('');
+        setMarkingModeState('ai');
+        tools.resetTools();
+        setZoom(1);
+        setClearCount(c => c + 1);
+        setIsMaximized(false);
+        grading.setIsAutoMode(false);
+        setActiveView('grade');
+    };
     const handleNew = () => { if (!confirmDiscardUnsavedWork('start a new workspace')) return; workspaceActions.handleNew(false, null, markingScheme, studentPaper); };
     const handleLogout = () => { if (!confirmDiscardUnsavedWork('log out')) return; auth.handleLogout(); };
     const handleDeleteAccount = async (password: string) => { if (!confirmDiscardUnsavedWork('delete your account')) return { success: false, message: 'Account deletion cancelled.' }; return auth.handleDeleteAccount(password); };
