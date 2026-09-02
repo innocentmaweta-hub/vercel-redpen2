@@ -41,11 +41,11 @@ export function useHistory() {
         examinerRemarks, paperCanvasRef, setShowCourseSelector, setWorkbook,
         persistWorkbook, setHasUnsavedResult,
     }: any) => {
-        if (!token) { setHistorySaveState('error'); alert('Please sign in before saving grading results.'); return; }
-        if (!workbook) { alert('No workbook is open. Please open or create a workbook first.'); return; }
-        if (!semesterCourse) { alert('No course is selected. Please select a course before saving.'); setShowCourseSelector(true); return; }
+        if (!token) { setHistorySaveState('error'); alert('Please sign in before saving grading results.'); return false; }
+        if (!workbook) { alert('No workbook is open. Please open or create a workbook first.'); return false; }
+        if (!semesterCourse) { alert('No course is selected. Please select a course before saving.'); setShowCourseSelector(true); return false; }
         const currentResult = resultToSave || result;
-        if (!currentResult) { alert('No grading result to save. Grade a paper first.'); return; }
+        if (!currentResult) { alert('No grading result to save. Grade a paper first.'); return false; }
 
         const hasQuestions = Array.isArray(currentResult.questions) && currentResult.questions.length > 0;
         if (hasQuestions) {
@@ -55,7 +55,7 @@ export function useHistory() {
             });
             if (incompleteQuestions.length > 0) {
                 alert('Cannot save this result. All question scores must be completed with valid scores such as 5/10.');
-                return;
+                return false;
             }
         }
 
@@ -66,11 +66,11 @@ export function useHistory() {
         ].filter(Boolean);
         if (missingResultFields.length > 0) {
             alert(`Cannot save an incomplete result. Missing: ${missingResultFields.join(', ')}.`);
-            return;
+            return false;
         }
 
         const activeCourseCode = semesterCourse.courseCode.trim();
-        if (!activeCourseCode) { alert('The selected course does not have a valid course code.'); return; }
+        if (!activeCourseCode) { alert('The selected course does not have a valid course code.'); return false; }
 
         const saveStudentInfo: StudentInfo = {
             ...studentInfo,
@@ -94,7 +94,7 @@ export function useHistory() {
                 `Go to the Identity Panel to enter the details, then try saving again.\n\n` +
                 `Do you want to proceed with saving anyway?`
             );
-            if (!userConfirmed) return;
+            if (!userConfirmed) return false;
         }
 
         setIsSaving(true);
@@ -116,7 +116,6 @@ export function useHistory() {
             writeLocalHistory(cloudHistory);
             setPendingHistoryRecord(null);
             setHistorySaveState('saved');
-            setHasUnsavedResult(false);
 
             try {
                 const activeWorksheetId = workbook.activeSheetId;
@@ -154,8 +153,14 @@ export function useHistory() {
                 );
             } catch (exportError) {
                 console.error('Failed to persist/export workbook:', exportError);
+                setHistorySaveState('error');
+                setHasUnsavedResult(true);
                 alert('Your result was saved, but the workbook/PDF export could not be updated. Please retry the workbook save.');
+                return false;
             }
+
+            setHasUnsavedResult(false);
+            return true;
         } catch (error) {
             console.error('Failed to save grading history:', error);
             const updated = [record, ...history.filter(item => item.id !== record.id)].slice(0, 50);
@@ -165,6 +170,7 @@ export function useHistory() {
             setHistorySaveState('error');
             setHasUnsavedResult(true);
             alert('The result could not be saved to the cloud. Your result is still available locally. Please use Retry when your connection is available.');
+            return false;
         } finally {
             setIsSaving(false);
         }
