@@ -70,15 +70,6 @@ export const UploadZone = forwardRef<UploadZoneHandle, Props>(
         return;
       }
 
-      if (
-        !hasFile &&
-        onZoneClick &&
-        document.documentElement.dataset.redpenSessionActive !== 'true'
-      ) {
-        window.dispatchEvent(new Event('redpen:open-load-session'));
-        return;
-      }
-
       if (onZoneClick) {
         onZoneClick();
       } else {
