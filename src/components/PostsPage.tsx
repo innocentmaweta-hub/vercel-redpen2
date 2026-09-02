@@ -1,4 +1,4 @@
-import React, { useState } from 'react'; 
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Award, FileText, BookOpen, Bell, CheckCircle, Clock, Star, ThumbsUp, BarChart2, Zap, ChevronRight, Calendar } from 'lucide-react';
 import type { HistoryRecord } from '../types';
@@ -38,12 +38,12 @@ function getStats(history: HistoryRecord[]) {
 }
 
 const WORKFLOW_STEPS = [
-  { icon: BookOpen, title: 'Load or create a workbook', body: 'Open your workbook from the top bar, or create a new one.' },
-  { icon: FileText, title: 'Choose your course', body: 'Select the course you want to grade from the workbook.' },
-  { icon: Zap, title: 'Start grading students', body: 'Upload the marking scheme and student paper, then grade the result.' },
-  { icon: CheckCircle, title: 'Finish and view results', body: 'Complete grading and review the course performance in Results.' },
-  { icon: Clock, title: 'Review grading history', body: 'Open History to find and review previously graded students.' },
-  { icon: BookOpen, title: 'Reload and continue later', body: 'When you return to RedPen, reload the workbook and select your course.' },
+  { icon: BookOpen, title: 'Load or create a workbook', body: 'Open your workbook from the top bar, or create a new one.', bg: 'bg-yellow-400/5 border-yellow-400/15', iconBg: 'bg-yellow-400/10', iconColor: 'text-yellow-400', numberBg: 'bg-yellow-400/10', numberColor: 'text-yellow-400' },
+  { icon: FileText, title: 'Choose your course', body: 'Select the course you want to grade from the workbook.', bg: 'bg-accent-blue/5 border-accent-blue/15', iconBg: 'bg-accent-blue/10', iconColor: 'text-accent-blue', numberBg: 'bg-accent-blue/10', numberColor: 'text-accent-blue' },
+  { icon: Zap, title: 'Start grading students', body: 'Upload the marking scheme and student paper, then grade the result.', bg: 'bg-purple-400/5 border-purple-400/15', iconBg: 'bg-purple-400/10', iconColor: 'text-purple-400', numberBg: 'bg-purple-400/10', numberColor: 'text-purple-400' },
+  { icon: CheckCircle, title: 'Finish and view results', body: 'Complete grading and review the course performance in Results.', bg: 'bg-emerald-400/5 border-emerald-400/15', iconBg: 'bg-emerald-400/10', iconColor: 'text-emerald-400', numberBg: 'bg-emerald-400/10', numberColor: 'text-emerald-400' },
+  { icon: Clock, title: 'Review grading history', body: 'Open History to find and review previously graded students.', bg: 'bg-pink-400/5 border-pink-400/15', iconBg: 'bg-pink-400/10', iconColor: 'text-pink-400', numberBg: 'bg-pink-400/10', numberColor: 'text-pink-400' },
+  { icon: BookOpen, title: 'Reload and continue later', body: 'When you return to RedPen, reload the workbook and select your course.', bg: 'bg-orange-400/5 border-orange-400/15', iconBg: 'bg-orange-400/10', iconColor: 'text-orange-400', numberBg: 'bg-orange-400/10', numberColor: 'text-orange-400' },
 ];
 
 const StatCard = ({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string | number; sub?: string; color: string }) => (
@@ -78,12 +78,12 @@ const AnnouncementCard = ({ post, index }: { post: { id: string; icon: any; icon
 ); };
 
 const GettingStarted = ({ onGrade }: { onGrade: () => void }) => (
-  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-gray-800 rounded-2xl p-4">
-    <div className="flex items-start gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-accent-blue/10 flex items-center justify-center"><Zap size={18} className="text-accent-blue" /></div><div><p className="text-[13px] font-bold text-white">Start grading</p><p className="text-[11px] text-gray-500 mt-0.5">Follow the workflow from opening your workbook to reviewing completed grading.</p></div></div>
+  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="border border-gray-800 rounded-2xl p-4 bg-gradient-to-br from-accent-blue/10 via-purple-500/5 to-pink-500/5 shadow-lg shadow-black/10">
+    <div className="flex items-start gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-blue/20 to-purple-500/20 border border-accent-blue/15 flex items-center justify-center"><Zap size={18} className="text-accent-blue" /></div><div><p className="text-[13px] font-bold text-white">Start grading</p><p className="text-[11px] text-gray-500 mt-0.5">Follow the workflow from opening your workbook to reviewing completed grading.</p></div></div>
     <div className="space-y-2.5">
-      {WORKFLOW_STEPS.map((step, index) => { const Icon = step.icon; return <div key={step.title} className="flex items-start gap-3 p-2.5 rounded-xl bg-gray-900/40 border border-gray-800/60"><div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-800 text-[10px] font-black text-gray-500 shrink-0">{index + 1}</div><div className="w-7 h-7 rounded-lg bg-accent-blue/10 flex items-center justify-center shrink-0"><Icon size={13} className="text-accent-blue" /></div><div className="min-w-0"><p className="text-[11px] font-bold text-gray-300">{step.title}</p><p className="text-[10px] text-gray-600 leading-relaxed mt-0.5">{step.body}</p></div></div>; })}
+      {WORKFLOW_STEPS.map((step, index) => { const Icon = step.icon; return <motion.div key={step.title} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className={`flex items-start gap-3 p-2.5 rounded-xl border transition-all hover:brightness-125 ${step.bg}`}><div className={`flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-black shrink-0 ${step.numberBg} ${step.numberColor}`}>{index + 1}</div><div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${step.iconBg}`}><Icon size={13} className={step.iconColor} /></div><div className="min-w-0"><p className="text-[11px] font-bold text-gray-300">{step.title}</p><p className="text-[10px] text-gray-600 leading-relaxed mt-0.5">{step.body}</p></div></motion.div>; })}
     </div>
-    <button onClick={onGrade} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all"><Zap size={13} />Start Grading<ChevronRight size={13} /></button>
+    <button onClick={onGrade} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg shadow-accent-blue/10"><Zap size={13} />Start Grading<ChevronRight size={13} /></button>
   </motion.div>
 );
 
@@ -99,8 +99,9 @@ const ContinueCard = ({ worksheet, onGrade }: { worksheet: RedPenWorksheet; onGr
     : 'No grading activity yet';
   const course = worksheet.course;
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="border border-accent-blue/20 bg-accent-blue/5 rounded-2xl p-4">
-      <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] uppercase tracking-widest font-bold text-accent-blue">Continue where you left off</p><p className="text-[15px] font-black text-white mt-1">Continue Grading</p><p className="text-[13px] font-bold text-gray-300 mt-1">{course?.courseCode || 'Course'}{course?.courseName ? ` — ${course.courseName}` : ''}</p><div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2"><span className="text-[11px] text-gray-400">{records.length} student{records.length !== 1 ? 's' : ''} graded</span><span className="text-[10px] text-gray-600">{activityLabel}</span></div></div><button onClick={onGrade} className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all">Continue<ChevronRight size={13} /></button></div>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden border border-accent-blue/20 bg-gradient-to-br from-accent-blue/10 via-purple-500/5 to-pink-500/10 rounded-2xl p-4 shadow-lg shadow-black/10">
+      <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-purple-500/10 blur-2xl" /><div className="absolute -bottom-12 -left-8 w-24 h-24 rounded-full bg-accent-blue/10 blur-2xl" />
+      <div className="relative flex items-start justify-between gap-4"><div><p className="text-[10px] uppercase tracking-widest font-bold text-accent-blue">Continue where you left off</p><p className="text-[15px] font-black text-white mt-1">Continue Grading</p><p className="text-[13px] font-bold text-gray-300 mt-1">{course?.courseCode || 'Course'}{course?.courseName ? ` — ${course.courseName}` : ''}</p><div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2"><span className="text-[11px] text-gray-400">{records.length} student{records.length !== 1 ? 's' : ''} graded</span><span className="text-[10px] text-gray-600">{activityLabel}</span></div></div><button onClick={onGrade} className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg shadow-accent-blue/10">Continue<ChevronRight size={13} /></button></div>
     </motion.div>
   );
 };
