@@ -39,10 +39,16 @@
     }
 }
 
-/* Moving 2px purple snake stroke around the Yaza AI button while closed. */
-@keyframes yaza-snake-stroke {
+/* Animated 2px Yaza AI boundary stroke. The button's dimensions are untouched. */
+@property --yaza-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+@keyframes yaza-border-rotate {
     to {
-        transform: rotate(360deg);
+        --yaza-angle: 360deg;
     }
 }
 
@@ -50,38 +56,28 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
     position: relative;
     isolation: isolate;
     border: 2px solid transparent;
-    background-clip: padding-box;
+    background:
+        linear-gradient(#161a21, #161a21) padding-box,
+        conic-gradient(
+            from var(--yaza-angle),
+            rgba(146, 63, 151, 0.12) 0deg,
+            rgba(146, 63, 151, 0.12) 285deg,
+            rgba(146, 63, 151, 0.28) 305deg,
+            rgba(146, 63, 151, 0.65) 325deg,
+            #ffffff 340deg,
+            #923f97 348deg,
+            rgba(146, 63, 151, 0.12) 360deg
+        ) border-box;
+    animation: yaza-border-rotate 2.4s linear infinite;
 }
 
-body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot)::before {
-    content: "";
-    position: absolute;
-    inset: -2px;
-    border-radius: inherit;
-    padding: 2px;
-    background: conic-gradient(
-        from 0deg,
-        rgba(146, 63, 151, 0.16) 0deg,
-        rgba(146, 63, 151, 0.16) 285deg,
-        rgba(146, 63, 151, 0.55) 315deg,
-        #923f97 330deg,
-        #ffffff 342deg,
-        #923f97 351deg,
-        rgba(146, 63, 151, 0.16) 360deg
-    );
-    -webkit-mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: yaza-snake-stroke 1.8s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-}
-
-body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) > * {
-    position: relative;
-    z-index: 2;
+@media (prefers-reduced-motion: reduce) {
+    body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
+        animation: none;
+        background:
+            linear-gradient(#161a21, #161a21) padding-box,
+            #923f97 border-box;
+    }
 }
 
 @layer base {
