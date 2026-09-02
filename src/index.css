@@ -39,16 +39,26 @@
     }
 }
 
-/* Animated 2px Yaza AI boundary stroke. The button's dimensions are untouched. */
+/* Animated 2px Yaza AI boundary stroke. One revolution lasts 2.4s,
+   then the stroke stays hidden for 7s before starting again. */
 @property --yaza-angle {
     syntax: '<angle>';
     initial-value: 0deg;
     inherits: false;
 }
 
-@keyframes yaza-border-rotate {
-    to {
+@keyframes yaza-border-cycle {
+    0% {
+        --yaza-angle: 0deg;
+        opacity: 1;
+    }
+    25.53% {
         --yaza-angle: 360deg;
+        opacity: 1;
+    }
+    100% {
+        --yaza-angle: 360deg;
+        opacity: 0;
     }
 }
 
@@ -68,7 +78,7 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
             #2563eb 348deg,
             rgba(37, 99, 235, 0.12) 360deg
         ) border-box;
-    animation: yaza-border-rotate 2.4s linear infinite;
+    animation: yaza-border-cycle 9.4s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
