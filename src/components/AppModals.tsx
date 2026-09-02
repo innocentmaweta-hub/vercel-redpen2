@@ -16,7 +16,7 @@ interface AppModalsProps { app: ReturnType<typeof import('../hooks/useAppState')
 
 export function AppModals({ app }: AppModalsProps) {
     const { auth, history, workbookState, grading, modals, workspaceActions, paymentCallback, tools } = app;
-    const sessionDeps = { hasUnsavedResult: grading.hasUnsavedResult, workbook: workbookState.workbook, token: auth.token, setHasUnsavedResult: grading.setHasUnsavedResult, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setStudentInfo: app.setStudentInfo, setSemesterCourse: workbookState.setSemesterCourse, resetForCourseSwitch: app.resetForCourseSwitch, persistWorkbook: workbookState.persistWorkbook };
+    const sessionDeps = { hasUnsavedResult: grading.hasUnsavedResult, workbook: workbookState.workbook, token: auth.token, setHasUnsavedResult: grading.setHasUnsavedResult, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setStudentInfo: app.setStudentInfo, setSemesterCourse: workbookState.setSemesterCourse, resetForCourseSwitch: app.resetForCourseSwitch, persistWorkbook: workbookState.persistWorkbook, setActiveView: app.setActiveView };
     const newWorkbookDeps = { hasUnsavedResult: grading.hasUnsavedResult, token: auth.token, setWorkbook: workbookState.setWorkbook, setWorkbooks: workbookState.setWorkbooks, setActiveWorkbookId: workbookState.setActiveWorkbookId, setSemesterCourse: workbookState.setSemesterCourse, setSessions: workbookState.setSessions, setActiveSessionId: workbookState.setActiveSessionId, setStudentInfo: app.setStudentInfo, setHasUnsavedResult: grading.setHasUnsavedResult, resetWorkspaceForNewCourse: app.resetWorkspaceForNewCourse, confirmDiscardUnsavedWork: app.confirmDiscardUnsavedWork };
     return <>
         {modals.showOldSessionModal && <OldSessionModal
@@ -32,7 +32,7 @@ export function AppModals({ app }: AppModalsProps) {
             onNewWorkbook={() => { modals.setModalType('new'); modals.setShowOldSessionModal(false); }}
             onClose={() => modals.setShowOldSessionModal(false)}
         />}
-        {modals.showCourseSelector && workbookState.workbook && <WorkbookCoursePicker workbook={workbookState.workbook} onSelect={(sheet) => modals.loadOldSemester(sheet.course, sessionDeps)} onCancel={() => modals.setShowCourseSelector(false)} />}
+        {modals.showCourseSelector && workbookState.workbook && <WorkbookCoursePicker workbook={workbookState.workbook} onSelect={(sheet) => modals.selectWorksheetById(sheet.id, sessionDeps)} onCancel={() => modals.setShowCourseSelector(false)} />}
         {grading.upgradePromptMessage && <UpgradePromptModal message={grading.upgradePromptMessage} onUpgrade={() => { grading.setUpgradePromptMessage(null); app.handleUpgrade(); }} onAddApiKey={() => { grading.setUpgradePromptMessage(null); app.setShowSettings(true); }} onCancel={() => grading.setUpgradePromptMessage(null)} />}
         {paymentCallback.paymentStatusMessage && <PaymentStatusModal message={paymentCallback.paymentStatusMessage} onClose={() => paymentCallback.setPaymentStatusMessage(null)} />}
         <AnimatePresence>
