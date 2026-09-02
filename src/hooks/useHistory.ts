@@ -242,3 +242,4 @@ export function useHistory() {
         retryHistorySave, handleSave, handleSaveAllBatch, handleLoadRecord, handleDeleteRecord,
     };
 }
+
