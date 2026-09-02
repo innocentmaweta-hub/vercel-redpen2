@@ -37,10 +37,13 @@ function getStats(history: HistoryRecord[]) {
   return { total: history.length, avgScore: Math.round(avg * 10) / 10, passRate: validScores.length ? Math.round((passed / validScores.length) * 100) : 0, topGrade };
 }
 
-const ANNOUNCEMENTS = [
-  { id: 'a1', type: 'tip', icon: Zap, iconColor: 'text-yellow-400', bg: 'bg-yellow-400/5 border-yellow-400/15', title: 'Pro Tip: Batch Grading', body: 'Use the Batch button in the title bar to queue multiple student papers and grade them all at once — saving significant time during exam season.', time: 'Pinned', likes: 12 },
-  { id: 'a2', type: 'update', icon: Star, iconColor: 'text-accent-blue', bg: 'bg-accent-blue/5 border-accent-blue/15', title: 'AI Provider Active', body: 'Your grading engine is connected and ready. Upload a marking scheme and student paper to begin. Results include per-question scores and detailed feedback.', time: 'Today', likes: 5 },
-  { id: 'a3', type: 'info', icon: BookOpen, iconColor: 'text-purple-400', bg: 'bg-purple-400/5 border-purple-400/15', title: 'Supported Formats', body: 'Upload marking schemes and student papers as PDF, JPG, PNG, or plain text. The AI extracts student identity information automatically from the answer sheet.', time: 'Yesterday', likes: 8 },
+const WORKFLOW_STEPS = [
+  { icon: BookOpen, title: 'Load or create a workbook', body: 'Open your workbook from the top bar, or create a new one.' },
+  { icon: FileText, title: 'Choose your course', body: 'Select the course you want to grade from the workbook.' },
+  { icon: Zap, title: 'Start grading students', body: 'Upload the marking scheme and student paper, then grade the result.' },
+  { icon: CheckCircle, title: 'Finish and view results', body: 'Complete grading and review the course performance in Results.' },
+  { icon: Clock, title: 'Review grading history', body: 'Open History to find and review previously graded students.' },
+  { icon: BookOpen, title: 'Reload and continue later', body: 'When you return to RedPen, reload the workbook and select your course.' },
 ];
 
 const StatCard = ({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string | number; sub?: string; color: string }) => (
@@ -68,11 +71,39 @@ const PostCard = ({ record, index }: { record: HistoryRecord; index: number }) =
   );
 };
 
-const AnnouncementCard = ({ post, index }: { post: typeof ANNOUNCEMENTS[0]; index: number }) => { const [liked, setLiked] = useState(false); const Icon = post.icon; return (
+const AnnouncementCard = ({ post, index }: { post: { id: string; icon: any; iconColor: string; bg: string; title: string; body: string; time: string; likes: number }; index: number }) => { const [liked, setLiked] = useState(false); const Icon = post.icon; return (
   <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.07 }} className={`border rounded-2xl p-4 hover:opacity-90 transition-all ${post.bg}`}>
     <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-black/20 flex items-center justify-center flex-shrink-0"><Icon size={18} className={post.iconColor} /></div><div className="flex-1 min-w-0"><div className="flex items-center justify-between gap-2"><p className="text-[12px] font-bold text-white">{post.title}</p><span className="text-[10px] text-gray-600 shrink-0">{post.time}</span></div><p className="mt-1 text-[11px] text-gray-400 leading-relaxed">{post.body}</p><button onClick={() => setLiked(v => !v)} className={`mt-3 flex items-center gap-1 text-[10px] transition-colors ${liked ? 'text-accent-blue' : 'text-gray-600 hover:text-gray-400'}`}><ThumbsUp size={10} /><span>{post.likes + (liked ? 1 : 0)}</span></button></div></div>
   </motion.div>
 ); };
+
+const GettingStarted = ({ onGrade }: { onGrade: () => void }) => (
+  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-gray-800 rounded-2xl p-4">
+    <div className="flex items-start gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-accent-blue/10 flex items-center justify-center"><Zap size={18} className="text-accent-blue" /></div><div><p className="text-[13px] font-bold text-white">Start grading</p><p className="text-[11px] text-gray-500 mt-0.5">Follow the workflow from opening your workbook to reviewing completed grading.</p></div></div>
+    <div className="space-y-2.5">
+      {WORKFLOW_STEPS.map((step, index) => { const Icon = step.icon; return <div key={step.title} className="flex items-start gap-3 p-2.5 rounded-xl bg-gray-900/40 border border-gray-800/60"><div className="flex items-center justify-center w-6 h-6 rounded-lg bg-gray-800 text-[10px] font-black text-gray-500 shrink-0">{index + 1}</div><div className="w-7 h-7 rounded-lg bg-accent-blue/10 flex items-center justify-center shrink-0"><Icon size={13} className="text-accent-blue" /></div><div className="min-w-0"><p className="text-[11px] font-bold text-gray-300">{step.title}</p><p className="text-[10px] text-gray-600 leading-relaxed mt-0.5">{step.body}</p></div></div>; })}
+    </div>
+    <button onClick={onGrade} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all"><Zap size={13} />Start Grading<ChevronRight size={13} /></button>
+  </motion.div>
+);
+
+const ContinueCard = ({ worksheet, onGrade }: { worksheet: RedPenWorksheet; onGrade: () => void }) => {
+  const records = worksheet.rows || [];
+  const lastActivity = records.reduce<string | null>((latest, row) => {
+    const date = row.gradedAt || null;
+    if (!date) return latest;
+    return !latest || new Date(date).getTime() > new Date(latest).getTime() ? date : latest;
+  }, worksheet.updatedAt || null);
+  const activityLabel = lastActivity
+    ? `Last activity: ${new Date(lastActivity).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(lastActivity).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : 'No grading activity yet';
+  const course = worksheet.course;
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="border border-accent-blue/20 bg-accent-blue/5 rounded-2xl p-4">
+      <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] uppercase tracking-widest font-bold text-accent-blue">Continue where you left off</p><p className="text-[15px] font-black text-white mt-1">Continue Grading</p><p className="text-[13px] font-bold text-gray-300 mt-1">{course?.courseCode || 'Course'}{course?.courseName ? ` — ${course.courseName}` : ''}</p><div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2"><span className="text-[11px] text-gray-400">{records.length} student{records.length !== 1 ? 's' : ''} graded</span><span className="text-[10px] text-gray-600">{activityLabel}</span></div></div><button onClick={onGrade} className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all">Continue<ChevronRight size={13} /></button></div>
+    </motion.div>
+  );
+};
 
 export const PostsPage = ({ onGrade, activeWorksheet }: PostsPageProps) => {
   const worksheetRecords: HistoryRecord[] = (activeWorksheet?.rows || []).map(row => ({
@@ -83,11 +114,12 @@ export const PostsPage = ({ onGrade, activeWorksheet }: PostsPageProps) => {
   }));
   const stats = getStats(worksheetRecords);
   const courseCode = activeWorksheet?.course?.courseCode?.trim().toUpperCase();
+  const hasSession = !!activeWorksheet;
   return (
     <div className="flex-1 flex overflow-hidden bg-bg-dark"><div className="flex-1 flex flex-col overflow-y-auto px-6 py-5 gap-5">
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between"><div><h1 className="text-xl font-black text-white">Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'} 👋</h1><p className="text-[11px] text-gray-500 mt-0.5">{courseCode ? `Showing activity for ${courseCode}.` : 'Select an active worksheet to see its grading activity.'}</p></div><button onClick={onGrade} className="flex items-center gap-2 px-4 py-2 bg-accent-blue text-white text-[11px] font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg"><Zap size={13} />Start Grading<ChevronRight size={13} /></button></motion.div>
       <div className="flex gap-3"><StatCard icon={FileText} label="Papers Graded" value={stats.total} sub={courseCode || 'active worksheet'} color="bg-accent-blue/10 text-accent-blue" /><StatCard icon={BarChart2} label="Avg Score" value={stats.total ? `${stats.avgScore}%` : '—'} sub="active worksheet" color="bg-purple-400/10 text-purple-400" /><StatCard icon={CheckCircle} label="Pass Rate" value={stats.total ? `${stats.passRate}%` : '—'} sub="≥ 50% threshold" color="bg-emerald-400/10 text-emerald-400" /><StatCard icon={Award} label="Best Grade" value={stats.topGrade} sub="active worksheet" color="bg-yellow-400/10 text-yellow-400" /></div>
-      <div className="flex gap-5 min-h-0"><div className="flex-[3] flex flex-col gap-3"><div className="flex items-center gap-2"><Bell size={13} className="text-gray-500" /><h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Announcements</h2></div>{ANNOUNCEMENTS.map((post, i) => <AnnouncementCard key={post.id} post={post} index={i} />)}</div>
+      <div className="flex gap-5 min-h-0"><div className="flex-[3] flex flex-col gap-3"><div className="flex items-center gap-2"><Bell size={13} className="text-gray-500" /><h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Announcements</h2></div>{hasSession ? <ContinueCard worksheet={activeWorksheet} onGrade={onGrade} /> : <GettingStarted onGrade={onGrade} />}</div>
         <div className="flex-[4] flex flex-col gap-3"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Clock size={13} className="text-gray-500" /><h2 className="text-[11px] font-black uppercase tracking-widest text-gray-500">Recent Activity{courseCode ? ` · ${courseCode}` : ''}</h2></div>{worksheetRecords.length > 0 && <span className="text-[10px] text-gray-700">{worksheetRecords.length} record{worksheetRecords.length !== 1 ? 's' : ''}</span>}</div>
           {worksheetRecords.length === 0 ? <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col items-center justify-center gap-3 bg-card border border-gray-800 rounded-2xl py-12"><FileText size={32} className="text-gray-700" /><p className="text-[12px] text-gray-600 font-medium">{courseCode ? `No graded papers for ${courseCode} yet` : 'No active worksheet selected'}</p><button onClick={onGrade} className="px-4 py-1.5 bg-accent-blue/10 text-accent-blue text-[11px] font-bold rounded-lg border border-accent-blue/20 hover:bg-accent-blue/20 transition-colors">Grade your first paper →</button></motion.div> : <div className="flex flex-col gap-3 overflow-y-auto">{[...worksheetRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((rec, i) => <PostCard key={rec.id} record={rec} index={i} />)}</div>}
         </div></div>
