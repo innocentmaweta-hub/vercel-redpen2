@@ -39,7 +39,7 @@
     }
 }
 
-/* Give the Yaza AI button a moving 2px purple "snake" stroke while its panel is closed. */
+/* Moving 2px purple snake stroke around the Yaza AI button while closed. */
 @keyframes yaza-snake-stroke {
     to {
         transform: rotate(360deg);
@@ -61,12 +61,13 @@ body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot)::befor
     padding: 2px;
     background: conic-gradient(
         from 0deg,
-        transparent 0deg,
-        transparent 285deg,
-        #923f97 315deg,
-        #ffffff 340deg,
-        #923f97 355deg,
-        transparent 360deg
+        rgba(146, 63, 151, 0.16) 0deg,
+        rgba(146, 63, 151, 0.16) 285deg,
+        rgba(146, 63, 151, 0.55) 315deg,
+        #923f97 330deg,
+        #ffffff 342deg,
+        #923f97 351deg,
+        rgba(146, 63, 151, 0.16) 360deg
     );
     -webkit-mask:
         linear-gradient(#fff 0 0) content-box,
