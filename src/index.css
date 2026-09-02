@@ -31,21 +31,61 @@
     }
 
     .ct-boxshadow {
-        border: 1px solid rgba(146, 63, 151, 0.8);
+        border: 1px solid rgba(37, 99, 235, 0.85);
         box-shadow:
-            0 0 0 1px rgba(146, 63, 151, 0.35),
-            0 4px 20px rgba(146, 63, 151, 0.25),
+            0 0 0 1px rgba(37, 99, 235, 0.35),
+            0 4px 20px rgba(37, 99, 235, 0.25),
             inset 0 0 12px rgba(255, 255, 255, 0.04);
     }
 }
 
-/* Give the Yaza AI button the purple CT box-shadow while its panel is closed. */
+/* Give the Yaza AI button a moving blue glow while its panel is closed. */
+@keyframes yaza-circling-glow {
+    0% {
+        box-shadow:
+            0 -4px 10px rgba(37, 99, 235, 0.9),
+            4px 0 10px rgba(37, 99, 235, 0.15),
+            0 4px 10px rgba(37, 99, 235, 0.15),
+            -4px 0 10px rgba(37, 99, 235, 0.15),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+    25% {
+        box-shadow:
+            0 -4px 10px rgba(37, 99, 235, 0.15),
+            4px 0 10px rgba(37, 99, 235, 0.9),
+            0 4px 10px rgba(37, 99, 235, 0.15),
+            -4px 0 10px rgba(37, 99, 235, 0.15),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+    50% {
+        box-shadow:
+            0 -4px 10px rgba(37, 99, 235, 0.15),
+            4px 0 10px rgba(37, 99, 235, 0.15),
+            0 4px 10px rgba(37, 99, 235, 0.9),
+            -4px 0 10px rgba(37, 99, 235, 0.15),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+    75% {
+        box-shadow:
+            0 -4px 10px rgba(37, 99, 235, 0.15),
+            4px 0 10px rgba(37, 99, 235, 0.15),
+            0 4px 10px rgba(37, 99, 235, 0.15),
+            -4px 0 10px rgba(37, 99, 235, 0.9),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+    100% {
+        box-shadow:
+            0 -4px 10px rgba(37, 99, 235, 0.9),
+            4px 0 10px rgba(37, 99, 235, 0.15),
+            0 4px 10px rgba(37, 99, 235, 0.15),
+            -4px 0 10px rgba(37, 99, 235, 0.15),
+            inset 0 0 12px rgba(255, 255, 255, 0.04);
+    }
+}
+
 body:not(:has(.fixed.top-10.right-4.bottom-4)) button:has(svg.lucide-bot) {
-    border: 1px solid rgba(146, 63, 151, 0.8);
-    box-shadow:
-        0 0 0 1px rgba(146, 63, 151, 0.35),
-        0 4px 20px rgba(146, 63, 151, 0.25),
-        inset 0 0 12px rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(37, 99, 235, 0.85);
+    animation: yaza-circling-glow 2.4s linear infinite;
 }
 
 @layer base {
