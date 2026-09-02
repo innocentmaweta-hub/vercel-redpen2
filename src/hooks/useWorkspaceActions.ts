@@ -51,6 +51,9 @@ export function useWorkspaceActions({
         setStudentInfo((prev: any) => ({ ...prev, name: '', regNo: '', program: '' }));
         setStudentPaper(null);
         setResult(null);
+        setHasUnsavedResult(false);
+        setPendingHistoryRecord(null);
+        setHistorySaveState('idle');
         setExaminerRemarks('');
         setMarkingModeState('ai');
         resetTools();
