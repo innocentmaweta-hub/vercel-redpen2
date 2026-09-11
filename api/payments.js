@@ -8,13 +8,14 @@ const MIN_PURCHASE_MWK = 100;
 
 export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMeta }) {
   const router = Router();
+  const API_KEY = process.env.MALIPO_API_KEY;
   const APP_ID = process.env.MALIPO_APP_ID;
+  // Hosted Checkout's merchantAccount is the merchant account number accepted
+  // by the checkout service. Keep this separate from the API Project/App ID.
+  const MERCHANT_ACCOUNT = process.env.MALIPO_MERCHANT_ACCOUNT;
 
-  // Malipo Hosted Checkout requires the project App ID (merchantAccount).
-  // The API key is only needed for Malipo's server REST endpoints; this flow
-  // does not call those endpoints to open the browser checkout.
   function isConfigured() {
-    return Boolean(APP_ID);
+    return Boolean(MERCHANT_ACCOUNT);
   }
 
   function generateMerchantTrxId(userId) {
@@ -83,7 +84,7 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
   router.post('/api/payments/initiate', authMiddleware, async (req, res) => {
     try {
       if (!isConfigured()) {
-        return res.status(500).json({ message: 'Malipo payments are not configured yet. Please add MALIPO_APP_ID in Vercel.' });
+        return res.status(500).json({ message: 'Malipo Hosted Checkout is not configured. Set MALIPO_MERCHANT_ACCOUNT to the merchant account number from your Malipo project.' });
       }
 
       const amount = Number(req.body?.amountMWK);
@@ -104,14 +105,12 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       };
       await updateUserMeta(req.user.id, 'redpen_transactions', transactions);
 
-      // Current Malipo Hosted Checkout flow from the merchant documentation.
-      // merchantAccount is the Project ID / App ID.
       res.json({
         txRef: merchantTrxId,
         tokens,
         provider: 'malipo',
         checkout: {
-          merchantAccount: APP_ID,
+          merchantAccount: MERCHANT_ACCOUNT,
           currency: 'MWK',
           amount,
           order_id: merchantTrxId,
@@ -119,13 +118,11 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
         },
       });
     } catch (error) {
-      console.error('Malipo Hosted Checkout initiate error:', error.message);
+      console.error('Malipo hosted checkout initiate error:', error.message);
       res.status(500).json({ message: 'Failed to start payment. Please try again.' });
     }
   });
 
-  // Browser success does not itself credit tokens. The Malipo IPN callback is
-  // used to mark the transaction completed and credit the token balance.
   router.post('/api/payments/verify', authMiddleware, async (req, res) => {
     try {
       const { txRef } = req.body;
@@ -143,15 +140,11 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       }
       return res.json({ credited: false, pending: true, message: 'Payment is being confirmed by Malipo.' });
     } catch (error) {
-      console.error('Malipo payment verify error:', error.message);
+      console.error('Malipo hosted checkout verify error:', error.message);
       res.status(500).json({ message: 'Failed to check payment status' });
     }
   });
 
-  // Malipo IPN/Callback URL configured in the Malipo project:
-  // https://YOUR-REDPEN-DOMAIN/api/payments/webhook
-  // Malipo documents these callback fields: status, merchant_trx_id,
-  // transaction_id and customer_reference.
   router.post('/api/payments/webhook', async (req, res) => {
     try {
       const body = req.body || {};
