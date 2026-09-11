@@ -8,10 +8,6 @@ const MIN_PURCHASE_MWK = 100;
 
 export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMeta }) {
   const router = Router();
-  const API_KEY = process.env.MALIPO_API_KEY;
-  const APP_ID = process.env.MALIPO_APP_ID;
-  // Hosted Checkout's merchantAccount is the merchant account number accepted
-  // by the checkout service. Keep this separate from the API Project/App ID.
   const MERCHANT_ACCOUNT = process.env.MALIPO_MERCHANT_ACCOUNT;
 
   function isConfigured() {
@@ -24,7 +20,7 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
   }
 
   function parseUserIdFromMerchantTrxId(merchantTrxId) {
-    const match = /^rp-(\d+)-/.exec(merchantTrxId || '');
+    const match = /^rp-(\d+)-/.exec(String(merchantTrxId || ''));
     return match ? match[1] : null;
   }
 
@@ -36,25 +32,33 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
 
     if (record.status === 'completed') {
       const usage = (await getUserMeta(userId, 'redpen_usage')) || {};
-      return { credited: false, message: 'Already processed', tokens: record.tokens, newBalance: usage.tokenBalance || 0 };
+      return { credited: false, completed: true, tokens: record.tokens, newBalance: usage.tokenBalance || 0 };
     }
 
     const status = String(providerData.status || '').trim().toLowerCase();
-    const amount = Number(providerData.amount ?? providerData.transaction_amount);
+    const amountRaw = providerData.amount ?? providerData.transaction_amount;
+    const amount = amountRaw === undefined || amountRaw === null || amountRaw === '' ? null : Number(amountRaw);
     const currency = String(providerData.currency || 'MWK').trim().toUpperCase();
 
+    if (status === 'failed' || status === 'failure') {
+      transactions[merchantTrxId] = {
+        ...record,
+        status: 'failed',
+        failedAt: new Date().toISOString(),
+        malipoTransactionId: providerData.transaction_id || providerData.transId || null,
+        customerReference: providerData.customer_reference || providerData.customer_ref || null,
+      };
+      await updateUserMeta(userId, 'redpen_transactions', transactions);
+      return { credited: false, failed: true, message: 'Malipo reported that the payment failed.' };
+    }
+
     if (status && status !== 'completed' && status !== 'success' && status !== 'successful') {
-      if (status === 'failed') {
-        transactions[merchantTrxId] = { ...record, status: 'failed', failedAt: new Date().toISOString() };
-        await updateUserMeta(userId, 'redpen_transactions', transactions);
-        return { credited: false, failed: true, message: 'The Malipo payment failed.' };
-      }
       return { credited: false, pending: true, message: 'Payment not confirmed by Malipo yet.' };
     }
 
-    // Malipo's Hosted Checkout callback does not document amount/currency in the
-    // IPN payload. When supplied, validate them; otherwise rely on the merchant
-    // transaction record created by RedPen.
+    // Malipo's documented IPN payload does not require amount/currency fields.
+    // Validate them when they are supplied, but do not reject a valid Completed
+    // callback merely because those optional fields are absent.
     if (Number.isFinite(amount) && amount !== Number(record.amountMWK)) {
       return { credited: false, failed: true, message: 'Payment amount does not match the RedPen purchase.' };
     }
@@ -81,7 +85,7 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
     };
     await updateUserMeta(userId, 'redpen_transactions', transactions);
 
-    return { credited: true, tokens: record.tokens, newBalance };
+    return { credited: true, completed: true, tokens: record.tokens, newBalance };
   }
 
   router.post('/api/payments/initiate', authMiddleware, async (req, res) => {
@@ -162,9 +166,6 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
         });
       }
 
-      // Hosted Checkout confirmation arrives asynchronously through Malipo's
-      // IPN/callback. The client is allowed to poll this endpoint while that
-      // callback is still in flight.
       return res.json({
         credited: false,
         completed: false,
@@ -177,19 +178,24 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
     }
   });
 
-  router.post('/api/payments/webhook', async (req, res) => {
+  async function handleMalipoCallback(req, res) {
     try {
-      const body = req.body || {};
+      // Accept both the documented top-level payload and common wrapped payloads.
+      const raw = req.body || {};
+      const body = raw.data && typeof raw.data === 'object' ? { ...raw, ...raw.data } : raw;
       const merchantTrxId = body.merchant_trx_id || body.order_id || body.merchantTrxId;
       const userId = parseUserIdFromMerchantTrxId(merchantTrxId);
-      if (!merchantTrxId || !userId) return res.status(200).json({ message: 'Ignored' });
 
       console.log('Malipo callback received:', {
-        status: body.status,
+        status: body.status || body.payment_status,
         merchant_trx_id: merchantTrxId,
         transaction_id: body.transaction_id || body.transId,
         customer_reference: body.customer_reference || body.customer_ref,
       });
+
+      if (!merchantTrxId || !userId) {
+        return res.status(204).end();
+      }
 
       const result = await creditTokens(userId, merchantTrxId, {
         status: body.status || body.payment_status,
@@ -199,14 +205,21 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
         customer_reference: body.customer_reference || body.customer_ref,
       });
 
-      return res.status(200).json({ message: result.credited ? 'Payment credited' : result.message });
+      // Malipo documents that the callback does not depend on a response body.
+      return res.status(204).end();
     } catch (error) {
       console.error('Malipo callback processing error:', error.message);
-      // Malipo's IPN documentation says the callback does not depend on a
-      // response body, so always acknowledge receipt to avoid unnecessary retries.
-      return res.status(200).json({ message: 'Callback received' });
+      // Acknowledge the callback without exposing internal details.
+      return res.status(204).end();
     }
-  });
+  }
+
+  // Support the endpoint used in Malipo's documentation as well as the
+  // RedPen-specific webhook URL. This prevents a callback-path mismatch from
+  // silently causing Hosted Checkout verification timeouts.
+  router.post('/api/payments/webhook', handleMalipoCallback);
+  router.post('/api/payments/callback', handleMalipoCallback);
+  router.post('/api/callback_url', handleMalipoCallback);
 
   router.get('/api/payments/balance', authMiddleware, async (req, res) => {
     try {
