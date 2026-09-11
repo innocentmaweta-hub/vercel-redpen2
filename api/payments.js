@@ -8,11 +8,13 @@ const MIN_PURCHASE_MWK = 100;
 
 export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMeta }) {
   const router = Router();
-  const API_KEY = process.env.MALIPO_API_KEY;
   const APP_ID = process.env.MALIPO_APP_ID;
 
+  // Malipo Hosted Checkout requires the project App ID (merchantAccount).
+  // The API key is only needed for Malipo's server REST endpoints; this flow
+  // does not call those endpoints to open the browser checkout.
   function isConfigured() {
-    return Boolean(API_KEY && APP_ID);
+    return Boolean(APP_ID);
   }
 
   function generateMerchantTrxId(userId) {
@@ -81,7 +83,7 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
   router.post('/api/payments/initiate', authMiddleware, async (req, res) => {
     try {
       if (!isConfigured()) {
-        return res.status(500).json({ message: 'Malipo payments are not configured yet. Please try again later.' });
+        return res.status(500).json({ message: 'Malipo payments are not configured yet. Please add MALIPO_APP_ID in Vercel.' });
       }
 
       const amount = Number(req.body?.amountMWK);
@@ -102,8 +104,8 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       };
       await updateUserMeta(req.user.id, 'redpen_transactions', transactions);
 
-      // v2 Hosted Checkout is opened by the browser SDK. The App ID is the
-      // merchantAccount value; the API key never leaves the server.
+      // Current Malipo Hosted Checkout flow from the merchant documentation.
+      // merchantAccount is the Project ID / App ID.
       res.json({
         txRef: merchantTrxId,
         tokens,
@@ -117,14 +119,13 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
         },
       });
     } catch (error) {
-      console.error('Malipo v2 payment initiate error:', error.message);
+      console.error('Malipo Hosted Checkout initiate error:', error.message);
       res.status(500).json({ message: 'Failed to start payment. Please try again.' });
     }
   });
 
-  // This endpoint is intentionally not a client-side credit authority. It only
-  // reports the current transaction state. Malipo's server callback is the
-  // authoritative payment notification path.
+  // Browser success does not itself credit tokens. The Malipo IPN callback is
+  // used to mark the transaction completed and credit the token balance.
   router.post('/api/payments/verify', authMiddleware, async (req, res) => {
     try {
       const { txRef } = req.body;
@@ -142,14 +143,15 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       }
       return res.json({ credited: false, pending: true, message: 'Payment is being confirmed by Malipo.' });
     } catch (error) {
-      console.error('Malipo v2 payment verify error:', error.message);
+      console.error('Malipo payment verify error:', error.message);
       res.status(500).json({ message: 'Failed to check payment status' });
     }
   });
 
-  // Malipo project callback URL: https://YOUR-DOMAIN/api/payments/webhook
-  // The handler accepts the documented transaction identifiers and common
-  // v2 result field names so the hosted checkout callback can be reconciled.
+  // Malipo IPN/Callback URL configured in the Malipo project:
+  // https://YOUR-REDPEN-DOMAIN/api/payments/webhook
+  // Malipo documents these callback fields: status, merchant_trx_id,
+  // transaction_id and customer_reference.
   router.post('/api/payments/webhook', async (req, res) => {
     try {
       const body = req.body || {};
@@ -167,7 +169,7 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
 
       return res.status(200).json({ message: result.credited ? 'Payment credited' : result.message });
     } catch (error) {
-      console.error('Malipo v2 callback processing error:', error.message);
+      console.error('Malipo callback processing error:', error.message);
       return res.status(200).json({ message: 'Callback received' });
     }
   });
