@@ -16,6 +16,8 @@ const MWK_PER_TOKEN = 100;
 const MIN_PURCHASE_MWK = 100;
 export const PENDING_TX_KEY = 'redpen_pending_tx_ref';
 const MALIPO_SCRIPT = 'https://app.malipo.mw/sdk/v1-malipo-hosted-checkout.js';
+const PAYMENT_CONFIRMATION_TIMEOUT_MS = 120000;
+const PAYMENT_POLL_INTERVAL_MS = 3000;
 
 export const SettingsModal = ({ user, onClose, authHeaders }: Props) => {
     const [tab, setTab] = useState<Tab>('tokens');
@@ -73,6 +75,43 @@ export const SettingsModal = ({ user, onClose, authHeaders }: Props) => {
         document.body.appendChild(script);
     });
 
+    const checkPaymentUntilResolved = async (txRef: string) => {
+        const started = Date.now();
+
+        while (Date.now() - started < PAYMENT_CONFIRMATION_TIMEOUT_MS) {
+            try {
+                const verify = await fetch('/api/payments/verify', {
+                    method: 'POST',
+                    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ txRef }),
+                });
+                const result = await verify.json().catch(() => ({}));
+
+                if (result.credited || result.completed) {
+                    setTokenBalance(result.newBalance);
+                    localStorage.removeItem(PENDING_TX_KEY);
+                    setBuyError('');
+                    return true;
+                }
+
+                if (result.failed) {
+                    localStorage.removeItem(PENDING_TX_KEY);
+                    setBuyError(result.message || 'Malipo reported that the payment failed.');
+                    return false;
+                }
+            } catch (error) {
+                console.warn('Waiting for Malipo confirmation:', error);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, PAYMENT_POLL_INTERVAL_MS));
+        }
+
+        // Do not call a successful payment "failed" merely because Malipo's
+        // asynchronous callback took longer than the UI timeout.
+        setBuyError('Payment was submitted to Malipo. Confirmation is still pending. Your tokens will be added automatically when Malipo confirms the payment.');
+        return false;
+    };
+
     const handleBuyTokens = async () => {
         if (!user) return;
         setBuyError('');
@@ -100,29 +139,19 @@ export const SettingsModal = ({ user, onClose, authHeaders }: Props) => {
             const Malipo = (window as any).Malipo;
             if (!Malipo?.open) throw new Error('Malipo checkout is unavailable.');
 
+            const finishWithConfirmation = () => {
+                // Malipo can report a checkout/session timeout even though the
+                // mobile-money payment is still being processed. Always check
+                // our server-side transaction record before showing failure.
+                void checkPaymentUntilResolved(data.txRef);
+            };
+
             Malipo.open({
                 ...data.checkout,
-                onSuccess: async () => {
-                    try {
-                        const verify = await fetch('/api/payments/verify', {
-                            method: 'POST',
-                            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ txRef: data.txRef }),
-                        });
-                        const result = await verify.json().catch(() => ({}));
-                        if (result.credited) {
-                            setTokenBalance(result.newBalance);
-                            setBuyError('');
-                        } else {
-                            setBuyError('Payment received by Malipo. Your tokens will appear after confirmation.');
-                        }
-                    } catch {
-                        setBuyError('Payment completed. We are waiting for Malipo confirmation.');
-                    }
-                },
+                onSuccess: finishWithConfirmation,
                 onError: (error: unknown) => {
-                    console.error('Malipo checkout error:', error);
-                    setBuyError('Payment was not completed. Please try again.');
+                    console.warn('Malipo checkout reported an error:', error);
+                    finishWithConfirmation();
                 },
             });
         } catch (error) {
