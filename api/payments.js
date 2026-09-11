@@ -39,25 +39,28 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       return { credited: false, message: 'Already processed', tokens: record.tokens, newBalance: usage.tokenBalance || 0 };
     }
 
-    const status = String(providerData.status || '').toLowerCase();
+    const status = String(providerData.status || '').trim().toLowerCase();
     const amount = Number(providerData.amount ?? providerData.transaction_amount);
-    const currency = String(providerData.currency || 'MWK').toUpperCase();
+    const currency = String(providerData.currency || 'MWK').trim().toUpperCase();
 
     if (status && status !== 'completed' && status !== 'success' && status !== 'successful') {
       if (status === 'failed') {
         transactions[merchantTrxId] = { ...record, status: 'failed', failedAt: new Date().toISOString() };
         await updateUserMeta(userId, 'redpen_transactions', transactions);
-        return { credited: false, message: 'The Malipo payment failed.' };
+        return { credited: false, failed: true, message: 'The Malipo payment failed.' };
       }
-      return { credited: false, message: 'Payment not confirmed by Malipo yet.' };
+      return { credited: false, pending: true, message: 'Payment not confirmed by Malipo yet.' };
     }
 
+    // Malipo's Hosted Checkout callback does not document amount/currency in the
+    // IPN payload. When supplied, validate them; otherwise rely on the merchant
+    // transaction record created by RedPen.
     if (Number.isFinite(amount) && amount !== Number(record.amountMWK)) {
-      return { credited: false, message: 'Payment amount does not match the RedPen purchase.' };
+      return { credited: false, failed: true, message: 'Payment amount does not match the RedPen purchase.' };
     }
 
     if (currency !== 'MWK') {
-      return { credited: false, message: 'Payment currency does not match the RedPen purchase.' };
+      return { credited: false, failed: true, message: 'Payment currency does not match the RedPen purchase.' };
     }
 
     const usage = (await getUserMeta(userId, 'redpen_usage')) || {
@@ -125,20 +128,49 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
 
   router.post('/api/payments/verify', authMiddleware, async (req, res) => {
     try {
-      const { txRef } = req.body;
-      const ownerId = parseUserIdFromMerchantTrxId(txRef);
+      const { txRef } = req.body || {};
       if (!txRef) return res.status(400).json({ message: 'txRef is required' });
-      if (String(ownerId) !== String(req.user.id)) return res.status(403).json({ message: 'This transaction does not belong to your account' });
+
+      const ownerId = parseUserIdFromMerchantTrxId(txRef);
+      if (String(ownerId) !== String(req.user.id)) {
+        return res.status(403).json({ message: 'This transaction does not belong to your account' });
+      }
 
       const transactions = (await getUserMeta(req.user.id, 'redpen_transactions')) || {};
       const record = transactions[txRef];
       if (!record) return res.status(404).json({ message: 'Unknown transaction' });
 
       const usage = (await getUserMeta(req.user.id, 'redpen_usage')) || {};
+
       if (record.status === 'completed') {
-        return res.json({ credited: false, message: 'Already processed', tokens: record.tokens, newBalance: usage.tokenBalance || 0 });
+        return res.json({
+          credited: false,
+          completed: true,
+          pending: false,
+          tokens: record.tokens,
+          newBalance: usage.tokenBalance || 0,
+        });
       }
-      return res.json({ credited: false, pending: true, message: 'Payment is being confirmed by Malipo.' });
+
+      if (record.status === 'failed') {
+        return res.json({
+          credited: false,
+          completed: false,
+          pending: false,
+          failed: true,
+          message: 'Malipo reported that this payment failed.',
+        });
+      }
+
+      // Hosted Checkout confirmation arrives asynchronously through Malipo's
+      // IPN/callback. The client is allowed to poll this endpoint while that
+      // callback is still in flight.
+      return res.json({
+        credited: false,
+        completed: false,
+        pending: true,
+        message: 'Payment is being confirmed by Malipo.',
+      });
     } catch (error) {
       console.error('Malipo hosted checkout verify error:', error.message);
       res.status(500).json({ message: 'Failed to check payment status' });
@@ -152,6 +184,13 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       const userId = parseUserIdFromMerchantTrxId(merchantTrxId);
       if (!merchantTrxId || !userId) return res.status(200).json({ message: 'Ignored' });
 
+      console.log('Malipo callback received:', {
+        status: body.status,
+        merchant_trx_id: merchantTrxId,
+        transaction_id: body.transaction_id || body.transId,
+        customer_reference: body.customer_reference || body.customer_ref,
+      });
+
       const result = await creditTokens(userId, merchantTrxId, {
         status: body.status || body.payment_status,
         amount: body.amount ?? body.transaction_amount,
@@ -163,6 +202,8 @@ export function createPaymentsRouter({ authMiddleware, getUserMeta, updateUserMe
       return res.status(200).json({ message: result.credited ? 'Payment credited' : result.message });
     } catch (error) {
       console.error('Malipo callback processing error:', error.message);
+      // Malipo's IPN documentation says the callback does not depend on a
+      // response body, so always acknowledge receipt to avoid unnecessary retries.
       return res.status(200).json({ message: 'Callback received' });
     }
   });
